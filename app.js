@@ -2472,8 +2472,8 @@ try {
     // ── top bar ──
     const topbar = el("div", "position:relative;z-index:2;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.22);background:rgba(10,8,24,0.55);");
     const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
-    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#d9d0f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "🪦 Fic Graveyard"));
-    const sub = el("div", "font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;");
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;line-height:1.2;text-transform:uppercase;color:#d9d0f5;white-space:normal;overflow-wrap:anywhere;", "🪦 Fic Graveyard"));
+    const sub = el("div", "font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);white-space:normal;line-height:1.35;");
     ttl.appendChild(sub);
     topbar.appendChild(ttl);
     const tbRight = el("div", "display:flex;align-items:center;gap:8px;flex:0 0 auto;");
@@ -3481,7 +3481,7 @@ try {
     back.appendChild(box);
     const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.18);background:rgba(8,6,22,0.55);z-index:3;");
     const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
-    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#d9d0f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "\u{1FAA6} Graveyard Grounds"));
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;line-height:1.2;text-transform:uppercase;color:#d9d0f5;white-space:normal;overflow-wrap:anywhere;", "\u{1FAA6} Graveyard Grounds"));
     const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);", "");
     ttl.appendChild(sub);
     topbar.appendChild(ttl);
