@@ -2481,6 +2481,13 @@ try {
     allBtn.type = "button";
     allBtn.title = "Lay one bouquet on every grave";
     const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "✕");
+    if (fics.length) {
+      const groundsBtn = el("button", "cursor:pointer;font:inherit;font-size:10px;border-radius:999px;padding:2px 8px;border:none;background:none;color:rgba(217,208,245,0.4);white-space:nowrap;", "grounds \u203A");
+      groundsBtn.type = "button";
+      groundsBtn.title = "Wander the graveyard grounds";
+      groundsBtn.onclick = () => openGraveyardGrounds();
+      tbRight.appendChild(groundsBtn);
+    }
     tbRight.appendChild(xBtn);
     topbar.appendChild(tbRight);
     box.appendChild(topbar);
@@ -3467,16 +3474,16 @@ try {
     box.appendChild(field);
     const card = el("div", "flex:0 0 auto;display:none;padding:12px 14px;border-top:1px solid rgba(190,170,255,0.25);background:rgba(18,12,34,0.96);text-align:center;");
     box.appendChild(card);
-    const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);", graves.length ? "tap a grave \u00B7 tap the well at the end of the path" : "");
+    const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);", graves.length ? "tap a grave \u00B7 tap the well at the end of the path \u00B7 \u2715 returns to the graveyard" : "");
     box.appendChild(caption);
 
     let strolling = false, raf = 0;
     const stopStroll = () => { strolling = false; cancelAnimationFrame(raf); strollBtn.textContent = "\u{1F56F}\uFE0F stroll"; };
-    const onKey = e => { if (e.key === "Escape") close(); };
-    const close = () => { stopStroll(); back.remove(); document.removeEventListener("keydown", onKey); };
+    const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); close(); } };
+    const close = () => { stopStroll(); back.remove(); document.removeEventListener("keydown", onKey, true); };
     xBtn.onclick = close;
     back.addEventListener("click", e => { if (e.target === back) close(); });
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
 
     if (!graves.length) {
       const empty = el("div", "text-align:center;padding:70px 24px;");
@@ -3493,7 +3500,7 @@ try {
     let y = GATE;
     live.forEach(s => { s.y = y; s.rows = Math.ceil(s.graves.length / PER_ROW); y += HEAD + s.rows * ROW + 30; });
     const H = y + TAIL;
-    const pathX = yy => 180 + 9 * Math.sin(yy / 70);
+    const pathX = yy => 180 + 12 * Math.sin(yy / 90) + 5 * Math.sin(yy / 37 + 1);
 
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
     svg.style.cssText = "width:100%;height:auto;display:block;";
@@ -3510,9 +3517,23 @@ try {
     // the cobbled path
     let d = `M${pathX(0).toFixed(1)} 0`;
     for (let yy = 10; yy <= H; yy += 10) d += ` L${pathX(yy).toFixed(1)} ${yy}`;
-    sv("path", { d, fill: "none", stroke: "#3d3249", "stroke-width": 46, "stroke-linejoin": "round" }, svg);
-    sv("path", { d, fill: "none", stroke: "#5b4c68", "stroke-width": 34, "stroke-linejoin": "round", opacity: 0.55 }, svg);
-    sv("path", { d, fill: "none", stroke: "#8d7d9a", "stroke-width": 9, "stroke-dasharray": "2 13", "stroke-linecap": "round", opacity: 0.55 }, svg);
+    sv("path", { d, fill: "none", stroke: "#2b2233", "stroke-width": 54, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.45 }, svg);
+    sv("path", { d, fill: "none", stroke: "#473b3d", "stroke-width": 38, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.9 }, svg);
+    const STONES = ["#6d6070", "#7a6d7d", "#5f5463", "#857886", "#6a5f5a"];
+    for (let yy = 4; yy < H; yy += 9) {
+      for (let k = 0; k < 3; k++) {
+        const sd = "st" + yy + "_" + k;
+        sv("ellipse", { cx: (pathX(yy) + (rnd(sd) - 0.5) * 32).toFixed(1), cy: (yy + rnd(sd + "y") * 8).toFixed(1),
+          rx: (2.6 + rnd(sd + "w") * 3.2).toFixed(1), ry: (1.8 + rnd(sd + "h") * 2).toFixed(1),
+          fill: STONES[Math.floor(rnd(sd + "c") * STONES.length)], opacity: (0.55 + rnd(sd + "o") * 0.4).toFixed(2) }, svg);
+      }
+    }
+    for (let yy = 12; yy < H; yy += 26) {      // little grass tufts hugging the path
+      [-1, 1].forEach(sd => {
+        const gx = pathX(yy) + sd * (26 + rnd("g" + yy + sd) * 10);
+        sv("path", { d: `M${gx} ${yy} l-2 -6 M${gx} ${yy} l0 -8 M${gx} ${yy} l2 -6`, stroke: "#46705a", "stroke-width": 1.4, fill: "none", "stroke-linecap": "round", opacity: 0.8 }, svg);
+      });
+    }
 
     // iron gate
     const gate = sv("g", {}, svg);
@@ -3592,8 +3613,8 @@ try {
       if (bits.length) card.appendChild(el("div", "font-size:10.5px;color:rgba(217,208,245,0.7);", bits.join(" \u00B7 ")));
       const row = el("div", "display:flex;justify-content:center;gap:8px;margin-top:10px;");
       const bcss = "cursor:pointer;font:inherit;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;";
-      const open = el("button", bcss, "Open in the graveyard"); open.type = "button";
-      open.onclick = () => { close(); openGraveyard(); };
+      const open = el("button", bcss, "Back to the graveyard"); open.type = "button";
+      open.onclick = () => close();
       const done = el("button", bcss, "Close"); done.type = "button";
       done.onclick = () => { picked.setAttribute("opacity", 0); picked = null; card.style.display = "none"; };
       row.appendChild(open); row.appendChild(done);
@@ -3688,16 +3709,22 @@ try {
     field.appendChild(svg);
 
     // ── stroll: wander down the path on your own; any touch stops it ──
-    const strollStep = () => {
+    let pos = 0, last = 0;
+    field.style.scrollBehavior = "auto";
+    const strollStep = ts => {
       if (!strolling) return;
+      if (!last) last = ts;
+      const dt = Math.min(64, ts - last); last = ts;
       const max = field.scrollHeight - field.clientHeight;
-      if (field.scrollTop >= max - 1) { stopStroll(); return; }
-      field.scrollTop += 0.7;
+      pos += dt * 0.045;                       // ~45px per second, kept as a float
+      field.scrollTop = pos;
+      if (pos >= max - 1) { stopStroll(); return; }
       raf = requestAnimationFrame(strollStep);
     };
     strollBtn.onclick = () => {
       if (strolling) { stopStroll(); return; }
       if (field.scrollTop >= field.scrollHeight - field.clientHeight - 2) field.scrollTop = 0;
+      pos = field.scrollTop; last = 0;
       strolling = true; strollBtn.textContent = "\u23F8 pause";
       raf = requestAnimationFrame(strollStep);
     };
@@ -7180,7 +7207,6 @@ try {
         return b;
       };
       cnWrap.appendChild(quietLink("constellation", "See your fics as a night sky", () => openConstellation()));
-      cnWrap.appendChild(quietLink("grounds", "Wander the graveyard grounds", () => openGraveyardGrounds()));
       cnWrap.appendChild(quietLink("aquarium", "See your fics as little fish", () => openAquarium()));
       cnWrap.appendChild(quietLink("bookshelf", "See your fics as books on a shelf", () => openBookshelf()));
       cnWrap.appendChild(quietLink("garden", "See your fics as a little garden", () => openGarden()));
@@ -7701,7 +7727,7 @@ try {
     });
   }, 1000);
   // Web app only: hand the four keepsake views to the web app's "Keepsakes" button.
-  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass };
+  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass };
 })();
 } catch (e) { console.error("[AO3 bundle] Fic Tracker failed to load:", e); }
 
@@ -27391,7 +27417,7 @@ try {
       back.onclick = e => { if (e.target === back) back.remove(); };
       const box = document.createElement("div");
       box.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:22px;background:var(--fb-card,#fffdfb);border:1.5px solid var(--fb-line,#ecd3cf);box-shadow:0 8px 28px rgba(0,0,0,0.25);min-width:220px;";
-      [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F56F}\uFE0F Graveyard grounds", "openGraveyardGrounds"], ["\u{1F389} Celebrations", "openCelebration"],
+      [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F389} Celebrations", "openCelebration"],
        ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"],
        ["\u{1F4DA} Bookshelf", "openBookshelf"], ["\u{1F337} Garden", "openGarden"], ["\u{1FA9F} Stained glass", "openStainedGlass"]].forEach(([label, fn]) => {
         const b = document.createElement("button");
