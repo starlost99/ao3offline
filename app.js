@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AO3 Reading Dashboard (Toggle Logging)
 // @namespace    http://tampermonkey.net/
-// @version      18.5
+// @version      18.6
 // @description  One combined script: AO3 Reading Dashboard + AO3 Fic Tracker + AO3 Notes Folder -> iOS Shortcut. The parts work exactly as before and are not connected, except for backup: every Export/Import button now uses ONE combined JSON file covering everything.
 // @match        https://archiveofourown.org/*
 // @match        https://www.archiveofourown.org/*
@@ -3396,7 +3396,13 @@ try {
   // Old Growth, the Quiet Meadow), each with its own landmark, to a wishing well. Every abandoned
   // fic keeps its grave; graves with a lit candle flicker, and flowers show on top. Tap a grave
   // for its epitaph and a way into the full graveyard. "stroll" wanders down the path on its own.
-  // Read-only: it stores nothing and leaves the original graveyard exactly as it is.
+  // Extras (all optional, all local): a day/dusk/dawn switch, weather (rain, fog, snow), seasonal
+  // dressing (Halloween pumpkins and bats, winter snow caps, autumn leaves, spring petals, summer
+  // fireflies), crows on the gate, a visitors' book with your graveyard stats, a groundskeeper who
+  // walks the path with a lantern, a cat who sits on graves, a drifting ghost, a koi pond with a frog,
+  // five will-o-wisps that come back every month, wishing-well streaks, grave search and a random visit.
+  // It never changes your graves. Its own little preferences (time of day, weather, wishes, this
+  // month's wisps) live in one local key, ao3-gg-prefs, and are not synced.
   function openGraveyardGrounds() {
     const old = document.getElementById("ao3-grounds");
     if (old) old.remove();
@@ -3409,6 +3415,19 @@ try {
         @keyframes ggRipple{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(2.6)}}
         @keyframes ggSway{0%,100%{transform:rotate(-1.6deg)}50%{transform:rotate(1.6deg)}}
         @keyframes ggMist{0%,100%{opacity:.18;transform:translateX(-14px)}50%{opacity:.34;transform:translateX(14px)}}
+        @keyframes ggRain{from{transform:translateY(-30px)}to{transform:translateY(60px)}}
+        @keyframes ggFall{0%{transform:translate(0,-20px)}50%{transform:translate(12px,30px)}100%{transform:translate(-6px,80px)}}
+        @keyframes ggBat{0%{transform:translateX(-40px)}100%{transform:translateX(410px)}}
+        @keyframes ggFlap{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.3)}}
+        @keyframes ggHeart{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-24px)}}
+        @keyframes ggDrift{0%{transform:translateX(-60px)}100%{transform:translateX(420px)}}
+        @keyframes ggBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+        @keyframes ggFly{to{transform:translate(70px,-130px);opacity:0}}
+        @keyframes ggHop{0%,100%{transform:translateY(0)}40%{transform:translateY(-10px)}}
+        @keyframes ggPulse{0%,100%{opacity:.1}50%{opacity:.9}}
+        @keyframes ggWisp{0%,100%{opacity:.3;transform:translate(0,0)}50%{opacity:.9;transform:translate(4px,-6px)}}
+        @keyframes ggSpark{0%{opacity:1;transform:translate(0,0)}100%{opacity:0;transform:translate(var(--dx),var(--dy))}}
+        @keyframes ggFlash{0%,92%,100%{opacity:0}93%{opacity:.3}94%{opacity:0}95.5%{opacity:.22}97%{opacity:0}}
         @media (prefers-reduced-motion: reduce){.gg-anim{animation:none !important}}
       `;
       (document.head || document.documentElement).appendChild(st);
@@ -3463,7 +3482,8 @@ try {
     const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.18);background:rgba(8,6,22,0.55);z-index:3;");
     const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
     ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#d9d0f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "\u{1FAA6} Graveyard Grounds"));
-    ttl.appendChild(el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);", `${graves.length} grave${graves.length === 1 ? "" : "s"} \u00B7 ${live.length} plot${live.length === 1 ? "" : "s"}`));
+    const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);", "");
+    ttl.appendChild(sub);
     topbar.appendChild(ttl);
     const strollBtn = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;border-radius:999px;padding:5px 12px;font:600 12px/1 inherit;font-family:inherit;cursor:pointer;", "\u{1F56F}\uFE0F stroll");
     const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
@@ -3496,7 +3516,7 @@ try {
     }
 
     // ── layout ──
-    const W = 360, GATE = 130, HEAD = 104, ROW = 58, PER_ROW = 8, TAIL = 190;
+    const W = 360, GATE = 130, HEAD = 104, ROW = 58, PER_ROW = 8, TAIL = 300;
     let y = GATE;
     live.forEach(s => { s.y = y; s.rows = Math.ceil(s.graves.length / PER_ROW); y += HEAD + s.rows * ROW + 30; });
     const H = y + TAIL;
@@ -3509,10 +3529,12 @@ try {
     sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.75" }, glow);
     sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
 
-    // sky stuff near the gate: stars + moon
-    for (let i = 0; i < 40; i++) sv("circle", { cx: (rnd("sx" + i) * W).toFixed(1), cy: (rnd("sy" + i) * 200).toFixed(1), r: (0.5 + rnd("sr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("so" + i) * 0.5).toFixed(2) }, svg);
-    sv("circle", { cx: 300, cy: 46, r: 17, fill: "#efe6bd" }, svg);
-    sv("circle", { cx: 300, cy: 46, r: 32, fill: "url(#gg-glow)", opacity: 0.35 }, svg);
+    // sky stuff near the gate: stars + moon (the moon becomes a low sun at dusk and dawn)
+    const starG = sv("g", {}, svg);
+    for (let i = 0; i < 40; i++) sv("circle", { cx: (rnd("sx" + i) * W).toFixed(1), cy: (rnd("sy" + i) * 200).toFixed(1), r: (0.5 + rnd("sr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("so" + i) * 0.5).toFixed(2) }, starG);
+    const moonG = sv("g", {}, svg);
+    const moonDisc = sv("circle", { cx: 300, cy: 46, r: 17, fill: "#efe6bd" }, moonG);
+    sv("circle", { cx: 300, cy: 46, r: 32, fill: "url(#gg-glow)", opacity: 0.35 }, moonG);
 
     // the cobbled path
     let d = `M${pathX(0).toFixed(1)} 0`;
@@ -3554,6 +3576,115 @@ try {
       anim(g, `animation:ggFlicker ${(2.2 + rnd("l" + seed) * 1.6).toFixed(1)}s ease-in-out infinite;transform-origin:${lx}px ${ly - 28}px;`);
     };
     for (let ly = GATE + 70, i = 0; ly < H - TAIL + 40; ly += 230, i++) lamp(pathX(ly) + (i % 2 ? -32 : 32), ly, i);
+
+    // ── extras: preferences, seasons and little scenes ──
+    const PKEY = "ao3-gg-prefs";
+    let prefs = {};
+    try { prefs = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; } catch { prefs = {}; }
+    const savePrefs = () => { try { localStorage.setItem(PKEY, JSON.stringify(prefs)); } catch {} };
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const say = t => { caption.textContent = t; };
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    const now = new Date(), month = now.getMonth();
+    const season = month === 9 ? "halloween" : (month === 11 || month <= 1) ? "winter" : month <= 4 ? "spring" : month <= 7 ? "summer" : "autumn";
+    const SEASON_TAG = { halloween: "\u{1F383} spooky season", winter: "\u2744\uFE0F winter", spring: "\u{1F338} spring", summer: "\u2600\uFE0F summer", autumn: "\u{1F342} autumn" };
+    const bcss = "cursor:pointer;font:inherit;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;";
+    const sparkle = (x, y, n) => {
+      const g = sv("g", {}, svg);
+      for (let k = 0; k < n; k++) {
+        const ang = (k / n) * Math.PI * 2, dist = 18 + Math.random() * 18;
+        const c = sv("circle", { cx: x, cy: y, r: 1.8, fill: "#ffe27a" }, g);
+        anim(c, `--dx:${(Math.cos(ang) * dist).toFixed(1)}px;--dy:${(Math.sin(ang) * dist).toFixed(1)}px;animation:ggSpark 1s ease-out forwards;`);
+      }
+      setTimeout(() => g.remove(), 1100);
+    };
+
+    // a little jack-o'-lantern
+    const pumpkin = (parent, px, py, s, seed) => {
+      const g = sv("g", { transform: `translate(${px.toFixed(1)} ${py.toFixed(1)}) scale(${s})` }, parent);
+      const lit = sv("g", {}, g);
+      sv("circle", { cx: 0, cy: -6, r: 15, fill: "url(#gg-glow)", opacity: 0.6 }, lit);
+      sv("ellipse", { cx: 0, cy: 2, rx: 10, ry: 2.5, fill: "#000", opacity: 0.35 }, g);
+      sv("ellipse", { cx: -5, cy: -6, rx: 6, ry: 7.5, fill: "#d9731f" }, g);
+      sv("ellipse", { cx: 5, cy: -6, rx: 6, ry: 7.5, fill: "#d9731f" }, g);
+      sv("ellipse", { cx: 0, cy: -6, rx: 5, ry: 8, fill: "#ee8a2c" }, g);
+      sv("rect", { x: -1, y: -16, width: 2.4, height: 4, rx: 1, fill: "#4f6b3a" }, g);
+      sv("path", { d: "M-5 -9 L-2 -9 L-3.5 -6 Z M2 -9 L5 -9 L3.5 -6 Z M-4 -2 L-2 -3.5 L0 -2 L2 -3.5 L4 -2 L2 -1 L0 -2.5 L-2 -1 Z", fill: "#ffe27a" }, g);
+      anim(lit, `animation:ggFlicker ${(1.8 + rnd("pk" + seed) * 1.4).toFixed(1)}s ease-in-out infinite;`);
+      return g;
+    };
+    if (season === "halloween") {
+      for (let py = GATE + 105, i = 0; py < H - TAIL; py += 150, i++) pumpkin(svg, pathX(py) + (i % 2 ? 34 : -34), py, 1, "p" + i);
+      for (let i = 0; i < 4; i++) {          // bats crossing the sky
+        const wrap = sv("g", { transform: `translate(0 ${(24 + rnd("bt" + i) * 110).toFixed(0)})` }, svg);
+        const fly = sv("g", {}, wrap);
+        const wing = sv("path", { d: "M-8 0 Q-4 -6 0 -1 Q4 -6 8 0 Q4 -2 0 3 Q-4 -2 -8 0 Z", fill: "#0d0916" }, fly);
+        anim(wing, "animation:ggFlap .35s ease-in-out infinite;transform-origin:0px 0px;");
+        anim(fly, `animation:ggBat ${(16 + rnd("bd" + i) * 10).toFixed(1)}s linear -${(rnd("bs" + i) * 14).toFixed(1)}s infinite;`);
+        if (reduce) fly.setAttribute("transform", `translate(${60 + i * 80} 0)`);
+      }
+    }
+
+    // two crows on the gate: tap one and it flaps off, then comes back
+    [[134, 43], [226, 43]].forEach(([cx, cy], i) => {
+      const wrap = sv("g", { transform: `translate(${cx} ${cy})` }, svg);
+      const bird = sv("g", {}, wrap);
+      const dir = i ? -1 : 1;
+      sv("ellipse", { cx: 0, cy: -3.5, rx: 6, ry: 3.6, fill: "#0e0b16" }, bird);
+      sv("circle", { cx: 5.5 * dir, cy: -7, r: 2.7, fill: "#0e0b16" }, bird);
+      sv("path", { d: `M${8 * dir} -7 L${11 * dir} -6 L${8 * dir} -5.5 Z`, fill: "#3a3047" }, bird);
+      sv("path", { d: `M${-5 * dir} -3 L${-11 * dir} 0 L${-4 * dir} -1 Z`, fill: "#0e0b16" }, bird);
+      sv("circle", { cx: 6.3 * dir, cy: -7.6, r: 0.6, fill: "#ffe27a" }, bird);
+      const hit = sv("circle", { cx: 0, cy: -5, r: 11, fill: "transparent" }, wrap);
+      hit.style.cursor = "pointer";
+      let away = false;
+      hit.addEventListener("click", () => {
+        if (away) return;
+        away = true;
+        say(pick(["Caw!", "Caw. Caw. (Translation: update your tracker.)", "The crow glares at you, then leaves in a dramatic flap."]));
+        anim(bird, "animation:ggFly 1.1s ease-in forwards;");
+        setTimeout(() => { bird.style.animation = "none"; away = false; }, 9000);
+      });
+    });
+
+    // the visitors' book on its lectern by the gate
+    const showBook = () => {
+      if (picked) { picked.setAttribute("opacity", 0); picked = null; }
+      const wordsAll = graves.reduce((a, g) => a + (g.f.words || 0), 0);
+      const quietest = graves.slice().sort((a, b) => b.quiet - a.quiet)[0];
+      const biggest = graves.slice().sort((a, b) => (b.f.words || 0) - (a.f.words || 0))[0];
+      const crowded = live.slice().sort((a, b) => b.graves.length - a.graves.length)[0];
+      let flowers = 0, candles = 0;
+      graves.forEach(g => { const r = gyRec(g.f.workId); flowers += gyTotal(r); if (r.lit && r.lit > Date.now()) candles++; });
+      card.textContent = "";
+      card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:14px;color:#f1e8ff;", "\u{1F4D6} The Visitors\u2019 Book"));
+      [
+        `${wordsAll.toLocaleString()} words laid to rest across ${graves.length} grave${graves.length === 1 ? "" : "s"}`,
+        `Longest silence: \u201C${titleOf(quietest.f)}\u201D, quiet for ${gyAgo(quietest.quiet)}`,
+        biggest.f.words ? `Biggest stone: \u201C${titleOf(biggest.f)}\u201D, ${biggest.f.words.toLocaleString()} words` : "",
+        `Busiest plot: ${crowded.name} (${crowded.graves.length})`,
+        `${flowers} flower${flowers === 1 ? "" : "s"} left \u00B7 ${candles} candle${candles === 1 ? "" : "s"} burning`,
+        `${prefs.wishes || 0} wish${(prefs.wishes || 0) === 1 ? "" : "es"} made at the well` + (prefs.keeper ? ` \u00B7 wisp-keeper \u00D7${prefs.keeper}` : "")
+      ].filter(Boolean).forEach(t => card.appendChild(el("div", "font-size:12px;line-height:1.5;color:#e6dcf5;margin-top:4px;", t)));
+      const row = el("div", "display:flex;justify-content:center;margin-top:10px;");
+      const done = el("button", bcss, "Close"); done.type = "button";
+      done.onclick = () => { card.style.display = "none"; };
+      row.appendChild(done); card.appendChild(row);
+      card.style.display = "block";
+    };
+    {
+      const lx = pathX(112) + 40, ly = 114;
+      const lect = sv("g", {}, svg);
+      sv("ellipse", { cx: lx, cy: ly + 2, rx: 11, ry: 2.5, fill: "#000", opacity: 0.35 }, lect);
+      sv("rect", { x: lx - 2, y: ly - 14, width: 4, height: 16, fill: "#4a3a30" }, lect);
+      sv("path", { d: `M${lx - 11} ${ly - 14} L${lx + 11} ${ly - 14} L${lx + 8} ${ly - 22} L${lx - 8} ${ly - 22} Z`, fill: "#6a5039" }, lect);
+      sv("path", { d: `M${lx - 7} ${ly - 20.5} L${lx} ${ly - 19} L${lx + 7} ${ly - 20.5} L${lx + 7} ${ly - 16} L${lx} ${ly - 14.8} L${lx - 7} ${ly - 16} Z`, fill: "#f1e8d0" }, lect);
+      const lt = sv("text", { x: lx, y: ly + 12, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 7, "font-style": "italic", fill: "#cbbfe0", opacity: 0.75 }, lect);
+      lt.textContent = "visitors\u2019 book";
+      const hit = sv("rect", { x: lx - 16, y: ly - 28, width: 32, height: 46, fill: "transparent" }, lect);
+      hit.style.cursor = "pointer";
+      hit.addEventListener("click", showBook);
+    }
 
     // landmark art, one per plot
     const landmark = (key, cx, cy) => {
@@ -3622,6 +3753,7 @@ try {
       card.style.display = "block";
     };
 
+    const graveNodes = [];
     // ── plots ──
     live.forEach((s, si) => {
       const left = si % 2 === 0;
@@ -3640,6 +3772,8 @@ try {
         sv("path", { d: "M0 36 V14 A14 14 0 0 1 28 14 V36 Z", fill: tones[gyHash(g.f.workId) % tones.length] }, stone);
         sv("path", { d: "M14 12 v14 M9 17 h10", stroke: "rgba(0,0,0,0.35)", "stroke-width": 2, "stroke-linecap": "round", fill: "none" }, stone);
         if (moss) sv("ellipse", { cx: 8, cy: 35, rx: 9, ry: 3, fill: "#4f7a5a", opacity: 0.8 }, stone);
+        if (season === "winter") sv("path", { d: "M2.2 7 A14 14 0 0 1 25.8 7 Q21 5.5 17.5 8.5 Q14 5 10.5 8.5 Q6 5.5 2.2 7 Z", fill: "#f4f7ff", opacity: 0.92 }, stone);
+        if (season === "halloween" && gyHash(g.f.workId) % 5 === 0) pumpkin(grp, 2, 40, 0.55, "g" + g.f.workId);
         const rec = gyRec(g.f.workId);
         const tot = gyTotal(rec);
         if (tot) {
@@ -3659,6 +3793,7 @@ try {
         hit.style.cursor = "pointer";
         const tl = sv("title", {}, hit); tl.textContent = titleOf(g.f);
         hit.addEventListener("click", () => showCard(g, mark));
+        graveNodes.push({ g, gx, gy, mark });
       });
     });
 
@@ -3685,11 +3820,14 @@ try {
       "A distant voice: \u201CI\u2019ll finish it this weekend.\u201D The well does not believe it."
     ];
     let wi = Math.floor(Math.random() * WHISPERS.length);
+    let wishes = prefs.wishes || 0;
     const wellHit = sv("rect", { x: wx - 34, y: wy - 52, width: 68, height: 84, fill: "transparent" }, well);
     wellHit.style.cursor = "pointer";
     wellHit.addEventListener("click", () => {
       wi = (wi + 1 + Math.floor(Math.random() * (WHISPERS.length - 1))) % WHISPERS.length;
-      caption.textContent = WHISPERS[wi];
+      wishes++; prefs.wishes = wishes; savePrefs();
+      if (wishes % 7 === 0) { caption.textContent = `The well glows gold for a heartbeat. Somewhere, a fic gets a new chapter. (${wishes} wishes)`; sparkle(wx, wy, 12); }
+      else caption.textContent = WHISPERS[wi];
       const rp = sv("ellipse", { cx: wx, cy: wy, rx: 20, ry: 5, fill: "none", stroke: "#9fb4ff", "stroke-width": 1.5 }, well);
       rp.setAttribute("class", "gg-anim"); rp.style.cssText = `transform-origin:${wx}px ${wy}px;animation:ggRipple 1.3s ease-out forwards;`;
       setTimeout(() => rp.remove(), 1400);
@@ -3698,7 +3836,7 @@ try {
     sv("rect", { x: 34, y: wy + 10, width: 40, height: 4, rx: 2, fill: "#5a4535" }, svg);
     sv("rect", { x: 37, y: wy + 14, width: 3, height: 10, fill: "#3d2f25" }, svg);
     sv("rect", { x: 68, y: wy + 14, width: 3, height: 10, fill: "#3d2f25" }, svg);
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < (season === "summer" ? 44 : 22); i++) {
       const c = sv("circle", { cx: (rnd("ffx" + i) * W).toFixed(1), cy: (GATE + 40 + rnd("ffy" + i) * (H - GATE - 80)).toFixed(1), r: 1.5, fill: "#f6e27a" }, svg);
       anim(c, `animation:ggFirefly ${(3 + rnd("ffd" + i) * 4).toFixed(1)}s ${(rnd("ffs" + i) * 3).toFixed(1)}s ease-in-out infinite;`);
     }
@@ -3706,6 +3844,274 @@ try {
       const m = sv("ellipse", { cx: 90 + i * 90, cy: H - 60 - i * 70, rx: 130, ry: 16, fill: "#c8bee6" }, svg);
       anim(m, `animation:ggMist ${(9 + i * 3)}s ease-in-out infinite;opacity:.2;`);
     }
+    // ── extras, part 2: wisps, ghost, cat, groundskeeper, pond, weather, time of day, finder ──
+    const WISPS = 5;
+    const ym = `${now.getFullYear()}-${now.getMonth() + 1}`;
+    if (prefs.wm !== ym) { prefs.wm = ym; prefs.wi = []; savePrefs(); }
+    const wispFound = () => (Array.isArray(prefs.wi) ? prefs.wi : []);
+    const updateSub = () => {
+      const bits = [`${graves.length} grave${graves.length === 1 ? "" : "s"}`, `${live.length} plot${live.length === 1 ? "" : "s"}`, SEASON_TAG[season], `\u2726 ${wispFound().length}/${WISPS} wisps`];
+      if (prefs.keeper) bits.push(`keeper \u00D7${prefs.keeper}`);
+      sub.textContent = bits.join(" \u00B7 ");
+    };
+
+    // will-o-wisps: five faint lights hidden in the grounds, new places every month
+    for (let i = 0; i < WISPS; i++) {
+      if (wispFound().includes(i)) continue;
+      const wx0 = 26 + rnd("wx" + ym + i) * 308, wy0 = GATE + 90 + rnd("wy" + ym + i) * Math.max(80, H - GATE - TAIL - 120);
+      const wg = sv("g", { transform: `translate(${wx0.toFixed(1)} ${wy0.toFixed(1)})` }, svg);
+      const wf = sv("g", {}, wg);
+      sv("circle", { cx: 0, cy: 0, r: 11, fill: "#9fd4ff", opacity: 0.22 }, wf);
+      sv("circle", { cx: 0, cy: 0, r: 4, fill: "#cfe9ff", opacity: 0.8 }, wf);
+      sv("circle", { cx: 0, cy: 0, r: 1.8, fill: "#fff" }, wf);
+      anim(wf, `animation:ggWisp ${(3.5 + rnd("wd" + i) * 3).toFixed(1)}s ease-in-out infinite;`);
+      const hit = sv("circle", { cx: 0, cy: 0, r: 15, fill: "transparent" }, wg);
+      hit.style.cursor = "pointer";
+      hit.addEventListener("click", () => {
+        wg.remove();
+        prefs.wi = wispFound().concat(i);
+        const n = prefs.wi.length;
+        if (n >= WISPS) { prefs.keeper = (prefs.keeper || 0) + 1; say("The last wisp slips into your lantern. The whole place hums. You are a wisp-keeper."); sparkle(wx0, wy0, 14); }
+        else { say(`A wisp drifts into your lantern. ${n} of ${WISPS} this month.`); sparkle(wx0, wy0, 6); }
+        savePrefs(); updateSub();
+      });
+    }
+
+    // a ghost that drifts across the grounds
+    {
+      const gy0 = GATE + 150 + rnd("ghost" + ym) * Math.max(60, H - GATE - TAIL - 300);
+      const wrap = sv("g", { transform: `translate(0 ${gy0.toFixed(0)})` }, svg);
+      wrap.style.transition = "opacity .6s";
+      const drift = sv("g", { transform: "translate(180 0)" }, wrap);
+      const bob = sv("g", {}, drift);
+      sv("circle", { cx: 0, cy: -4, r: 20, fill: "#cfe0ff", opacity: 0.12 }, bob);
+      sv("path", { d: "M-9 8 V-2 A9 9 0 0 1 9 -2 V8 L6 5 L3 8 L0 5 L-3 8 L-6 5 Z", fill: "#f1f4ff", opacity: 0.55 }, bob);
+      sv("circle", { cx: -3, cy: -3, r: 1.3, fill: "#1b1530" }, bob);
+      sv("circle", { cx: 3, cy: -3, r: 1.3, fill: "#1b1530" }, bob);
+      sv("ellipse", { cx: 0, cy: 1.5, rx: 1.5, ry: 2, fill: "#1b1530" }, bob);
+      anim(bob, "animation:ggBob 2.8s ease-in-out infinite;");
+      anim(drift, `animation:ggDrift ${40 + Math.round(rnd("gd") * 20)}s linear -${Math.round(rnd("gs" + ym) * 30)}s infinite alternate;`);
+      const hit = sv("circle", { cx: 0, cy: -2, r: 18, fill: "transparent" }, drift);
+      hit.style.cursor = "pointer";
+      let gone = false;
+      hit.addEventListener("click", () => {
+        if (gone) return;
+        gone = true;
+        say(pick([
+          "Boo. (Affectionately.)",
+          "\u201CI was a six-chapter slow burn. Tell no one.\u201D",
+          "\u201CHave you seen my author? Last seen 2019.\u201D",
+          "\u201CI\u2019m not haunting you. I\u2019m waiting for an update.\u201D",
+          "\u201CWhooo reads at 3am? Oh. You do.\u201D",
+          "\u201CPlease. Just one more chapter.\u201D"
+        ]));
+        wrap.style.opacity = "0";
+        setTimeout(() => { wrap.style.opacity = "1"; gone = false; }, 9000);
+      });
+    }
+
+    // a cat who sits on graves; pet her and she eventually wanders off to another one
+    if (graveNodes.length) {
+      let at = Math.floor(Math.random() * graveNodes.length), pets = 0;
+      const spot = n => ({ x: n.gx + 14, y: n.gy + 1 });
+      const catG = sv("g", {}, svg);
+      catG.style.transition = "transform .9s ease-in-out";
+      const place = () => { const p = spot(graveNodes[at]); catG.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; };
+      place();
+      const tail = sv("path", { d: "M5 -2 Q13 -3 11 -11", stroke: "#0b0910", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, catG);
+      anim(tail, "animation:ggSway 2.4s ease-in-out infinite;transform-origin:5px -2px;");
+      sv("ellipse", { cx: 0, cy: -6, rx: 6, ry: 6, fill: "#0b0910" }, catG);
+      sv("circle", { cx: 0, cy: -15, r: 4.6, fill: "#0b0910" }, catG);
+      sv("path", { d: "M-4 -17 L-3.5 -22 L-0.8 -18.5 Z M4 -17 L3.5 -22 L0.8 -18.5 Z", fill: "#0b0910" }, catG);
+      sv("circle", { cx: -1.8, cy: -15.5, r: 0.9, fill: "#ffe27a" }, catG);
+      sv("circle", { cx: 1.8, cy: -15.5, r: 0.9, fill: "#ffe27a" }, catG);
+      const hit = sv("circle", { cx: 0, cy: -12, r: 10, fill: "transparent" }, catG);
+      hit.style.cursor = "pointer";
+      hit.addEventListener("click", e => {
+        e.stopPropagation();
+        pets++;
+        const p = spot(graveNodes[at]);
+        const h = sv("text", { x: p.x, y: p.y - 24, "text-anchor": "middle", "font-size": 10, fill: "#ff9fb8" }, svg);
+        h.textContent = "\u2665";
+        anim(h, "animation:ggHeart 1s ease-out forwards;");
+        setTimeout(() => h.remove(), 1050);
+        if (pets % 4 === 0) {
+          say("The cat hops down and trots off to another grave.");
+          setTimeout(() => { at = (at + 1 + Math.floor(Math.random() * Math.max(1, graveNodes.length - 1))) % graveNodes.length; place(); }, 500);
+        } else say(pick(["Mrrp.", `Purrrr. (${pets} pet${pets === 1 ? "" : "s"})`, "The cat narrows her eyes happily.", "She allows it."]));
+      });
+    }
+
+    // the groundskeeper walks the whole path with a lantern, very slowly
+    {
+      const keeper = sv("g", {}, svg);
+      const fig = sv("g", { transform: "translate(24 0)" }, keeper);
+      sv("ellipse", { cx: 0, cy: 1, rx: 7, ry: 2, fill: "#000", opacity: 0.3 }, fig);
+      sv("path", { d: "M-6 0 L-4 -16 Q0 -20 4 -16 L6 0 Z", fill: "#2e2a45" }, fig);
+      sv("circle", { cx: 0, cy: -20, r: 3.5, fill: "#d9c3a8" }, fig);
+      sv("path", { d: "M-7 -22 Q0 -25 7 -22 L3 -29 Q0 -32 -3 -29 Z", fill: "#1d1830" }, fig);
+      sv("line", { x1: 4, y1: -13, x2: 10, y2: -11, stroke: "#2e2a45", "stroke-width": 2, "stroke-linecap": "round" }, fig);
+      const gl = sv("circle", { cx: 11, cy: -8, r: 18, fill: "url(#gg-glow)" }, fig);
+      anim(gl, "animation:ggFlicker 2.4s ease-in-out infinite;transform-origin:11px -8px;");
+      sv("rect", { x: 9, y: -10, width: 4, height: 6, rx: 1, fill: "#ffd98a" }, fig);
+      const hit = sv("rect", { x: -9, y: -34, width: 30, height: 42, fill: "transparent" }, fig);
+      hit.style.cursor = "pointer";
+      hit.addEventListener("click", () => say(pick([
+        "\u201CEvening. I just keep the lanterns lit.\u201D",
+        "\u201CMind the third stone from the left. It has opinions.\u201D",
+        "\u201CMost of these folks would have finished, given a little more time.\u201D",
+        "\u201CThe cat? Never seen her before in my life. She lives here.\u201D",
+        "\u201CIf you hear whispering near the well, that\u2019s the authors, apologizing.\u201D",
+        "\u201CThe wisps come back every month. Don\u2019t ask me how they know.\u201D"
+      ])));
+      if (reduce) keeper.setAttribute("transform", `translate(${pathX(260).toFixed(1)} 260)`);
+      else sv("animateMotion", { dur: "180s", repeatCount: "indefinite", path: d, rotate: "0" }, keeper);
+    }
+
+    // a koi pond with lily pads and a frog, below the well
+    {
+      const px = 84, py = wy + 112;
+      const pond = sv("g", {}, svg);
+      sv("ellipse", { cx: px, cy: py, rx: 56, ry: 21, fill: "#1b2748", stroke: "#4a5a8a", "stroke-width": 2.5 }, pond);
+      sv("ellipse", { cx: px - 12, cy: py - 4, rx: 22, ry: 5, fill: "#2c3d6e", opacity: 0.7 }, pond);
+      sv("circle", { cx: px + 22, cy: py - 5, r: 3.5, fill: "#efe6bd", opacity: 0.55 }, pond);
+      [["#ff9a4d", 24, 5.5, 26], ["#f4efe6", 18, 4.5, 38]].forEach(([col, rx, ry, dur], k) => {
+        const kg = sv("g", {}, pond);
+        sv("ellipse", { cx: 0, cy: 0, rx: 5, ry: 2.2, fill: col }, kg);
+        sv("path", { d: "M-4 0 L-8 -2.2 L-8 2.2 Z", fill: col }, kg);
+        const kp = `M${px - rx} ${py + k * 2} A${rx} ${ry} 0 1 1 ${px + rx} ${py + k * 2} A${rx} ${ry} 0 1 1 ${px - rx} ${py + k * 2}`;
+        if (reduce) kg.setAttribute("transform", `translate(${px - rx + 6} ${py + k * 2})`);
+        else sv("animateMotion", { dur: dur + "s", repeatCount: "indefinite", path: kp, rotate: "auto" }, kg);
+      });
+      [[-30, 4, 8], [30, 8, 7], [8, -9, 6.5], [-12, 9, 6]].forEach(([dx, dy, r]) => {
+        sv("ellipse", { cx: px + dx, cy: py + dy, rx: r, ry: r * 0.45, fill: "#4f8a5e" }, pond);
+        sv("path", { d: `M${px + dx} ${py + dy} L${px + dx + r} ${py + dy - 1}`, stroke: "#1b2748", "stroke-width": 1 }, pond);
+      });
+      sv("circle", { cx: px + 30, cy: py + 5, r: 2.4, fill: "#f6a5c0" }, pond);
+      const pt = sv("text", { x: px, y: py + 38, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 8, "font-style": "italic", fill: "#cbbfe0", opacity: 0.75 }, pond);
+      pt.textContent = "the koi pond";
+      const water = sv("ellipse", { cx: px, cy: py, rx: 56, ry: 21, fill: "transparent" }, pond);
+      water.style.cursor = "pointer";
+      water.addEventListener("click", () => say(pick(["The koi circle once, unimpressed.", "A koi surfaces, judges your tabs, and sinks again.", "Lily pads. Zero chapters. Total peace."])));
+      const frog = sv("g", { transform: `translate(${px - 30} ${py + 2})` }, pond);
+      const fj = sv("g", {}, frog);
+      fj.setAttribute("class", "gg-anim");
+      sv("ellipse", { cx: 0, cy: -2, rx: 4.5, ry: 3.2, fill: "#6fbf73" }, fj);
+      [-2.2, 2.2].forEach(ex => { sv("circle", { cx: ex, cy: -5, r: 1.6, fill: "#6fbf73" }, fj); sv("circle", { cx: ex, cy: -5, r: 0.7, fill: "#10151f" }, fj); });
+      const fh = sv("circle", { cx: 0, cy: -3, r: 10, fill: "transparent" }, frog);
+      fh.style.cursor = "pointer";
+      fh.addEventListener("click", e => {
+        e.stopPropagation();
+        say(pick(["Ribbit.", "Ribbit. (He has seen things.)", "The frog hops, lands on the same pad, and acts like that was the plan."]));
+        fj.style.animation = "none"; void fj.getBoundingClientRect(); fj.style.animation = "ggHop .5s ease-out";
+      });
+    }
+
+    // seasonal falling bits (leaves / petals) and the weather, drawn over everything and never tappable
+    const overlay = sv("g", {}, svg);
+    overlay.style.pointerEvents = "none";
+    const wxG = sv("g", {}, overlay);
+    const seasonG = sv("g", {}, overlay);
+    if (!reduce && (season === "autumn" || season === "halloween" || season === "spring")) {
+      const cols = season === "spring" ? ["#f6b6cc", "#fbd3e0", "#f09ab8"] : ["#d9731f", "#b5541a", "#e0a032", "#8a4a1e"];
+      const N = Math.min(46, Math.round(H / 32));
+      for (let i = 0; i < N; i++) {
+        const p = sv("ellipse", { cx: (rnd("lx" + i) * W).toFixed(1), cy: (rnd("ly" + i) * H).toFixed(1), rx: 3, ry: 1.6, fill: cols[i % cols.length], opacity: 0.8 }, seasonG);
+        anim(p, `animation:ggFall ${(6 + rnd("ld" + i) * 6).toFixed(1)}s linear -${(rnd("lz" + i) * 8).toFixed(1)}s infinite;`);
+      }
+    }
+    const WX = [["clear", "\u2600\uFE0F clear"], ["rain", "\u{1F327}\uFE0F rain"], ["fog", "\u{1F32B}\uFE0F fog"], ["snow", "\u2744\uFE0F snow"]];
+    const WX_SAY = { clear: "The sky clears.", rain: "Rain patters on the stones. Somewhere, distant thunder.", fog: "A thick fog rolls in between the graves.", snow: "Soft snow begins to fall." };
+    let wxI = Math.max(0, Math.min(WX.length - 1, prefs.wx | 0));
+    const paintWeather = () => {
+      wxG.textContent = "";
+      const kind = WX[wxI][0];
+      if (kind === "rain" && !reduce) {
+        const n = Math.min(190, Math.round(H / 8));
+        for (let i = 0; i < n; i++) {
+          const x = rnd("rx" + i) * (W + 20), y = rnd("ry" + i) * H;
+          const l = sv("line", { x1: x.toFixed(1), y1: y.toFixed(1), x2: (x - 2.5).toFixed(1), y2: (y + 9).toFixed(1), stroke: "#a9bcff", "stroke-width": 1, opacity: 0.45 }, wxG);
+          anim(l, `animation:ggRain ${(0.6 + rnd("rd" + i) * 0.5).toFixed(2)}s linear -${rnd("rs" + i).toFixed(2)}s infinite;`);
+        }
+        const fl = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#dfe6ff", opacity: 0 }, wxG);
+        anim(fl, "animation:ggFlash 13s linear infinite;");
+      } else if (kind === "snow" && !reduce) {
+        const n = Math.min(130, Math.round(H / 12));
+        for (let i = 0; i < n; i++) {
+          const s = sv("circle", { cx: (rnd("nx" + i) * W).toFixed(1), cy: (rnd("ny" + i) * H).toFixed(1), r: (1 + rnd("nr" + i) * 1.4).toFixed(1), fill: "#fff", opacity: 0.85 }, wxG);
+          anim(s, `animation:ggFall ${(5 + rnd("nd" + i) * 5).toFixed(1)}s linear -${(rnd("nz" + i) * 8).toFixed(1)}s infinite;`);
+        }
+      } else if (kind === "fog") {
+        const n = Math.max(4, Math.round(H / 260));
+        for (let i = 0; i < n; i++) {
+          const f = sv("ellipse", { cx: (rnd("fx" + i) * W).toFixed(1), cy: ((i + 0.5) * H / n).toFixed(1), rx: 190, ry: 46, fill: "#c8bee6", opacity: 0.22 }, wxG);
+          anim(f, `animation:ggMist ${(11 + i % 4 * 3)}s ease-in-out infinite;`);
+        }
+      }
+    };
+
+    // time of day: night, dusk, dawn
+    const TIMES = [
+      { label: "\u{1F319} night", bg: "linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%)", stars: 1, orb: "#efe6bd", dy: 0, say: "Night again. The moon is out." },
+      { label: "\u{1F307} dusk", bg: "linear-gradient(180deg,#2b1b4a 0%,#6a3566 35%,#a85a52 55%,#33203c 100%)", stars: 0.3, orb: "#ffb067", dy: 34, say: "Dusk. The lamps are just starting to matter." },
+      { label: "\u{1F305} dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, say: "Dawn. Even the graveyard looks hopeful." }
+    ];
+    let tI = Math.max(0, Math.min(TIMES.length - 1, prefs.tm | 0));
+    const applyTime = () => {
+      const t = TIMES[tI];
+      box.style.background = t.bg;
+      starG.setAttribute("opacity", t.stars);
+      moonDisc.setAttribute("fill", t.orb);
+      moonG.setAttribute("transform", `translate(0 ${t.dy})`);
+      timeBtn.textContent = t.label;
+    };
+
+    // tools row, grave finder and random visit
+    const tools = el("div", "flex:0 0 auto;display:flex;gap:6px;padding:7px 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid rgba(190,170,255,0.12);background:rgba(8,6,22,0.4);z-index:3;");
+    const pill = (label, title, fn) => {
+      const b = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);color:#e6dcf5;border-radius:999px;padding:5px 11px;font:500 12px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", label);
+      b.type = "button"; b.title = title; b.onclick = fn; tools.appendChild(b); return b;
+    };
+    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; prefs.tm = tI; savePrefs(); applyTime(); say(TIMES[tI].say); });
+    const wxBtn = pill(WX[wxI][1], "Change the weather", () => { wxI = (wxI + 1) % WX.length; prefs.wx = wxI; savePrefs(); wxBtn.textContent = WX[wxI][1]; paintWeather(); say(WX_SAY[WX[wxI][0]]); });
+    const goTo = n => {
+      stopStroll();
+      const top = Math.max(0, n.gy * (field.clientWidth / W) - field.clientHeight / 2 + 20);
+      field.scrollTo({ top, behavior: "smooth" });
+      const ring = sv("rect", { x: n.gx - 6, y: n.gy - 8, width: 40, height: 62, rx: 12, fill: "none", stroke: "#ffd98a", "stroke-width": 1.5 }, svg);
+      anim(ring, "animation:ggPulse .9s ease-in-out 4;");
+      setTimeout(() => ring.remove(), 3800);
+      if (picked !== n.mark) showCard(n.g, n.mark);
+    };
+    const finder = el("div", "flex:0 0 auto;display:none;padding:8px 14px 10px;border-bottom:1px solid rgba(190,170,255,0.12);background:rgba(8,6,22,0.45);z-index:3;");
+    const fin = el("input", "width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.08);color:#e6dcf5;font-family:inherit;font-size:16px;outline:none;");
+    fin.type = "search"; fin.placeholder = "find a grave by title\u2026";
+    const finRes = el("div", "display:flex;flex-direction:column;gap:5px;margin-top:7px;max-height:150px;overflow-y:auto;");
+    finder.appendChild(fin); finder.appendChild(finRes);
+    fin.addEventListener("input", () => {
+      const q = fin.value.trim().toLowerCase();
+      finRes.textContent = "";
+      if (!q) return;
+      const hits = graveNodes.filter(n => (titleOf(n.g.f) + " " + String(n.g.f.author || "")).toLowerCase().includes(q)).slice(0, 8);
+      if (!hits.length) { finRes.appendChild(el("div", "font-size:12px;opacity:0.6;", "No grave by that name.")); return; }
+      hits.forEach(n => {
+        const b = el("button", "text-align:left;cursor:pointer;font-family:inherit;font-size:12.5px;color:#e6dcf5;background:rgba(255,255,255,0.06);border:1px solid rgba(190,170,255,0.25);border-radius:8px;padding:6px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", titleOf(n.g.f));
+        b.type = "button"; b.onclick = () => goTo(n); finRes.appendChild(b);
+      });
+    });
+    pill("\u{1F50D} find", "Find a grave by title", () => {
+      const open = finder.style.display === "none";
+      finder.style.display = open ? "block" : "none";
+      if (open) fin.focus();
+    });
+    pill("\u{1F3B2} random", "Visit a random grave", () => goTo(pick(graveNodes)));
+    pill("\u{1F4D6} book", "The visitors\u2019 book", showBook);
+    box.insertBefore(tools, field);
+    box.insertBefore(finder, field);
+
+    applyTime(); paintWeather(); updateSub();
+    if (month === 9 && now.getDate() === 31) say("Happy Halloween. Tonight, the graves are almost lively.");
+
     field.appendChild(svg);
 
     // ── stroll: wander down the path on your own; any touch stops it ──
