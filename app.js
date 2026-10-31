@@ -3861,6 +3861,148 @@ try {
     document.body.appendChild(back);
   }
 
+  // ── 🪟 FIC STAINED GLASS ──
+  // Every tracked fic is a pane in one big arched stained-glass window: wider = more words,
+  // colour = status (gold and ruby finished, sea-blue still reading, dusky violet abandoned),
+  // and the window is lit from behind with a slow shimmer. Tap a pane for its title.
+  // Read-only: it stores nothing. Reached from a faint link at the bottom of the tracker.
+  function openStainedGlass() {
+    const old = document.getElementById("ao3-glass");
+    if (old) old.remove();
+    nvEnsureCss(); // provides the .nv-anim reduced-motion rule
+    if (!document.getElementById("ao3-sg-css")) {
+      const st = document.createElement("style");
+      st.id = "ao3-sg-css";
+      st.textContent = `@keyframes sgShimmer{0%{transform:translateX(-340px)}100%{transform:translateX(340px)}}
+        @keyframes sgGlow{0%,100%{opacity:.75}50%{opacity:1}}`;
+      (document.head || document.documentElement).appendChild(st);
+    }
+    const el = (tag, css, text) => {
+      const e = document.createElement(tag);
+      if (css) e.style.cssText = css;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const NS = "http://www.w3.org/2000/svg";
+    const sv = (tag, attrs) => {
+      const e = document.createElementNS(NS, tag);
+      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+      return e;
+    };
+    const titleOf = f => f.title || `Work ${f.workId}`;
+    const h32 = x => Math.abs(Math.floor(gyHash(String(x))));
+    const PAL = {
+      finished:  ["#e0a82e", "#eab94d", "#c9482e", "#b3304a", "#d98a2b"],
+      active:    ["#2f7fa8", "#3aa0a0", "#4aa36b", "#5a7fd1", "#2a9d8f"],
+      abandoned: ["#7a5c8f", "#8a6f9e", "#6b5b7e", "#5d4f78"]
+    };
+    const ORDER = { finished: 0, active: 1, abandoned: 2 };
+    const panes = getTracked().map(f => {
+      const st = f.finished ? "finished" : (isWip(f) ? "active" : "abandoned");
+      const hv = h32(f.workId || titleOf(f));
+      const words = Number(f.words) || 0;
+      return { f, st, title: titleOf(f), words, color: PAL[st][hv % PAL[st].length],
+               wt: 1 + (words > 0 ? Math.min(1, Math.log10(words + 1) / 6) : 0.4) * 1.6 };
+    }).sort((a, b) => ORDER[a.st] - ORDER[b.st]);
+
+    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000002;");
+    back.id = "ao3-glass";
+    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;font-family:inherit;color:#f3e6ff;background:radial-gradient(ellipse at 50% 35%,#4a3260 0%,#1d1228 70%);box-shadow:0 10px 40px rgba(0,0,0,0.6);");
+    back.appendChild(box);
+    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(243,230,255,0.15);");
+    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;", "\u{1FA9F} Fic Stained Glass"));
+    ttl.appendChild(el("div", "font-size:10px;letter-spacing:0.04em;opacity:0.6;", `${panes.length} pane${panes.length === 1 ? "" : "s"}`));
+    topbar.appendChild(ttl);
+    const xBtn = el("button", "background:none;border:none;color:inherit;opacity:0.7;cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
+    topbar.appendChild(xBtn);
+    box.appendChild(topbar);
+
+    const stage = el("div", "position:relative;flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:10px;");
+    box.appendChild(stage);
+    const caption = el("div", "flex:0 0 auto;min-height:54px;padding:8px 14px;text-align:center;border-top:1px solid rgba(243,230,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;display:flex;flex-direction:column;justify-content:center;gap:2px;");
+    caption.appendChild(el("div", "", panes.length ? "tap a pane" : ""));
+    caption.appendChild(el("div", "font-style:normal;font-family:inherit;font-size:10px;opacity:0.55;", "wider = more words \u00B7 gold/ruby finished \u00B7 blue-green reading \u00B7 violet abandoned"));
+    box.appendChild(caption);
+
+    const onKey = e => { if (e.key === "Escape") close(); };
+    const close = () => { back.remove(); document.removeEventListener("keydown", onKey); };
+    xBtn.onclick = close;
+    back.addEventListener("click", e => { if (e.target === back) close(); });
+    document.addEventListener("keydown", onKey);
+
+    if (!panes.length) {
+      const empty = el("div", "text-align:center;padding:30px 24px;");
+      empty.appendChild(el("div", "font-size:34px;", "\u{1FA9F}"));
+      empty.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-size:15px;margin-top:8px;", "The window is bare."));
+      empty.appendChild(el("div", "font-size:12px;opacity:0.65;margin-top:4px;", "Track a fic and a pane of glass will appear."));
+      stage.appendChild(empty);
+      document.body.appendChild(back);
+      return;
+    }
+
+    // ── the window: an arch 300 wide, 440 tall ──
+    const W = 300, H = 440, R = 150;
+    const svg = sv("svg", { viewBox: `-8 -8 ${W + 16} ${H + 16}`, preserveAspectRatio: "xMidYMid meet" });
+    svg.style.cssText = "max-width:100%;max-height:100%;width:auto;height:100%;display:block;";
+    const defs = sv("defs");
+    const clip = sv("clipPath", { id: "sg-arch" });
+    clip.appendChild(sv("path", { d: `M0 ${H} L0 ${R} A${R} ${R} 0 0 1 ${W} ${R} L${W} ${H} Z` }));
+    defs.appendChild(clip);
+    const sheen = sv("linearGradient", { id: "sg-sheen", x1: "0", y1: "0", x2: "1", y2: "1" });
+    sheen.appendChild(sv("stop", { offset: "0%", "stop-color": "#fff", "stop-opacity": "0.38" }));
+    sheen.appendChild(sv("stop", { offset: "55%", "stop-color": "#fff", "stop-opacity": "0.04" }));
+    sheen.appendChild(sv("stop", { offset: "100%", "stop-color": "#000", "stop-opacity": "0.22" }));
+    defs.appendChild(sheen);
+    const beam = sv("linearGradient", { id: "sg-beam", x1: "0", y1: "0", x2: "1", y2: "0" });
+    beam.appendChild(sv("stop", { offset: "0%", "stop-color": "#fff", "stop-opacity": "0" }));
+    beam.appendChild(sv("stop", { offset: "50%", "stop-color": "#fff", "stop-opacity": "0.28" }));
+    beam.appendChild(sv("stop", { offset: "100%", "stop-color": "#fff", "stop-opacity": "0" }));
+    defs.appendChild(beam);
+    svg.appendChild(defs);
+
+    svg.appendChild(sv("path", { d: `M-6 ${H + 6} L-6 ${R} A${R + 6} ${R + 6} 0 0 1 ${W + 6} ${R} L${W + 6} ${H + 6} Z`, fill: "#120a18" }));
+    const gl = sv("g", { "clip-path": "url(#sg-arch)" });
+    // lay panes out in rows, widths proportional to weight
+    const rowsN = Math.max(1, Math.round(Math.sqrt(panes.length * (H / W) * 0.9)));
+    const perRow = Math.ceil(panes.length / rowsN), rh = H / rowsN;
+    let picked = null;
+    for (let r = 0; r < rowsN; r++) {
+      const row = panes.slice(r * perRow, (r + 1) * perRow);
+      if (!row.length) break;
+      const tot = row.reduce((s, p) => s + p.wt, 0);
+      let x = 0;
+      row.forEach(p => {
+        const w = W * p.wt / tot;
+        const rect = sv("rect", { x: x.toFixed(1), y: (r * rh).toFixed(1), width: w.toFixed(1), height: rh.toFixed(1), fill: p.color });
+        const shine = sv("rect", { x: x.toFixed(1), y: (r * rh).toFixed(1), width: w.toFixed(1), height: rh.toFixed(1), fill: "url(#sg-sheen)" });
+        const lit = sv("rect", { x: x.toFixed(1), y: (r * rh).toFixed(1), width: w.toFixed(1), height: rh.toFixed(1), fill: "#fff", opacity: 0 });
+        const hit = sv("rect", { x: x.toFixed(1), y: (r * rh).toFixed(1), width: w.toFixed(1), height: rh.toFixed(1), fill: "transparent", stroke: "#150d1b", "stroke-width": 3.2 });
+        hit.style.cursor = "pointer";
+        const t = sv("title"); t.textContent = p.title; hit.appendChild(t);
+        hit.addEventListener("click", () => {
+          if (picked) picked.setAttribute("opacity", 0);
+          if (picked === lit) { picked = null; caption.firstChild.textContent = "tap a pane"; return; }
+          picked = lit; lit.setAttribute("opacity", 0.4);
+          const label = { finished: "finished", active: "still reading", abandoned: "abandoned" }[p.st];
+          caption.firstChild.textContent = `${p.title} \u00B7 ${label}${p.words ? " \u00B7 " + p.words.toLocaleString() + " words" : ""}`;
+        });
+        gl.appendChild(rect); gl.appendChild(shine); gl.appendChild(lit); gl.appendChild(hit);
+        x += w;
+      });
+    }
+    // slow shimmer of light sweeping across the glass
+    const sweep = sv("rect", { x: 0, y: 0, width: 90, height: H, fill: "url(#sg-beam)", "pointer-events": "none", class: "nv-anim" });
+    sweep.style.cssText = "animation:sgShimmer 7s ease-in-out infinite;mix-blend-mode:screen;";
+    gl.appendChild(sweep);
+    svg.appendChild(gl);
+    // lead frame + sill
+    svg.appendChild(sv("path", { d: `M0 ${H} L0 ${R} A${R} ${R} 0 0 1 ${W} ${R} L${W} ${H}`, fill: "none", stroke: "#150d1b", "stroke-width": 7 }));
+    svg.appendChild(sv("rect", { x: -8, y: H, width: W + 16, height: 8, rx: 2, fill: "#3a2a44" }));
+    stage.appendChild(svg);
+    document.body.appendChild(back);
+  }
+
   // ── 🐠 FIC AQUARIUM ──
   // Every tracked fic is a little fish. Lively = a WIP that's updating on schedule,
   // slow = a WIP that's gone quiet for a while (about 2.5x its usual gap, min. 21 days),
@@ -6719,6 +6861,7 @@ try {
       cnWrap.appendChild(quietLink("aquarium", "See your fics as little fish", () => openAquarium()));
       cnWrap.appendChild(quietLink("bookshelf", "See your fics as books on a shelf", () => openBookshelf()));
       cnWrap.appendChild(quietLink("garden", "See your fics as a little garden", () => openGarden()));
+      cnWrap.appendChild(quietLink("window", "See your fics as stained glass", () => openStainedGlass()));
       content.appendChild(cnWrap);
     }
   }
@@ -7235,7 +7378,7 @@ try {
     });
   }, 1000);
   // Web app only: hand the four keepsake views to the web app's "Keepsakes" button.
-  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden };
+  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass };
 })();
 } catch (e) { console.error("[AO3 bundle] Fic Tracker failed to load:", e); }
 
@@ -26927,7 +27070,7 @@ try {
       box.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:22px;background:var(--fb-card,#fffdfb);border:1.5px solid var(--fb-line,#ecd3cf);box-shadow:0 8px 28px rgba(0,0,0,0.25);min-width:220px;";
       [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F389} Celebrations", "openCelebration"],
        ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"],
-       ["\u{1F4DA} Bookshelf", "openBookshelf"], ["\u{1F337} Garden", "openGarden"]].forEach(([label, fn]) => {
+       ["\u{1F4DA} Bookshelf", "openBookshelf"], ["\u{1F337} Garden", "openGarden"], ["\u{1FA9F} Stained glass", "openStainedGlass"]].forEach(([label, fn]) => {
         const b = document.createElement("button");
         b.textContent = label;
         b.style.cssText = "padding:12px 16px;border-radius:999px;border:1.5px solid var(--fb-line,#ecd3cf);background:var(--fb-card,#fffdfb);color:var(--fb-ink,#3f3b6f);font:500 15px/1.2 inherit;font-family:inherit;cursor:pointer;";
