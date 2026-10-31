@@ -206,6 +206,8 @@
   }
   const onAo3 = /(^|\.)archiveofourown\.org$/.test(location.hostname);
   window.__ao3Down = true;
+  // On archiveofourown.org itself (even the maintenance page) add no buttons: they only appear once AO3 is back, in its normal header.
+  if (onAo3) return;
 
   const LIGHT = "--fb-bg:#fdf8f5;--fb-bg2:#f8e6e7;--fb-card:#fffdfb;--fb-line:#ecd3cf;--fb-ink:#3f3b6f;--fb-ink2:#7d7899;--fb-accent:#e59ab0;--fb-accent2:#b44a6c;--fb-shadow:rgba(190,120,135,.25);--fb-chip:#fbe3e8;";
   const DARK  = "--fb-bg:#1c1722;--fb-bg2:#2b1f31;--fb-card:#2b2231;--fb-line:#4c3a50;--fb-ink:#f5e8f0;--fb-ink2:#bba8bb;--fb-accent:#e68db0;--fb-accent2:#f4a9c6;--fb-shadow:rgba(0,0,0,.5);--fb-chip:#3d2b42;";
