@@ -3383,6 +3383,328 @@ try {
     document.body.appendChild(back);
   }
 
+  // ── 🪦 GRAVEYARD GROUNDS ──
+  // An expansion of the fic graveyard: a walkable night-time cemetery map. A winding cobbled path
+  // runs from the iron gate down past five plots (Long Lives, Almost There, Gone Too Soon,
+  // Old Growth, the Quiet Meadow), each with its own landmark, to a wishing well. Every abandoned
+  // fic keeps its grave; graves with a lit candle flicker, and flowers show on top. Tap a grave
+  // for its epitaph and a way into the full graveyard. "stroll" wanders down the path on its own.
+  // Read-only: it stores nothing and leaves the original graveyard exactly as it is.
+  function openGraveyardGrounds() {
+    const old = document.getElementById("ao3-grounds");
+    if (old) old.remove();
+    if (!document.getElementById("ao3-gg-css")) {
+      const st = document.createElement("style");
+      st.id = "ao3-gg-css";
+      st.textContent = `
+        @keyframes ggFlicker{0%,100%{opacity:.75;transform:scale(1)}30%{opacity:1;transform:scale(1.15)}60%{opacity:.6;transform:scale(.9)}}
+        @keyframes ggFirefly{0%,100%{opacity:.1;transform:translate(0,0)}25%{opacity:1;transform:translate(8px,-7px)}50%{opacity:.3;transform:translate(-5px,-14px)}75%{opacity:1;transform:translate(7px,-5px)}}
+        @keyframes ggRipple{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(2.6)}}
+        @keyframes ggSway{0%,100%{transform:rotate(-1.6deg)}50%{transform:rotate(1.6deg)}}
+        @keyframes ggMist{0%,100%{opacity:.18;transform:translateX(-14px)}50%{opacity:.34;transform:translateX(14px)}}
+        @media (prefers-reduced-motion: reduce){.gg-anim{animation:none !important}}
+      `;
+      (document.head || document.documentElement).appendChild(st);
+    }
+    const el = (tag, css, text) => {
+      const e = document.createElement(tag);
+      if (css) e.style.cssText = css;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const NS = "http://www.w3.org/2000/svg";
+    const sv = (tag, attrs, parent) => {
+      const e = document.createElementNS(NS, tag);
+      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+      if (parent) parent.appendChild(e);
+      return e;
+    };
+    const anim = (node, css) => { node.setAttribute("class", "gg-anim"); node.style.cssText += css; return node; };
+    const rnd = seed => { const x = Math.sin(gyHash(String(seed)) * 12.9898) * 43758.5453; return x - Math.floor(x); };
+    const titleOf = f => f.title || `Work ${f.workId}`;
+    const bornOf = f => ((f.chapterDates || []).slice().sort()[0]) || (f.trackedAt ? String(f.trackedAt).slice(0, 10) : null);
+    const yearOf = d => (d ? String(d).slice(0, 4) : "?");
+    const yearsOf = f => { const b = yearOf(bornOf(f)), d = yearOf(f.lastUpdate); return b === d ? b : `${b} \u2013 ${d}`; };
+
+    // ── sort every abandoned fic into a plot ──
+    const SECTIONS = [
+      { key: "long",    name: "Long Lives",       sub: "100k+ words" },
+      { key: "close",   name: "Almost There",     sub: "nearly finished" },
+      { key: "soon",    name: "Gone Too Soon",    sub: "3 chapters or fewer" },
+      { key: "old",     name: "Old Growth",       sub: "silent 2+ years" },
+      { key: "meadow",  name: "The Quiet Meadow", sub: "everyone else" }
+    ];
+    const plotOf = f => {
+      const total = f.totalChapters || 1;
+      const planned = parseInt(((f.chaptersLabel || "").split("/")[1]) || "", 10);
+      const quiet = daysSince(f.lastUpdate) || 0;
+      if (f.words >= 100000) return "long";
+      if (planned && total / planned >= 0.8) return "close";
+      if (total <= 3) return "soon";
+      if (quiet >= 730) return "old";
+      return "meadow";
+    };
+    const graves = abandonedFics().map(f => ({ f, plot: plotOf(f), quiet: daysSince(f.lastUpdate) || 0 }));
+    SECTIONS.forEach(s => { s.graves = graves.filter(g => g.plot === s.key); });
+    const live = SECTIONS.filter(s => s.graves.length);
+
+    // ── shell ──
+    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000002;");
+    back.id = "ao3-grounds";
+    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;font-family:inherit;color:#e6dcf5;background:linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%);box-shadow:0 10px 40px rgba(0,0,0,0.6);");
+    back.appendChild(box);
+    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.18);background:rgba(8,6,22,0.55);z-index:3;");
+    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#d9d0f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "\u{1FAA6} Graveyard Grounds"));
+    ttl.appendChild(el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);", `${graves.length} grave${graves.length === 1 ? "" : "s"} \u00B7 ${live.length} plot${live.length === 1 ? "" : "s"}`));
+    topbar.appendChild(ttl);
+    const strollBtn = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;border-radius:999px;padding:5px 12px;font:600 12px/1 inherit;font-family:inherit;cursor:pointer;", "\u{1F56F}\uFE0F stroll");
+    const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
+    topbar.appendChild(strollBtn); topbar.appendChild(xBtn);
+    box.appendChild(topbar);
+
+    const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;");
+    box.appendChild(field);
+    const card = el("div", "flex:0 0 auto;display:none;padding:12px 14px;border-top:1px solid rgba(190,170,255,0.25);background:rgba(18,12,34,0.96);text-align:center;");
+    box.appendChild(card);
+    const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);", graves.length ? "tap a grave \u00B7 tap the well at the end of the path" : "");
+    box.appendChild(caption);
+
+    let strolling = false, raf = 0;
+    const stopStroll = () => { strolling = false; cancelAnimationFrame(raf); strollBtn.textContent = "\u{1F56F}\uFE0F stroll"; };
+    const onKey = e => { if (e.key === "Escape") close(); };
+    const close = () => { stopStroll(); back.remove(); document.removeEventListener("keydown", onKey); };
+    xBtn.onclick = close;
+    back.addEventListener("click", e => { if (e.target === back) close(); });
+    document.addEventListener("keydown", onKey);
+
+    if (!graves.length) {
+      const empty = el("div", "text-align:center;padding:70px 24px;");
+      empty.appendChild(el("div", "font-size:34px;", "\u{1F54A}\uFE0F"));
+      empty.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-size:15px;margin-top:8px;", "The grounds are empty."));
+      empty.appendChild(el("div", "font-size:12px;opacity:0.65;margin-top:4px;", "No abandoned fics, so no graves. The gate stays quietly closed."));
+      field.appendChild(empty);
+      document.body.appendChild(back);
+      return;
+    }
+
+    // ── layout ──
+    const W = 360, GATE = 130, HEAD = 104, ROW = 58, PER_ROW = 8, TAIL = 190;
+    let y = GATE;
+    live.forEach(s => { s.y = y; s.rows = Math.ceil(s.graves.length / PER_ROW); y += HEAD + s.rows * ROW + 30; });
+    const H = y + TAIL;
+    const pathX = yy => 180 + 9 * Math.sin(yy / 70);
+
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const glow = sv("radialGradient", { id: "gg-glow" }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.75" }, glow);
+    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
+
+    // sky stuff near the gate: stars + moon
+    for (let i = 0; i < 40; i++) sv("circle", { cx: (rnd("sx" + i) * W).toFixed(1), cy: (rnd("sy" + i) * 200).toFixed(1), r: (0.5 + rnd("sr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("so" + i) * 0.5).toFixed(2) }, svg);
+    sv("circle", { cx: 300, cy: 46, r: 17, fill: "#efe6bd" }, svg);
+    sv("circle", { cx: 300, cy: 46, r: 32, fill: "url(#gg-glow)", opacity: 0.35 }, svg);
+
+    // the cobbled path
+    let d = `M${pathX(0).toFixed(1)} 0`;
+    for (let yy = 10; yy <= H; yy += 10) d += ` L${pathX(yy).toFixed(1)} ${yy}`;
+    sv("path", { d, fill: "none", stroke: "#3d3249", "stroke-width": 46, "stroke-linejoin": "round" }, svg);
+    sv("path", { d, fill: "none", stroke: "#5b4c68", "stroke-width": 34, "stroke-linejoin": "round", opacity: 0.55 }, svg);
+    sv("path", { d, fill: "none", stroke: "#8d7d9a", "stroke-width": 9, "stroke-dasharray": "2 13", "stroke-linecap": "round", opacity: 0.55 }, svg);
+
+    // iron gate
+    const gate = sv("g", {}, svg);
+    sv("rect", { x: 52, y: 40, width: 14, height: 90, fill: "#2c2438" }, gate);
+    sv("rect", { x: 294, y: 40, width: 14, height: 90, fill: "#2c2438" }, gate);
+    sv("rect", { x: 48, y: 34, width: 22, height: 8, fill: "#3a3047" }, gate);
+    sv("rect", { x: 290, y: 34, width: 22, height: 8, fill: "#3a3047" }, gate);
+    sv("path", { d: "M66 70 Q180 6 294 70", fill: "none", stroke: "#4a3e58", "stroke-width": 5 }, gate);
+    for (let i = 0; i < 8; i++) { const gx = 78 + i * 29; sv("line", { x1: gx, y1: 78 - 22 * Math.sin((i + 0.5) / 8 * Math.PI) * 0.2, x2: gx, y2: 30 + Math.abs(i - 3.5) * 8, stroke: "#3a3047", "stroke-width": 2 }, gate); }
+    const gt = sv("text", { x: 180, y: 38, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 9, "letter-spacing": 3, fill: "#cbbfe0", opacity: 0.8 }, gate); gt.textContent = "REST HERE";
+
+    // lamp posts along the path, glowing
+    const lamp = (lx, ly, seed) => {
+      const g = sv("g", {}, svg);
+      sv("circle", { cx: lx, cy: ly - 26, r: 22, fill: "url(#gg-glow)" }, g);
+      sv("rect", { x: lx - 1.5, y: ly - 24, width: 3, height: 26, fill: "#2c2438" }, g);
+      sv("rect", { x: lx - 4, y: ly - 32, width: 8, height: 9, rx: 2, fill: "#ffd98a" }, g);
+      anim(g, `animation:ggFlicker ${(2.2 + rnd("l" + seed) * 1.6).toFixed(1)}s ease-in-out infinite;transform-origin:${lx}px ${ly - 28}px;`);
+    };
+    for (let ly = GATE + 70, i = 0; ly < H - TAIL + 40; ly += 230, i++) lamp(pathX(ly) + (i % 2 ? -32 : 32), ly, i);
+
+    // landmark art, one per plot
+    const landmark = (key, cx, cy) => {
+      const g = sv("g", {}, svg);
+      if (key === "long") {            // mausoleum
+        sv("rect", { x: cx - 30, y: cy - 28, width: 60, height: 34, fill: "#6f6a80" }, g);
+        sv("path", { d: `M${cx - 36} ${cy - 28} L${cx} ${cy - 50} L${cx + 36} ${cy - 28} Z`, fill: "#58536b" }, g);
+        [-22, -8, 8, 22].forEach(o => sv("rect", { x: cx + o - 2.5, y: cy - 26, width: 5, height: 30, fill: "#8a8499" }, g));
+        sv("rect", { x: cx - 7, y: cy - 16, width: 14, height: 22, rx: 7, fill: "#14101f" }, g);
+      } else if (key === "close") {    // stone cross + halo
+        sv("ellipse", { cx, cy: cy - 30, rx: 22, ry: 22, fill: "url(#gg-glow)", opacity: 0.55 }, g);
+        sv("rect", { x: cx - 18, y: cy - 2, width: 36, height: 8, fill: "#6f6a80" }, g);
+        sv("rect", { x: cx - 4, y: cy - 40, width: 8, height: 40, fill: "#8a8499" }, g);
+        sv("rect", { x: cx - 15, y: cy - 31, width: 30, height: 7, fill: "#8a8499" }, g);
+      } else if (key === "soon") {     // sapling with sparkles
+        sv("path", { d: `M${cx} ${cy + 4} Q${cx - 2} ${cy - 14} ${cx + 3} ${cy - 30}`, stroke: "#6aa56e", "stroke-width": 3, fill: "none", "stroke-linecap": "round" }, g);
+        sv("ellipse", { cx: cx - 8, cy: cy - 22, rx: 9, ry: 4, fill: "#7fc083", transform: `rotate(-30 ${cx - 8} ${cy - 22})` }, g);
+        sv("ellipse", { cx: cx + 11, cy: cy - 32, rx: 9, ry: 4, fill: "#7fc083", transform: `rotate(28 ${cx + 11} ${cy - 32})` }, g);
+        sv("ellipse", { cx, cy: cy + 5, rx: 16, ry: 4, fill: "#4a3a30" }, g);
+        [[-18, -34], [20, -16], [-14, -10]].forEach(([dx, dy], i) => { const c = sv("circle", { cx: cx + dx, cy: cy + dy, r: 1.6, fill: "#f6e27a" }, g); anim(c, `animation:ggFirefly ${3 + i}s ease-in-out infinite;`); });
+      } else if (key === "old") {      // willow
+        sv("rect", { x: cx - 5, y: cy - 30, width: 10, height: 36, fill: "#4a3a30" }, g);
+        sv("ellipse", { cx, cy: cy - 40, rx: 30, ry: 16, fill: "#3f6a55" }, g);
+        for (let i = 0; i < 9; i++) { const sx = cx - 26 + i * 6.5; sv("path", { d: `M${sx} ${cy - 38} Q${sx + (i % 2 ? 4 : -4)} ${cy - 18} ${sx + (i % 2 ? 2 : -2)} ${cy + 2}`, stroke: "#4f8068", "stroke-width": 1.6, fill: "none", opacity: 0.85 }, g); }
+        anim(g, `animation:ggSway 6s ease-in-out infinite;transform-origin:${cx}px ${cy}px;`);
+      } else {                          // bench + lamp
+        sv("rect", { x: cx - 22, y: cy - 10, width: 44, height: 5, rx: 2, fill: "#5a4535" }, g);
+        sv("rect", { x: cx - 20, y: cy - 5, width: 4, height: 11, fill: "#3d2f25" }, g);
+        sv("rect", { x: cx + 16, y: cy - 5, width: 4, height: 11, fill: "#3d2f25" }, g);
+        sv("rect", { x: cx - 22, y: cy - 22, width: 44, height: 4, rx: 2, fill: "#5a4535" }, g);
+      }
+    };
+    const sign = (s, sx, sy) => {
+      const g = sv("g", {}, svg);
+      sv("rect", { x: sx + 48, y: sy + 8, width: 4, height: 50, fill: "#4a3a30" }, g);
+      sv("rect", { x: sx, y: sy, width: 100, height: 36, rx: 4, fill: "#6a5039", stroke: "#3d2f25", "stroke-width": 1.5 }, g);
+      const t1 = sv("text", { x: sx + 50, y: sy + 15, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 10, "font-weight": 700, fill: "#f1dfc0" }, g); t1.textContent = s.name;
+      const t2 = sv("text", { x: sx + 50, y: sy + 28, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 8, "font-style": "italic", fill: "#d9c3a0" }, g); t2.textContent = `${s.graves.length} grave${s.graves.length === 1 ? "" : "s"} \u00B7 ${s.sub}`;
+      t2.setAttribute("font-size", 7);
+    };
+
+    // ── tapping a grave ──
+    let picked = null;
+    const showCard = (g, mark) => {
+      if (picked) picked.setAttribute("opacity", 0);
+      if (picked === mark) { picked = null; card.style.display = "none"; return; }
+      picked = mark; mark.setAttribute("opacity", 0.35);
+      const f = g.f, rec = gyRec(f.workId), total = gyTotal(rec);
+      const lit = rec.lit && rec.lit > Date.now();
+      card.textContent = "";
+      card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:14px;color:#f1e8ff;", titleOf(f)));
+      card.appendChild(el("div", "font-size:10.5px;letter-spacing:0.05em;color:rgba(217,208,245,0.6);margin-top:2px;", `${yearsOf(f)} \u00B7 quiet for ${gyAgo(g.quiet)}`));
+      card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;margin:8px 0 4px;color:#e6dcf5;", `\u201C${rec.ep || gyEpitaph(f)}\u201D`));
+      const bits = [];
+      if (total) bits.push(`${total} flower${total === 1 ? "" : "s"} left`);
+      if (lit) bits.push(`candle lit \u00B7 ${gyLeft(rec.lit - Date.now())} left`);
+      if (bits.length) card.appendChild(el("div", "font-size:10.5px;color:rgba(217,208,245,0.7);", bits.join(" \u00B7 ")));
+      const row = el("div", "display:flex;justify-content:center;gap:8px;margin-top:10px;");
+      const bcss = "cursor:pointer;font:inherit;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;";
+      const open = el("button", bcss, "Open in the graveyard"); open.type = "button";
+      open.onclick = () => { close(); openGraveyard(); };
+      const done = el("button", bcss, "Close"); done.type = "button";
+      done.onclick = () => { picked.setAttribute("opacity", 0); picked = null; card.style.display = "none"; };
+      row.appendChild(open); row.appendChild(done);
+      card.appendChild(row);
+      card.style.display = "block";
+    };
+
+    // ── plots ──
+    live.forEach((s, si) => {
+      const left = si % 2 === 0;
+      landmark(s.key, left ? 262 : 98, s.y + 78);
+      sign(s, left ? 14 : 246, s.y + 14);
+      s.graves.forEach((g, i) => {
+        const side = i % 2, col = Math.floor(i / 2) % 4, row = Math.floor(i / PER_ROW);
+        const gx = side === 0 ? 14 + col * 34 : 318 - col * 34;
+        const gy = s.y + HEAD + row * ROW + (rnd("j" + g.f.workId) * 8);
+        const grp = sv("g", { transform: `translate(${gx.toFixed(1)} ${gy.toFixed(1)})` }, svg);
+        const moss = g.quiet >= 730;
+        const tones = moss ? ["#7d8f86", "#74887e"] : ["#8c8a9a", "#9a97a8", "#7f7d90"];
+        sv("ellipse", { cx: 14, cy: 37, rx: 17, ry: 4, fill: "#000", opacity: 0.35 }, grp);
+        const tilt = (rnd("t" + g.f.workId) - 0.5) * 8;
+        const stone = sv("g", { transform: `rotate(${tilt.toFixed(1)} 14 36)` }, grp);
+        sv("path", { d: "M0 36 V14 A14 14 0 0 1 28 14 V36 Z", fill: tones[gyHash(g.f.workId) % tones.length] }, stone);
+        sv("path", { d: "M14 12 v14 M9 17 h10", stroke: "rgba(0,0,0,0.35)", "stroke-width": 2, "stroke-linecap": "round", fill: "none" }, stone);
+        if (moss) sv("ellipse", { cx: 8, cy: 35, rx: 9, ry: 3, fill: "#4f7a5a", opacity: 0.8 }, stone);
+        const rec = gyRec(g.f.workId);
+        const tot = gyTotal(rec);
+        if (tot) {
+          const best = Object.keys(rec.c).sort((a, b) => rec.c[b] - rec.c[a])[0];
+          const ft = sv("text", { x: 14, y: 46, "text-anchor": "middle", "font-size": 11 }, grp); ft.textContent = best || "\u{1F339}";
+        }
+        if (rec.lit && rec.lit > Date.now()) {
+          const cg = sv("g", {}, grp);
+          sv("circle", { cx: 33, cy: 32, r: 11, fill: "url(#gg-glow)" }, cg);
+          sv("rect", { x: 31.5, y: 31, width: 3, height: 6, fill: "#f3ead2" }, cg);
+          sv("ellipse", { cx: 33, cy: 29.5, rx: 1.8, ry: 3, fill: "#ffcf5a" }, cg);
+          anim(cg, `animation:ggFlicker ${(1.6 + rnd("c" + g.f.workId)).toFixed(1)}s ease-in-out infinite;transform-origin:33px 32px;`);
+        }
+        const mark = sv("rect", { x: -3, y: -4, width: 34, height: 44, rx: 8, fill: "#fff", opacity: 0 }, grp);
+        mark.style.pointerEvents = "none";
+        const hit = sv("rect", { x: -3, y: -4, width: 34, height: 52, fill: "transparent" }, grp);
+        hit.style.cursor = "pointer";
+        const tl = sv("title", {}, hit); tl.textContent = titleOf(g.f);
+        hit.addEventListener("click", () => showCard(g, mark));
+      });
+    });
+
+    // ── the wishing well at the end of the path ──
+    const wy = H - TAIL + 70, wx = pathX(wy) + 52;
+    const well = sv("g", {}, svg);
+    sv("ellipse", { cx: wx, cy: wy + 28, rx: 30, ry: 6, fill: "#000", opacity: 0.35 }, well);
+    sv("rect", { x: wx - 24, y: wy, width: 48, height: 28, fill: "#6f6a80" }, well);
+    sv("ellipse", { cx: wx, cy: wy, rx: 24, ry: 7, fill: "#2d3a63" }, well);
+    sv("ellipse", { cx: wx, cy: wy, rx: 24, ry: 7, fill: "none", stroke: "#8a8499", "stroke-width": 3 }, well);
+    sv("rect", { x: wx - 22, y: wy - 34, width: 4, height: 34, fill: "#4a3a30" }, well);
+    sv("rect", { x: wx + 18, y: wy - 34, width: 4, height: 34, fill: "#4a3a30" }, well);
+    sv("path", { d: `M${wx - 30} ${wy - 32} L${wx} ${wy - 50} L${wx + 30} ${wy - 32} Z`, fill: "#58493c" }, well);
+    const wt = sv("text", { x: wx, y: wy + 52, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 8, "font-style": "italic", fill: "#cbbfe0", opacity: 0.75 }, svg); wt.textContent = "the wishing well";
+    const WHISPERS = [
+      "A coin sinks. Somewhere, an author opens a blank document.",
+      "You wished for an update. The well is considering it.",
+      "The water whispers: \u201Cone more chapter.\u201D",
+      "Something splashes. It sounds a lot like hope.",
+      "The well is deep, but the wishes are deeper.",
+      "A faint chime. Somewhere, a notification you will never get.",
+      "The ripples spell out \u201Cplease don\u2019t be abandoned.\u201D",
+      "Nothing happens. But you feel slightly more optimistic.",
+      "A distant voice: \u201CI\u2019ll finish it this weekend.\u201D The well does not believe it."
+    ];
+    let wi = Math.floor(Math.random() * WHISPERS.length);
+    const wellHit = sv("rect", { x: wx - 34, y: wy - 52, width: 68, height: 84, fill: "transparent" }, well);
+    wellHit.style.cursor = "pointer";
+    wellHit.addEventListener("click", () => {
+      wi = (wi + 1 + Math.floor(Math.random() * (WHISPERS.length - 1))) % WHISPERS.length;
+      caption.textContent = WHISPERS[wi];
+      const rp = sv("ellipse", { cx: wx, cy: wy, rx: 20, ry: 5, fill: "none", stroke: "#9fb4ff", "stroke-width": 1.5 }, well);
+      rp.setAttribute("class", "gg-anim"); rp.style.cssText = `transform-origin:${wx}px ${wy}px;animation:ggRipple 1.3s ease-out forwards;`;
+      setTimeout(() => rp.remove(), 1400);
+    });
+    // a bench near the well, fireflies and drifting mist over the lower grounds
+    sv("rect", { x: 34, y: wy + 10, width: 40, height: 4, rx: 2, fill: "#5a4535" }, svg);
+    sv("rect", { x: 37, y: wy + 14, width: 3, height: 10, fill: "#3d2f25" }, svg);
+    sv("rect", { x: 68, y: wy + 14, width: 3, height: 10, fill: "#3d2f25" }, svg);
+    for (let i = 0; i < 22; i++) {
+      const c = sv("circle", { cx: (rnd("ffx" + i) * W).toFixed(1), cy: (GATE + 40 + rnd("ffy" + i) * (H - GATE - 80)).toFixed(1), r: 1.5, fill: "#f6e27a" }, svg);
+      anim(c, `animation:ggFirefly ${(3 + rnd("ffd" + i) * 4).toFixed(1)}s ${(rnd("ffs" + i) * 3).toFixed(1)}s ease-in-out infinite;`);
+    }
+    for (let i = 0; i < 3; i++) {
+      const m = sv("ellipse", { cx: 90 + i * 90, cy: H - 60 - i * 70, rx: 130, ry: 16, fill: "#c8bee6" }, svg);
+      anim(m, `animation:ggMist ${(9 + i * 3)}s ease-in-out infinite;opacity:.2;`);
+    }
+    field.appendChild(svg);
+
+    // ── stroll: wander down the path on your own; any touch stops it ──
+    const strollStep = () => {
+      if (!strolling) return;
+      const max = field.scrollHeight - field.clientHeight;
+      if (field.scrollTop >= max - 1) { stopStroll(); return; }
+      field.scrollTop += 0.7;
+      raf = requestAnimationFrame(strollStep);
+    };
+    strollBtn.onclick = () => {
+      if (strolling) { stopStroll(); return; }
+      if (field.scrollTop >= field.scrollHeight - field.clientHeight - 2) field.scrollTop = 0;
+      strolling = true; strollBtn.textContent = "\u23F8 pause";
+      raf = requestAnimationFrame(strollStep);
+    };
+    ["touchstart", "wheel", "pointerdown"].forEach(ev => field.addEventListener(ev, () => { if (strolling) stopStroll(); }, { passive: true }));
+    document.body.appendChild(back);
+  }
+
   // ── ✦ FIC CONSTELLATION ──
   // A night sky where every tracked fic is a star: bigger = more words, colour =
   // status (active / finished / abandoned). Fics you logged on the same day are
@@ -6858,6 +7180,7 @@ try {
         return b;
       };
       cnWrap.appendChild(quietLink("constellation", "See your fics as a night sky", () => openConstellation()));
+      cnWrap.appendChild(quietLink("grounds", "Wander the graveyard grounds", () => openGraveyardGrounds()));
       cnWrap.appendChild(quietLink("aquarium", "See your fics as little fish", () => openAquarium()));
       cnWrap.appendChild(quietLink("bookshelf", "See your fics as books on a shelf", () => openBookshelf()));
       cnWrap.appendChild(quietLink("garden", "See your fics as a little garden", () => openGarden()));
@@ -7378,7 +7701,7 @@ try {
     });
   }, 1000);
   // Web app only: hand the four keepsake views to the web app's "Keepsakes" button.
-  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass };
+  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass };
 })();
 } catch (e) { console.error("[AO3 bundle] Fic Tracker failed to load:", e); }
 
@@ -27068,7 +27391,7 @@ try {
       back.onclick = e => { if (e.target === back) back.remove(); };
       const box = document.createElement("div");
       box.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:22px;background:var(--fb-card,#fffdfb);border:1.5px solid var(--fb-line,#ecd3cf);box-shadow:0 8px 28px rgba(0,0,0,0.25);min-width:220px;";
-      [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F389} Celebrations", "openCelebration"],
+      [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F56F}\uFE0F Graveyard grounds", "openGraveyardGrounds"], ["\u{1F389} Celebrations", "openCelebration"],
        ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"],
        ["\u{1F4DA} Bookshelf", "openBookshelf"], ["\u{1F337} Garden", "openGarden"], ["\u{1FA9F} Stained glass", "openStainedGlass"]].forEach(([label, fn]) => {
         const b = document.createElement("button");
