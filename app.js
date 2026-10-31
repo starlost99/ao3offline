@@ -6981,6 +6981,8 @@ try {
       if (updated && updated.length) showToast(updated, false);
     });
   }, 1000);
+  // Web app only: hand the four keepsake views to the web app's "Keepsakes" button.
+  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium };
 })();
 } catch (e) { console.error("[AO3 bundle] Fic Tracker failed to load:", e); }
 
@@ -26652,6 +26654,40 @@ try {
     briefBtn.onclick = () => showMorningBrief(getPeriodStats());
     briefLi.appendChild(briefBtn);
     periodNavLi.after(briefLi);
+  }
+
+  // Web app only: one "Keepsakes" button that opens a small menu of the four views.
+  if (window.__ao3WebApp) {
+    const keepLi = document.createElement("li");
+    const keepBtn = document.createElement("a");
+    keepBtn.textContent = "Keepsakes";
+    keepBtn.href = "javascript:void(0)";
+    keepBtn.style.cursor = "pointer";
+    keepBtn.onclick = () => {
+      const old = document.getElementById("ao3-keepsakes-menu");
+      if (old) { old.remove(); return; }
+      const back = document.createElement("div");
+      back.id = "ao3-keepsakes-menu";
+      back.style.cssText = "position:fixed;inset:0;z-index:2147482000;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;";
+      back.onclick = e => { if (e.target === back) back.remove(); };
+      const box = document.createElement("div");
+      box.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:22px;background:var(--fb-card,#fffdfb);border:1.5px solid var(--fb-line,#ecd3cf);box-shadow:0 8px 28px rgba(0,0,0,0.25);min-width:220px;";
+      [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F389} Celebrations", "openCelebration"],
+       ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"]].forEach(([label, fn]) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.style.cssText = "padding:12px 16px;border-radius:999px;border:1.5px solid var(--fb-line,#ecd3cf);background:var(--fb-card,#fffdfb);color:var(--fb-ink,#3f3b6f);font:500 15px/1.2 inherit;font-family:inherit;cursor:pointer;";
+        b.onclick = () => {
+          back.remove();
+          try { window.__ao3Extras && window.__ao3Extras[fn](); } catch (e) { console.error(e); }
+        };
+        box.appendChild(b);
+      });
+      back.appendChild(box);
+      document.body.appendChild(back);
+    };
+    keepLi.appendChild(keepBtn);
+    (periodNavLi.nextElementSibling || periodNavLi).after(keepLi); // after the Daily Brief button
   }
   periodCloseBtn.onclick  = closePeriodTracker;
   periodOverlay.addEventListener("click", e => { if (e.target === periodOverlay) closePeriodTracker(); });
