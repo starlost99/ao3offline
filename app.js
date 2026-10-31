@@ -3426,6 +3426,8 @@ try {
         @keyframes ggFly{to{transform:translate(70px,-130px);opacity:0}}
         @keyframes ggHop{0%,100%{transform:translateY(0)}40%{transform:translateY(-10px)}}
         @keyframes ggPulse{0%,100%{opacity:.1}50%{opacity:.9}}
+        @keyframes ggSteam{0%{opacity:0;transform:translateY(2px)}35%{opacity:.8}100%{opacity:0;transform:translateY(-7px)}}
+        @keyframes ggSmoke{0%{opacity:.55;transform:translate(0,0) scale(.6)}100%{opacity:0;transform:translate(7px,-24px) scale(1.7)}}
         @keyframes ggWisp{0%,100%{opacity:.3;transform:translate(0,0)}50%{opacity:.9;transform:translate(4px,-6px)}}
         @keyframes ggSpark{0%{opacity:1;transform:translate(0,0)}100%{opacity:0;transform:translate(var(--dx),var(--dy))}}
         @keyframes ggFlash{0%,92%,100%{opacity:0}93%{opacity:.3}94%{opacity:0}95.5%{opacity:.22}97%{opacity:0}}
@@ -3584,7 +3586,8 @@ try {
     try { prefs = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; } catch { prefs = {}; }
     const savePrefs = () => { try { localStorage.setItem(PKEY, JSON.stringify(prefs)); } catch {} };
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const say = t => { caption.textContent = t; };
+    let sayAt = 0;
+    const say = t => { caption.textContent = t; sayAt = Date.now(); };
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     const now = new Date(), month = now.getMonth();
     const season = month === 9 ? "halloween" : (month === 11 || month <= 1) ? "winter" : month <= 4 ? "spring" : month <= 7 ? "summer" : "autumn";
@@ -3740,6 +3743,7 @@ try {
       if (picked) picked.setAttribute("opacity", 0);
       if (picked === mark) { picked = null; card.style.display = "none"; return; }
       picked = mark; mark.setAttribute("opacity", 0.35);
+      if (keeperGoTo) { const kn = graveNodes.find(x => x.g === g); if (kn) keeperGoTo(kn); }   // Bram walks over
       const f = g.f, rec = gyRec(f.workId), total = gyTotal(rec);
       const lit = rec.lit && rec.lit > Date.now();
       card.textContent = "";
@@ -3840,7 +3844,7 @@ try {
         hit.style.cursor = "pointer";
         const tl = sv("title", {}, hit); tl.textContent = titleOf(g.f);
         hit.addEventListener("click", () => showCard(g, mark));
-        graveNodes.push({ g, gx, gy, mark, paintDyn });
+        graveNodes.push({ g, gx, gy, mark, paintDyn, dyn });
       });
     });
 
@@ -3957,13 +3961,17 @@ try {
       });
     }
 
-    // a cat who sits on graves; pet her and she eventually wanders off to another one
+    // hooks that Bram's block fills in (declared here so the cat, the weather and the graves can reach them)
+    let keeperGoTo = null, keeperOnWeather = null, catCtl = null;
+
+    // a cat who sits on graves; pet her and she eventually wanders off to another one.
+    // catCtl lets Bram chase her: while he does, she runs loose over the grounds (see Bram's block below).
     if (graveNodes.length) {
-      let at = Math.floor(Math.random() * graveNodes.length), pets = 0;
+      let at = Math.floor(Math.random() * graveNodes.length), pets = 0, cx = 0, cy = 0;
       const spot = n => ({ x: n.gx + 14, y: n.gy + 1 });
       const catG = sv("g", {}, svg);
       catG.style.transition = "transform .9s ease-in-out";
-      const place = () => { const p = spot(graveNodes[at]); catG.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; };
+      const place = () => { const p = spot(graveNodes[at]); cx = p.x; cy = p.y; catG.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; };
       place();
       const tail = sv("path", { d: "M5 -2 Q13 -3 11 -11", stroke: "#0b0910", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, catG);
       anim(tail, "animation:ggSway 2.4s ease-in-out infinite;transform-origin:5px -2px;");
@@ -3974,17 +3982,22 @@ try {
       sv("circle", { cx: 1.8, cy: -15.5, r: 0.9, fill: "#ffe27a" }, catG);
       const hit = sv("circle", { cx: 0, cy: -12, r: 10, fill: "transparent" }, catG);
       hit.style.cursor = "pointer";
+      catCtl = {
+        busy: false,
+        at: () => at,
+        run: (x, y) => { cx = x; cy = y; catG.style.transition = "none"; catG.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`; },
+        sit: i => { if (i != null) at = i; catG.style.transition = "transform .9s ease-in-out"; place(); }
+      };
       hit.addEventListener("click", e => {
         e.stopPropagation();
         pets++;
-        const p = spot(graveNodes[at]);
-        const h = sv("text", { x: p.x, y: p.y - 24, "text-anchor": "middle", "font-size": 10, fill: "#ff9fb8" }, svg);
+        const h = sv("text", { x: cx, y: cy - 24, "text-anchor": "middle", "font-size": 10, fill: "#ff9fb8" }, svg);
         h.textContent = "\u2665";
         anim(h, "animation:ggHeart 1s ease-out forwards;");
         setTimeout(() => h.remove(), 1050);
-        if (pets % 4 === 0) {
+        if (pets % 4 === 0 && !catCtl.busy) {
           say("The cat hops down and trots off to another grave.");
-          setTimeout(() => { at = (at + 1 + Math.floor(Math.random() * Math.max(1, graveNodes.length - 1))) % graveNodes.length; place(); }, 500);
+          setTimeout(() => { if (catCtl.busy) return; at = (at + 1 + Math.floor(Math.random() * Math.max(1, graveNodes.length - 1))) % graveNodes.length; place(); }, 500);
         } else say(pick(["Mrrp.", `Purrrr. (${pets} pet${pets === 1 ? "" : "s"})`, "The cat narrows her eyes happily.", "She allows it."]));
       });
     }
@@ -3993,22 +4006,104 @@ try {
     // Walks the path with a lantern (driven by script, so he can stop for a chat). Tap him and he
     // talks about YOUR graveyard: quiet fics, flowers, candles, wisps, anniversaries, the weather.
     // A glowing "!" over his hat means he has news (an anniversary today, or candles about to go out).
+    // He also goes about his day: he stops to sweep a stone, straighten a flower, or sit on the bench
+    // with a thermos; he chases the cat when she knocks something over; he walks over to any grave you
+    // tap; and when it rains he goes into his cottage by the gate (lit window) until it clears.
     {
+      const OFF = 24, yMin = GATE + 20, benchY = wy + 34;
+      const CX = 335, CB = 132, DOORY = 137;      // cottage centre, base line, and where Bram stands at its door
+      let mode = "patrol";                        // patrol | walk | act | chase | home | enter | inside | exit
+
+      // ── the cottage just outside the gate: dark until Bram is home, then the window lights up ──
+      const cot = sv("g", {}, svg);
+      sv("ellipse", { cx: CX, cy: CB + 1, rx: 25, ry: 3.5, fill: "#000", opacity: 0.35 }, cot);
+      sv("rect", { x: 344, y: 92, width: 6, height: 15, fill: "#35283f" }, cot);
+      sv("rect", { x: 315, y: 108, width: 40, height: 24, fill: "#4a3a4f" }, cot);
+      sv("path", { d: "M311 110.5 L335 89 L359 110.5 Z", fill: "#3b2a46" }, cot);
+      sv("path", { d: "M311 110.5 L335 89 L359 110.5", fill: "none", stroke: "#5d4a6d", "stroke-width": 1.2, "stroke-linejoin": "round" }, cot);
+      [[318, 8], [345, 7]].forEach(([wx2, ww]) => {
+        sv("rect", { x: wx2, y: 114, width: ww, height: 8, rx: 0.8, fill: "#241f3a" }, cot);
+        sv("rect", { x: wx2, y: 114, width: ww, height: 8, rx: 0.8, fill: "none", stroke: "#6f5f7d", "stroke-width": 0.9 }, cot);
+      });
+      sv("rect", { x: 329, y: 118, width: 11, height: 14, rx: 1.5, fill: "#2a2033" }, cot);
+      sv("circle", { cx: 338, cy: 125.5, r: 0.8, fill: "#d9c3a0" }, cot);
+      const litG = sv("g", {}, svg);              // glow + warm windows, faded in while he is home
+      litG.style.transition = "opacity .6s"; litG.style.opacity = "0";
+      sv("circle", { cx: 331, cy: 118, r: 26, fill: "url(#gg-glow)", opacity: 0.55 }, litG);
+      [[318, 8], [345, 7]].forEach(([wx2, ww], i) => {
+        const wl = sv("rect", { x: wx2, y: 114, width: ww, height: 8, rx: 0.8, fill: "#ffd98a" }, litG);
+        if (i === 0) anim(wl, "animation:ggFlicker 3.4s ease-in-out infinite;transform-origin:322px 118px;");
+      });
+      sv("path", { d: "M322 114 V122 M318 118 H326 M348.5 114 V122", stroke: "#6b4f35", "stroke-width": 0.7, fill: "none" }, litG);
+      sv("circle", { cx: 322, cy: 117.6, r: 1.7, fill: "#3d2a1e" }, litG);       // Bram's silhouette in the window
+      sv("path", { d: "M318.8 122 Q322 117.8 325.2 122 Z", fill: "#3d2a1e" }, litG);
+      const doorG = sv("g", {}, svg);             // the door standing open, light spilling out
+      doorG.style.transition = "opacity .25s"; doorG.style.opacity = "0";
+      sv("path", { d: "M329 132 L340 132 L348 143 L321 143 Z", fill: "#ffd98a", opacity: 0.28 }, doorG);
+      sv("rect", { x: 329, y: 118, width: 11, height: 14, rx: 1.5, fill: "#ffd98a", opacity: 0.92 }, doorG);
+      const smokeG = sv("g", {}, svg);
+      smokeG.style.transition = "opacity .6s"; smokeG.style.opacity = "0";
+      for (let i = 0; i < 3; i++) {
+        const sm = sv("circle", { cx: 347, cy: 90, r: 2.2, fill: "#cfc6e0" }, smokeG);
+        anim(sm, `animation:ggSmoke 3.3s ease-out ${(i * 1.1).toFixed(1)}s infinite;transform-box:fill-box;transform-origin:center;`);
+      }
+      const ct = sv("text", { x: CX, y: 146, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 7.5, "font-style": "italic", fill: "#cbbfe0", opacity: 0.75 }, svg);
+      ct.textContent = "the cottage";
+      const setLit = on => { litG.style.opacity = on ? "1" : "0"; smokeG.style.opacity = on ? "1" : "0"; };
+      const setDoor = on => { doorG.style.opacity = on ? "1" : "0"; };
+      const cotHit = sv("rect", { x: 311, y: 88, width: 48, height: 46, fill: "transparent" }, svg);
+      cotHit.style.cursor = "pointer";
+      const RAIN_LINES = [
+        "Not coming out in this. Kettle\u2019s on.",
+        "Listen to that rain on the roof. Best sound there is.",
+        "Nothing out there needs sweeping tonight. The rain\u2019s doing it for me.",
+        "Window\u2019s lit. If you spot a wisp, wave. I\u2019ll wave back."
+      ];
+      cotHit.addEventListener("click", () => {
+        if (mode === "inside") talk({ t: pick(RAIN_LINES) });
+        else say(pick(["Bram\u2019s cottage. The kettle is always on.", "The cottage sits dark and quiet. He\u2019ll be back by the lamps.", "A tidy little cottage. The roof only leaks in one corner."]));
+      });
+
+      // ── the figure: facing flips with the walk, items swap with the job ──
       const keeper = sv("g", {}, svg);
-      const fig = sv("g", { transform: "translate(24 0)" }, keeper);
-      sv("ellipse", { cx: 0, cy: 1, rx: 7, ry: 2, fill: "#000", opacity: 0.3 }, fig);
-      sv("path", { d: "M-6 0 L-4 -16 Q0 -20 4 -16 L6 0 Z", fill: "#2e2a45" }, fig);
-      sv("circle", { cx: 0, cy: -20, r: 3.5, fill: "#d9c3a8" }, fig);
-      sv("path", { d: "M-7 -22 Q0 -25 7 -22 L3 -29 Q0 -32 -3 -29 Z", fill: "#1d1830" }, fig);
-      sv("line", { x1: 4, y1: -13, x2: 10, y2: -11, stroke: "#2e2a45", "stroke-width": 2, "stroke-linecap": "round" }, fig);
-      const gl = sv("circle", { cx: 11, cy: -8, r: 18, fill: "url(#gg-glow)" }, fig);
+      keeper.style.transition = "opacity .35s";
+      const flipG = sv("g", {}, keeper);
+      sv("ellipse", { cx: 0, cy: 1, rx: 7, ry: 2, fill: "#000", opacity: 0.3 }, flipG);
+      const lantDown = sv("g", {}, flipG);        // lantern set down on the ground while his hands are busy
+      const gld = sv("circle", { cx: -15, cy: -3, r: 12, fill: "url(#gg-glow)" }, lantDown);
+      anim(gld, "animation:ggFlicker 2.4s ease-in-out infinite;transform-origin:-15px -3px;");
+      sv("rect", { x: -17, y: -6, width: 4, height: 6, rx: 1, fill: "#ffd98a" }, lantDown);
+      lantDown.style.display = "none";
+      const sitG = sv("g", {}, flipG);            // squashed a little when he sits
+      const body = sv("g", {}, sitG);             // bobs and leans
+      sv("path", { d: "M-6 0 L-4 -16 Q0 -20 4 -16 L6 0 Z", fill: "#2e2a45" }, body);
+      sv("circle", { cx: 0, cy: -20, r: 3.5, fill: "#d9c3a8" }, body);
+      sv("path", { d: "M-7 -22 Q0 -25 7 -22 L3 -29 Q0 -32 -3 -29 Z", fill: "#1d1830" }, body);
+      sv("line", { x1: 4, y1: -13, x2: 10, y2: -11, stroke: "#2e2a45", "stroke-width": 2, "stroke-linecap": "round" }, body);
+      const lantHeld = sv("g", {}, body);
+      const gl = sv("circle", { cx: 11, cy: -8, r: 18, fill: "url(#gg-glow)" }, lantHeld);
       anim(gl, "animation:ggFlicker 2.4s ease-in-out infinite;transform-origin:11px -8px;");
-      sv("rect", { x: 9, y: -10, width: 4, height: 6, rx: 1, fill: "#ffd98a" }, fig);
-      const badge = sv("text", { x: 0, y: -36, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: "#ffd98a" }, fig);
+      sv("rect", { x: 9, y: -10, width: 4, height: 6, rx: 1, fill: "#ffd98a" }, lantHeld);
+      const broomG = sv("g", {}, body);
+      const broomRot = sv("g", {}, broomG);
+      sv("line", { x1: 8, y1: -12, x2: 16, y2: 1, stroke: "#6b4f35", "stroke-width": 1.8, "stroke-linecap": "round" }, broomRot);
+      sv("path", { d: "M13 -2 L20 0 L19.5 3.5 L12 2.5 Z", fill: "#b99a5b" }, broomRot);
+      broomG.style.display = "none";
+      const thermosG = sv("g", {}, body);
+      const thermos = sv("g", {}, thermosG);
+      sv("rect", { x: 8, y: -16, width: 4.5, height: 9, rx: 1.2, fill: "#6f93bd" }, thermos);
+      sv("rect", { x: 8, y: -18, width: 4.5, height: 2.6, rx: 1, fill: "#d6deea" }, thermos);
+      sv("rect", { x: 8, y: -12.5, width: 4.5, height: 1, fill: "#3a5a80" }, thermos);
+      [0, 1].forEach(i => {
+        const st = sv("path", { d: `M${(9.5 + i * 2).toFixed(1)} -19 q-1.5 -3 0 -5 q1.5 -2 0 -4`, stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, thermosG);
+        anim(st, `animation:ggSteam ${(1.8 + i * 0.5).toFixed(1)}s ease-out ${(i * 0.6).toFixed(1)}s infinite;`);
+      });
+      thermosG.style.display = "none";
+      const badge = sv("text", { x: 0, y: -36, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: "#ffd98a" }, keeper);
       badge.textContent = "!";
       anim(badge, "animation:ggBob 1.6s ease-in-out infinite;");
       badge.style.display = "none";
-      const hit = sv("rect", { x: -9, y: -42, width: 30, height: 50, fill: "transparent" }, fig);
+      const hit = sv("rect", { x: -14, y: -42, width: 28, height: 50, fill: "transparent" }, keeper);
       hit.style.cursor = "pointer";
 
       const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -4058,7 +4153,11 @@ try {
           "Mind the third stone from the left. It has opinions.",
           "Most of these folks would have finished, given a little more time.",
           "The cat? Never seen her before in my life. She lives here.",
-          "If you hear whispering near the well, that\u2019s the authors, apologizing."
+          "If you hear whispering near the well, that\u2019s the authors, apologizing.",
+          "Sweep a stone, straighten a flower, sit down with the thermos. That\u2019s the whole job. Best job.",
+          "She knocks that bucket over on purpose. I\u2019ve watched her take aim.",
+          "Tap a stone and I\u2019ll wander over. Slowly. I\u2019m not young.",
+          "When it rains I\u2019m in the cottage with the kettle. Wave at the window if you like."
         ].forEach(t => add(t));
         return out;
       };
@@ -4106,20 +4205,388 @@ try {
       };
       hit.addEventListener("click", () => talk(firstLine()));
 
-      // walking: along an invisible copy of the path, paused while he's talking
-      const track = sv("path", { d, fill: "none", stroke: "none" }, svg);
-      let total = 0;
-      try { total = track.getTotalLength(); } catch {}
-      if (reduce || !total) keeper.setAttribute("transform", `translate(${pathX(260).toFixed(1)} 260)`);
-      else {
-        let s = total * 0.03, lastT = 0, lastBadge = 0;
-        const put = () => { const p = track.getPointAtLength(s); keeper.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`); };
-        put();
+      // ── Bram's day ──
+      // One small state machine, driven by requestAnimationFrame and frozen while he is talking to you:
+      //   patrol  walks the path (down to the bench, sits a while, then back up to the gate)
+      //   walk    walks a route (to a grave, back to the path) and then does `onArrive`
+      //   act     sweeps a stone / straightens a flower / sits on the bench with his thermos
+      //   chase   goes after the cat, who knocks something over; he stands it back up
+      //   home    heads for the cottage when it rains; enter / inside / exit are the door and the wait
+      const bsay = t => { if (Date.now() - sayAt > 7000) say(t); };     // ambient lines never talk over something you just did
+      const rainNow = () => WX[wxI][0] === "rain";
+      const clampY = y0 => Math.max(yMin, Math.min(benchY, y0));
+      const bm = { x: pathX(yMin + 40) + OFF, y: yMin + 40, route: [] };
+      let face = 1, bob = 0, lean = 0, seated = false, walkPh = 0;
+      const put = () => keeper.setAttribute("transform", `translate(${bm.x.toFixed(1)} ${bm.y.toFixed(1)})`);
+      const applyBody = () => {
+        body.setAttribute("transform", `translate(0 ${(-bob).toFixed(2)}) rotate(${lean.toFixed(1)})`);
+        sitG.setAttribute("transform", seated ? "scale(1 0.86)" : "");
+      };
+      const setFace = f => { if (f !== face) { face = f; flipG.setAttribute("transform", f < 0 ? "scale(-1 1)" : ""); } };
+      const setPose = p => {                      // "walk" | "sweep" | "bend" | "sit"
+        lantHeld.style.display = p === "walk" ? "" : "none";
+        lantDown.style.display = p === "walk" ? "none" : "";
+        broomG.style.display = p === "sweep" ? "" : "none";
+        thermosG.style.display = p === "sit" ? "" : "none";
+        seated = p === "sit"; lean = 0; bob = 0; applyBody();
+      };
+      put(); setPose("walk");
+
+      if (reduce) {
+        // reduced motion: he just stands on the path; in rain he is "home" (hidden) with the window lit
+        bm.y = Math.min(260, benchY - 30); bm.x = pathX(bm.y) + OFF; put();
+        keeperOnWeather = () => { const r = rainNow(); mode = r ? "inside" : "patrol"; keeper.style.display = r ? "none" : ""; setLit(r); };
+      } else {
+        // ── routes ──
+        const spineP = (y0, off) => ({ x: pathX(y0) + off, y: y0 });
+        // from (fx, fy) to `to`: step onto the path, follow it up/down, then step off sideways if `to.lane`
+        const mkRoute = (fx, fy, to, off) => {
+          const pts = [];
+          if (Math.abs(fx - (pathX(fy) + off)) > 1.5) pts.push(spineP(fy, off));
+          const dir0 = to.y >= fy ? 1 : -1;
+          for (let y0 = fy + dir0 * 24; dir0 > 0 ? y0 < to.y : y0 > to.y; y0 += dir0 * 24) pts.push(spineP(y0, off));
+          if (to.lane) pts.push(spineP(to.y, off));
+          pts.push({ x: to.x, y: to.y });
+          return pts;
+        };
+        const advance = (m, dt, speed, faceFn) => {
+          let rem = speed * dt;
+          while (rem > 0 && m.route.length) {
+            const tg = m.route[0], dx = tg.x - m.x, dy = tg.y - m.y, dd = Math.hypot(dx, dy);
+            if (dd < 1e-3) { m.route.shift(); continue; }
+            if (faceFn && Math.abs(dx) > Math.abs(dy) * 0.8 + 0.05) faceFn(dx > 0 ? 1 : -1);
+            if (dd <= rem) { m.x = tg.x; m.y = tg.y; rem -= dd; m.route.shift(); }
+            else { m.x += dx / dd * rem; m.y += dy / dd * rem; rem = 0; }
+          }
+          return m.route.length === 0;
+        };
+        const stride = dist => {
+          walkPh += dist * 0.45;
+          bob = Math.abs(Math.sin(walkPh)) * 1.1; lean = Math.sin(walkPh) * 1.6;
+        };
+        const walkBy = (dt, speed) => {
+          const x0 = bm.x, y0 = bm.y;
+          const done = advance(bm, dt, speed, setFace);
+          stride(Math.hypot(bm.x - x0, bm.y - y0));
+          return done;
+        };
+
+        // ── little effects ──
+        const bits = (x0, y0, n, fill) => {
+          const g = sv("g", {}, svg);
+          for (let k = 0; k < n; k++) {
+            const ang = -Math.PI * (0.1 + Math.random() * 0.8), dist = 8 + Math.random() * 14;
+            const cc = sv("circle", { cx: x0, cy: y0, r: 1.3, fill }, g);
+            anim(cc, `--dx:${(Math.cos(ang) * dist).toFixed(1)}px;--dy:${(Math.sin(ang) * dist).toFixed(1)}px;animation:ggSpark .8s ease-out forwards;`);
+          }
+          setTimeout(() => g.remove(), 900);
+        };
+        const dustPuff = (x0, y0) => {
+          const cc = sv("circle", { cx: (x0 + (Math.random() - 0.5) * 6).toFixed(1), cy: y0 - 1, r: 1.5, fill: "#cdbfa8", opacity: 0.8 }, svg);
+          anim(cc, `--dx:${((Math.random() - 0.5) * 14).toFixed(1)}px;--dy:${(-6 - Math.random() * 6).toFixed(1)}px;animation:ggSpark .8s ease-out forwards;`);
+          setTimeout(() => cc.remove(), 850);
+        };
+        const shout = (txt, x0, y0) => {
+          const tx = sv("text", { x: x0, y: y0, "text-anchor": "middle", "font-size": 9, "font-weight": 700, "font-style": "italic", "font-family": "Georgia,serif", fill: "#ffe9a8" }, svg);
+          tx.textContent = txt;
+          anim(tx, "animation:ggHeart 1.2s ease-out forwards;");
+          setTimeout(() => tx.remove(), 1250);
+        };
+
+        // ── things the cat can knock over, left about the path ──
+        const PROP_NAME = { bucket: "bucket", can: "watering can", pot: "flowerpot" };
+        const PROP_NOISE = { bucket: "CLANG!", can: "clink!", pot: "crack!" };
+        const makeProp = (kind, px, py) => {
+          const g = sv("g", {}, svg);
+          g.style.transition = "transform .45s cubic-bezier(.3,1.5,.5,1)";
+          g.style.transform = `translate(${px.toFixed(1)}px,${py.toFixed(1)}px) rotate(0deg)`;
+          sv("ellipse", { cx: 0, cy: 0.5, rx: 7, ry: 1.8, fill: "#000", opacity: 0.35 }, g);
+          if (kind === "bucket") {
+            sv("path", { d: "M-6 -11 L6 -11 L5 0 L-5 0 Z", fill: "#7d8398" }, g);
+            sv("ellipse", { cx: 0, cy: -11, rx: 6, ry: 1.6, fill: "#4c5266" }, g);
+            sv("path", { d: "M-6 -11 Q0 -19 6 -11", fill: "none", stroke: "#9aa0b4", "stroke-width": 1 }, g);
+          } else if (kind === "can") {
+            sv("rect", { x: -6, y: -9, width: 10, height: 9, rx: 1.5, fill: "#6fa07f" }, g);
+            sv("path", { d: "M4 -3 L10 -10", stroke: "#6fa07f", "stroke-width": 2, "stroke-linecap": "round" }, g);
+            sv("path", { d: "M-6 -8 Q-11 -6 -6 -2", fill: "none", stroke: "#8cc09a", "stroke-width": 1.4 }, g);
+          } else {
+            sv("path", { d: "M-5 -8 L5 -8 L4 0 L-4 0 Z", fill: "#b5603a" }, g);
+            sv("rect", { x: -6, y: -10, width: 12, height: 3, rx: 1, fill: "#c97449" }, g);
+            const fl = sv("text", { x: 0, y: -12, "text-anchor": "middle", "font-size": 9 }, g);
+            fl.textContent = "\u{1F337}";
+          }
+          return { kind, x: px, y: py, g, down: false };
+        };
+        const props = [];
+        const KINDS = ["bucket", "can", "pot"];
+        for (let k = 0, py0 = GATE + 195; py0 < H - TAIL - 30 && k < 5; k++, py0 += 260) props.push(makeProp(KINDS[k % 3], pathX(py0) - 12, py0));
+        props.push(makeProp("can", pathX(wy + 52) - 12, wy + 52));          // always one by the well
+        const knockProp = p => {
+          p.down = true;
+          p.g.style.transform = `translate(${(p.x - 4).toFixed(1)}px,${(p.y + 1).toFixed(1)}px) rotate(-88deg)`;
+          shout(PROP_NOISE[p.kind], p.x - 2, p.y - 18);
+          bits(p.x - 8, p.y - 2, 7, p.kind === "pot" ? "#8b5a3c" : "#9fb4ff");
+        };
+        const standProp = p => {
+          p.down = false;
+          p.g.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px) rotate(0deg)`;
+        };
+
+        // ── state ──
+        let dir = 1, wSpeed = 20, stopT = 14 + Math.random() * 12, chaseT = 40 + Math.random() * 30;
+        let act = null, ch = null, onArrive = null, tendNode = null, pendingTap = null;
+        let insideT = 0, phT = 0, flags = 0, clock = 0, started = false;
+
+        const hasFlowers = n => gyTotal(gyRec(n.g.f.workId)) > 0;
+        const pickGrave = () => {
+          const near = graveNodes.filter(n => Math.abs(n.gy + 54 - bm.y) < 420);
+          return pick(near.length ? near : graveNodes);
+        };
+        // his feet go in the aisle just in front of a stone
+        const walkToTend = (n, speed) => {
+          tendNode = n; mode = "walk"; wSpeed = speed;
+          bm.route = mkRoute(bm.x, bm.y, { x: n.gx + 14, y: n.gy + 54, lane: true }, OFF);
+          onArrive = () => startAct(hasFlowers(n) && Math.random() < 0.6 ? "straighten" : "sweep", n);
+        };
+        const resume = () => {                    // back onto the path, or off to a grave you tapped meanwhile
+          if (pendingTap) { const n = pendingTap; pendingTap = null; walkToTend(n, 28); return; }
+          const y1 = clampY(bm.y);
+          mode = "walk"; wSpeed = 22; onArrive = null; tendNode = null;
+          bm.route = mkRoute(bm.x, bm.y, { x: pathX(y1) + OFF, y: y1 }, OFF);
+          stopT = 12 + Math.random() * 14;
+        };
+
+        // ── jobs ──
+        const startAct = (kind, n) => {
+          mode = "act";
+          const title = n ? q2(titleOf(n.g.f)) : "";
+          if (kind === "sweep") {
+            act = { kind, n, t: 0, dur: 4.8, dust: 0 };
+            setPose("sweep");
+            bsay(pick([`Bram sweeps ${title} clean.`, `Bram brushes the leaves off ${title}.`, `Bram gives ${title} a good sweep.`]));
+          } else if (kind === "straighten") {
+            act = { kind, n, t: 0, dur: 3.7, done: false };
+            setPose("bend");
+            bsay(pick([`Bram straightens the flowers on ${title}.`, `Bram tucks the flowers back upright on ${title}.`]));
+          } else {
+            act = { kind: "bench", n: null, t: 0, dur: 10.5 };
+            bm.x = 54; bm.y = wy + 13; setFace(1);
+            setPose("sit");
+            bsay("Bram sits on the bench and unscrews his thermos. Steam curls up into the cold.");
+          }
+        };
+        const endAct = cancelled => {
+          const a = act;
+          if (!a) return;
+          act = null;
+          if (a.kind === "straighten" && a.n && a.n.dyn) a.n.dyn.removeAttribute("transform");
+          if (a.kind === "bench") { bm.y = wy + 30; dir = -1; }
+          thermos.setAttribute("transform", ""); broomRot.setAttribute("transform", "");
+          setPose("walk");
+          if (!cancelled) resume();
+        };
+        const actTick = dt => {
+          const a = act;
+          a.t += dt;
+          if (a.kind === "sweep") {
+            broomRot.setAttribute("transform", `rotate(${(Math.sin(a.t * 8) * 16).toFixed(1)} 8 -12)`);
+            lean = 5;
+            a.dust += dt;
+            if (a.dust > 0.3) { a.dust = 0; dustPuff(bm.x + face * 15, bm.y); }
+          } else if (a.kind === "straighten") {
+            const t0 = a.t, node = a.n;
+            lean = t0 < 0.7 ? 18 * (t0 / 0.7) : t0 < 3.2 ? 18 : 18 * Math.max(0, 1 - (t0 - 3.2) / 0.5);
+            if (t0 > 0.7 && t0 < 2.4) { const k = t0 - 0.7; node.dyn.setAttribute("transform", `rotate(${(11 * Math.sin(k * 13) * Math.exp(-k * 1.1)).toFixed(1)} 14 47)`); }
+            else if (!a.done && t0 >= 2.4) { a.done = true; node.dyn.removeAttribute("transform"); sparkle(node.gx + 14, node.gy + 44, 5); rise("\u2728", node.gx + 14, node.gy + 30); }
+          } else {
+            const p = a.t % 4;                    // a sip every four seconds or so
+            thermos.setAttribute("transform", p > 1.2 && p < 2.6 ? `rotate(${(-34 * Math.sin((p - 1.2) / 1.4 * Math.PI)).toFixed(1)} 10 -8)` : "");
+          }
+          applyBody();
+          if (a.t >= a.dur) endAct(false);
+        };
+
+        // ── the cat ──
+        const LAG = 0.6;                          // Bram runs this many seconds behind her
+        const propTarget = p => ({ x: p.x + 9, y: p.y + 3, lane: true });
+        const tryChase = () => {
+          if (!catCtl || catCtl.busy || rainNow() || pendingTap) return false;
+          const cn = graveNodes[catCtl.at()];
+          if (Math.abs(cn.gy + 54 - bm.y) > 700) return false;       // too far to bother
+          const free = props.filter(p => !p.down).sort((p1, p2) => Math.abs(p1.y - cn.gy) - Math.abs(p2.y - cn.gy));
+          if (!free.length) return false;
+          startChase(cn, pick(free.slice(0, 2)));
+          return true;
+        };
+        const startChase = (cn, prop) => {
+          mode = "chase"; tendNode = null;
+          const lane = { x: cn.gx + 14, y: cn.gy + 54 };
+          const co = lane.x > 180 ? -18 : 18;
+          ch = { ph: "approach", cn, prop, lane, co, t: 0, k: 0, hist: [], rec: false, bouncePh: 0, arrived: false, left: false, righted: false,
+                 cat: { x: cn.gx + 14, y: cn.gy + 1, route: [] } };
+          catCtl.busy = true;
+          bm.route = mkRoute(bm.x, bm.y, { x: lane.x + co, y: lane.y, lane: true }, OFF);
+        };
+        const followCat = () => {                 // Bram retraces her path, a moment behind
+          const h = ch.hist, T = clock - LAG;
+          if (!h.length || T <= h[0].t) return;
+          let p = h[h.length - 1];
+          if (T < p.t) {
+            let i = h.length - 1;
+            while (i > 0 && h[i - 1].t > T) i--;
+            const a0 = h[i - 1], b0 = h[i], f = (T - a0.t) / Math.max(1e-6, b0.t - a0.t);
+            p = { x: a0.x + (b0.x - a0.x) * f, y: a0.y + (b0.y - a0.y) * f };
+          }
+          const nx = p.x + ch.co, ny = p.y, dx = nx - bm.x, dy = ny - bm.y;
+          if (Math.abs(dx) > Math.abs(dy) * 0.8 + 0.3) setFace(dx > 0 ? 1 : -1);
+          stride(Math.hypot(dx, dy));
+          bm.x = nx; bm.y = ny;
+        };
+        const endChase = () => {
+          if (ch && !ch.left) { ch.left = true; catCtl.sit(); }
+          catCtl.busy = false; ch = null;
+          setPose("walk");
+          chaseT = 45 + Math.random() * 40;
+          resume();
+        };
+        const chaseTick = dt => {
+          const c = ch;
+          if (c.ph === "approach") {
+            if (walkBy(dt, 38)) {
+              c.ph = "spook"; c.t = 0; bob = 0; lean = 0;
+              say(pick(["Bram points at the cat. \u201CDown. Off. That one\u2019s freshly swept.\u201D", "\u201COi! Not that stone, madam.\u201D", "\u201CDon\u2019t you dare. Not the bucket.\u201D"]));
+            }
+          } else if (c.ph === "spook") {
+            c.t += dt;
+            if (c.t >= 0.6) {
+              c.ph = "run";
+              c.cat.route = [{ x: c.lane.x, y: c.lane.y }].concat(mkRoute(c.lane.x, c.lane.y, propTarget(c.prop), 2));
+            }
+          } else if (c.ph === "run") {
+            const cat = c.cat;
+            const done = advance(cat, dt, 58, null);
+            c.bouncePh += dt * 24;
+            catCtl.run(cat.x, cat.y - Math.abs(Math.sin(c.bouncePh)) * 3);
+            if (!c.rec && cat.y >= c.lane.y - 0.01) c.rec = true;      // she has dropped down to the aisle: he starts tracking her
+            if (c.rec) c.hist.push({ t: clock, x: cat.x, y: cat.y });
+            followCat();
+            if (done) {
+              c.ph = "knock"; c.arrived = true; c.k = 0;
+              catCtl.run(cat.x, cat.y);
+              knockProp(c.prop);
+              say(`The cat bats the ${PROP_NAME[c.prop.kind]} clean over and stares straight at Bram.`);
+            }
+          } else {
+            followCat();
+            const h = c.hist;
+            if (c.ph === "knock" && clock - LAG >= h[h.length - 1].t) {
+              c.ph = "tidy"; c.t = 0; bob = 0; lean = 0; setFace(-1); setPose("bend");
+            } else if (c.ph === "tidy") {
+              c.t += dt;
+              lean = c.t < 0.5 ? 16 * (c.t / 0.5) : c.t < 1.7 ? 16 : 16 * Math.max(0, 1 - (c.t - 1.7) / 0.4);
+              if (c.t >= 0.9 && !c.righted) {
+                c.righted = true; standProp(c.prop);
+                say(pick([`Bram rights the ${PROP_NAME[c.prop.kind]}. \u201CEvery. Single. Time.\u201D`, `Bram stands the ${PROP_NAME[c.prop.kind]} back up and sighs.`]));
+              }
+              if (c.t >= 2.3) { endChase(); return; }
+            }
+          }
+          if (c.arrived) {
+            c.k += dt;
+            if (!c.left && c.k > 1.5) {         // she wanders off to another grave
+              c.left = true;
+              let i; do { i = Math.floor(Math.random() * graveNodes.length); } while (graveNodes.length > 1 && i === catCtl.at());
+              catCtl.sit(i);
+            }
+          }
+        };
+
+        // ── rain: into the cottage, and out again when it stops ──
+        const goHome = () => {
+          mode = "home"; tendNode = null; onArrive = null; wSpeed = 38;
+          bm.route = mkRoute(bm.x, bm.y, { x: CX, y: DOORY, lane: true }, OFF);
+          bsay("Bram pulls his hat down and makes for the cottage.");
+        };
+        const enterTick = dt => {
+          phT += dt;
+          if (!(flags & 1)) { flags |= 1; setDoor(true); }
+          if (phT > 0.5 && !(flags & 2)) { flags |= 2; keeper.style.opacity = "0"; }
+          if (phT > 1.0) {
+            setDoor(false); setLit(true); keeper.style.display = "none";
+            say(pick(["The cottage door shuts. A warm window glows through the rain.", "Bram ducks inside. A lamp comes on in the window.", "A light appears in the cottage window. Smoke curls from the chimney."]));
+            mode = "inside"; insideT = 0;
+          }
+        };
+        const startExit = () => {
+          mode = "exit"; phT = 0; flags = 0;
+          bm.x = CX; bm.y = DOORY; setFace(-1); put();
+          setDoor(true);
+          keeper.style.opacity = "0"; keeper.style.display = "";
+          void keeper.getBoundingClientRect();
+          keeper.style.opacity = "1";
+          say(pick(["The rain stops. Bram steps out and stretches.", "The cottage door opens. Bram checks the sky, then reaches for his lantern.", "Clear again. Bram comes out, sniffing the air."]));
+        };
+        const exitTick = dt => {
+          phT += dt;
+          if (phT > 0.5 && !(flags & 1)) { flags |= 1; setLit(false); }
+          if (phT > 1.2) { setDoor(false); resume(); }
+        };
+
+        // ── the main loop ──
+        const patrolTick = dt => {
+          bm.y += dir * 10 * dt;
+          bm.x = pathX(bm.y) + OFF;
+          setFace(dir > 0 ? 1 : -1);
+          stride(10 * dt * 1.8);
+          stopT -= dt; chaseT -= dt;
+          if (dir > 0 && bm.y >= benchY) {        // end of the round: to the bench
+            bm.y = benchY; bm.x = pathX(bm.y) + OFF;
+            mode = "walk"; wSpeed = 20; bm.route = [{ x: 54, y: benchY }];
+            onArrive = () => startAct("bench", null);
+            return;
+          }
+          if (dir < 0 && bm.y <= yMin) { bm.y = yMin; dir = 1; }
+          if (stopT <= 0) { stopT = 12 + Math.random() * 14; walkToTend(pickGrave(), 26); return; }
+          if (chaseT <= 0) chaseT = tryChase() ? 45 + Math.random() * 40 : 8;
+        };
+        const tick = dt => {
+          clock += dt;
+          if (!started) {
+            started = true;
+            if (rainNow()) { mode = "inside"; keeper.style.display = "none"; setLit(true); insideT = 0; }
+          }
+          if (rainNow() && (mode === "patrol" || mode === "walk" || mode === "act")) { if (act) endAct(true); goHome(); }
+          if (mode === "patrol") patrolTick(dt);
+          else if (mode === "walk") {
+            if (walkBy(dt, wSpeed)) { bob = 0; lean = 0; mode = "patrol"; const f = onArrive; onArrive = null; if (f) f(); }
+          }
+          else if (mode === "act") actTick(dt);
+          else if (mode === "chase") chaseTick(dt);
+          else if (mode === "home") { if (walkBy(dt, wSpeed)) { mode = "enter"; phT = 0; flags = 0; bob = 0; lean = 0; setFace(1); } }
+          else if (mode === "enter") enterTick(dt);
+          else if (mode === "inside") { if (!rainNow()) { insideT += dt; if (insideT >= 2.5) startExit(); } else insideT = 0; }
+          else if (mode === "exit") exitTick(dt);
+          put(); applyBody();
+        };
+
+        // tap a grave and he walks over to it
+        keeperGoTo = n => {
+          if (mode === "chase") { pendingTap = n; return; }
+          if (mode === "inside") { say(pick(["A shadow moves behind the lit window. \u201CNot in this rain, love.\u201D", "Bram taps the glass from inside. \u201CAfter the rain!\u201D"])); return; }
+          if (mode === "home" || mode === "enter" || mode === "exit") return;
+          if (tendNode === n && (mode === "walk" || mode === "act")) return;
+          if (act) endAct(true);
+          walkToTend(n, 28);
+          bsay(pick([`Bram ambles over to ${q2(titleOf(n.g.f))}.`, "Bram heads over, lantern swinging.", "\u201CComing, coming.\u201D"]));
+        };
+
+        let lastT = 0, lastBadge = 0;
         const step = ts => {
           if (!back.isConnected) return;
           if (!lastT) lastT = ts;
-          const dt = Math.min(64, ts - lastT) / 1000; lastT = ts;
-          if (!isTalking()) { s += dt * 10; if (s >= total) s -= total; put(); }
+          const dt = isTalking() ? 0 : Math.min(64, ts - lastT) / 1000;   // everything waits while he talks to you
+          lastT = ts;
+          tick(dt);
           if (ts - lastBadge > 30000) { lastBadge = ts; updateBadge(); }
           requestAnimationFrame(step);
         };
@@ -4184,6 +4651,7 @@ try {
     const WX_SAY = { clear: "The sky clears.", rain: "Rain patters on the stones. Somewhere, distant thunder.", fog: "A thick fog rolls in between the graves.", snow: "Soft snow begins to fall." };
     let wxI = Math.max(0, Math.min(WX.length - 1, prefs.wx | 0));
     const paintWeather = () => {
+      if (keeperOnWeather) keeperOnWeather();
       wxG.textContent = "";
       const kind = WX[wxI][0];
       if (kind === "rain" && !reduce) {
