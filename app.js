@@ -141,6 +141,44 @@
   });
 })();
 
+// ═════════ PART 0.65: AO3 DOWNTIME (fair update predictions) ═════════
+// While AO3 is down, authors can't post. This remembers the window (start date, and
+// end date once AO3 is back) so every "days since update", overdue count, update
+// prediction, average gap and stale/abandoned check can leave those days out.
+// Stored under "ao3_downtime_v1" (so it syncs and is in the backup file).
+(function () {
+  'use strict';
+  if (window.__ao3Dt) return;
+  const KEY = "ao3_downtime_v1", DAY = 86400000, RX = /^\d{4}-\d{2}-\d{2}$/;
+  const read = () => {
+    try {
+      const v = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (!v || !RX.test(v.start || "")) return null;
+      return { start: v.start, end: RX.test(v.end || "") ? v.end : null };
+    } catch (e) { return null; }
+  };
+  const mid = x => {
+    if (x instanceof Date) return new Date(x.getFullYear(), x.getMonth(), x.getDate());
+    const p = String(x).slice(0, 10).split("-").map(Number);
+    return new Date(p[0], p[1] - 1, p[2]);
+  };
+  // whole days of AO3 downtime between a and b (Date or YYYY-MM-DD string); the end day is the day AO3 came back
+  const overlap = (a, b) => {
+    const w = read(); if (!w) return 0;
+    const A = mid(a), B = mid(b), S = mid(w.start);
+    const lo = A > S ? A : S;
+    const hi = w.end ? (mid(w.end) < B ? mid(w.end) : B) : B;
+    return Math.max(0, Math.round((hi - lo) / DAY));
+  };
+  const today = () => { const d = new Date(); const z = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()); };
+  const status = () => {
+    const w = read(); if (!w) return null;
+    const days = w.end ? Math.max(0, Math.round((mid(w.end) - mid(w.start)) / DAY)) : overlap(w.start, new Date());
+    return { start: w.start, end: w.end, days };
+  };
+  window.__ao3Dt = { KEY, read, overlap, status, today };
+})();
+
 // ═════════ PART 0.7: OFFLINE HEADER (AO3 maintenance page / fallback site) ═════════
 // The Fic Tracker and Reading Dashboard hang their buttons on AO3's header. When
 // AO3 is down (maintenance page) or on the fallback site (example.com) there is
@@ -154,7 +192,18 @@
 (function () {
   'use strict';
   if (!document.body) return;
-  if (document.querySelector("#header ul.primary.navigation")) return;
+  if (document.querySelector("#header ul.primary.navigation")) {
+    // AO3 is up: if a downtime window is still open, close it (a few seconds later, once cloud sync is listening)
+    try {
+      if (/(^|\.)archiveofourown\.org$/.test(location.hostname) && window.__ao3Dt) {
+        const w = window.__ao3Dt.read(), t = window.__ao3Dt.today();
+        if (w && !w.end && w.start <= t) setTimeout(() => {
+          try { localStorage.setItem(window.__ao3Dt.KEY, JSON.stringify({ start: w.start, end: t })); } catch (e) {}
+        }, 3000);
+      }
+    } catch (e) {}
+    return;
+  }
   const onAo3 = /(^|\.)archiveofourown\.org$/.test(location.hostname);
   window.__ao3Down = true;
 
@@ -287,6 +336,68 @@
   const modeBtn = el("button", "ao3-fb-mode"); modeBtn.type = "button";
   modeWrap.appendChild(modeBtn);
   main.insertBefore(modeWrap, card);
+
+  // ── AO3 downtime control (so update predictions stay fair) ──
+  const dtCss =
+    "#ao3-fb-dt{margin:10px 0 0;text-align:center}" +
+    "#ao3-fb-dtbtn{min-height:34px;padding:6px 14px;border-radius:999px;border:1.5px solid var(--fb-line);background:var(--fb-card);color:var(--fb-ink);font:500 13px/1.25 " + FONT + ";cursor:pointer;box-shadow:0 2px 6px var(--fb-shadow);-webkit-tap-highlight-color:transparent}" +
+    "#ao3-fb-dtpanel{display:none;margin:10px 0 0;padding:14px;border-radius:20px;background:var(--fb-card);border:1.5px solid var(--fb-line);box-shadow:0 4px 14px var(--fb-shadow);text-align:left}" +
+    "#ao3-fb-dtpanel.open{display:block}" +
+    "#ao3-fb-dtpanel p{margin:0 0 10px;font:400 13px/1.5 " + FONT + ";color:var(--fb-ink2)}" +
+    "#ao3-fb-dtpanel label{display:block;margin:0 0 10px;font:500 13px/1.3 " + FONT + ";color:var(--fb-ink2)}" +
+    "#ao3-fb-dtpanel input{display:block;width:100%;box-sizing:border-box;margin-top:4px;height:40px;padding:0 12px;border-radius:14px;border:1.5px solid var(--fb-line);background:var(--fb-bg);color:var(--fb-ink);font:400 16px/1 " + FONT + ";-webkit-appearance:none}" +
+    "#ao3-fb-dtpanel .dt-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:4px}" +
+    "#ao3-fb-dtpanel .dt-btns button{height:36px;padding:0 15px;border-radius:999px;border:1.5px solid var(--fb-line);background:var(--fb-card);color:var(--fb-ink);font:500 14px/1 " + FONT + ";cursor:pointer;box-shadow:0 2px 6px var(--fb-shadow)}" +
+    "#ao3-fb-dtpanel .dt-btns button.primary{background:var(--fb-accent);border-color:var(--fb-accent);color:#fff;font-weight:600}" +
+    "#ao3-fb-dtmsg{margin-top:8px;text-align:center;font:500 13px/1.4 " + FONT + ";color:var(--fb-accent2)}";
+  const dtStyle = document.createElement("style"); dtStyle.textContent = dtCss; document.head.appendChild(dtStyle);
+  const DT = window.__ao3Dt;
+  const dtWrap = el("div", "ao3-fb-dt");
+  const dtBtn = el("button", "ao3-fb-dtbtn"); dtBtn.type = "button";
+  const dtPanel = el("div", "ao3-fb-dtpanel");
+  dtPanel.appendChild(el("p", null, "While AO3 is down, authors can't post. Set when it went down and these days are left out of “days since update”, overdue counts, update predictions and stale/abandoned checks, so nobody gets blamed for the outage. When you next open AO3 normally, the end date fills in by itself."));
+  const mkDate = label => { const lb = document.createElement("label"); lb.appendChild(document.createTextNode(label)); const i = document.createElement("input"); i.type = "date"; lb.appendChild(i); dtPanel.appendChild(lb); return i; };
+  const dtStart = mkDate("AO3 went down on");
+  const dtEnd = mkDate("AO3 came back on (leave empty while it's still down)");
+  const dtBtns = el("div"); dtBtns.className = "dt-btns";
+  const dtSave = el("button", null, "Save"); dtSave.type = "button"; dtSave.className = "primary";
+  const dtBack = el("button", null, "AO3 is back today"); dtBack.type = "button";
+  const dtClear = el("button", null, "Clear"); dtClear.type = "button";
+  dtBtns.appendChild(dtSave); dtBtns.appendChild(dtBack); dtBtns.appendChild(dtClear);
+  dtPanel.appendChild(dtBtns);
+  const dtMsg = el("div", "ao3-fb-dtmsg");
+  dtPanel.appendChild(dtMsg);
+  dtWrap.appendChild(dtBtn); dtWrap.appendChild(dtPanel);
+  main.insertBefore(dtWrap, card);
+  const fmtD = iso => { const p = iso.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+  const paintDt = () => {
+    const st = DT && DT.status();
+    if (!st) dtBtn.textContent = "⏸ AO3 downtime: not set";
+    else if (!st.end) dtBtn.textContent = "⏸ AO3 down since " + fmtD(st.start) + " · " + st.days + " day" + (st.days === 1 ? "" : "s") + " not counted";
+    else dtBtn.textContent = "⏸ AO3 was down " + fmtD(st.start) + " – " + fmtD(st.end) + " · " + st.days + " days not counted";
+    const w = DT && DT.read();
+    dtStart.value = w ? w.start : ""; dtEnd.value = (w && w.end) || "";
+  };
+  const saveDt = (start, end, msg) => {
+    try { localStorage.setItem(DT.KEY, JSON.stringify({ start: start || null, end: end || null })); } catch (e) {}
+    paintDt(); dtMsg.textContent = msg || "";
+    if (typeof renderMock === "function") renderMock();
+  };
+  if (DT) {
+    dtBtn.onclick = () => { dtPanel.classList.toggle("open"); dtMsg.textContent = ""; if (dtPanel.classList.contains("open") && !dtStart.value) dtStart.value = DT.today(); };
+    dtSave.onclick = () => {
+      const a = dtStart.value, b = dtEnd.value;
+      if (!a) { dtMsg.textContent = "Pick the day AO3 went down."; return; }
+      if (b && b < a) { dtMsg.textContent = "The end date can't be before the start."; return; }
+      saveDt(a, b, "Saved ♡ those days won't count against authors.");
+    };
+    dtBack.onclick = () => {
+      if (!dtStart.value) { dtMsg.textContent = "Pick the day AO3 went down first."; return; }
+      saveDt(dtStart.value, DT.today(), "Saved ♡ AO3 marked as back today.");
+    };
+    dtClear.onclick = () => saveDt(null, null, "Cleared. Every day counts again.");
+    paintDt();
+  } else { dtWrap.style.display = "none"; }
 
   const mock = el("div", "ao3-mock");
   const mTop = el("div"); mTop.className = "am-top";
@@ -755,6 +866,7 @@ try {
   const WORDS_PER_PAGE   = 300;
   const WORDS_PER_BOOK   = 90000;
   const WORDS_PER_MINUTE = 215; // reading pace (words per minute)
+  const dtOverlap        = (a, b) => (window.__ao3Dt ? window.__ao3Dt.overlap(a, b) : 0); // AO3-down days between two dates
   const STALE_DAYS       = 120; // ~4 months — unfinished, no-update fics go into Abandoned/Removed
   const READ_LOG_KEY     = "ao3_word_log_v4"; // the reading log (same key the Log button writes to)
   const _llc             = { raw: null, map: new Map() }; // cache for lastLoggedChapters()
@@ -1223,10 +1335,13 @@ try {
   // ─────────────────────────────
   function calcAvgUpdateDays(chapterDates) {
     if (!chapterDates || chapterDates.length < 2) return null;
-    const sorted = [...chapterDates].map(d => new Date(d)).sort((a,b) => a-b);
+    const ds = [...chapterDates].map(d => String(d).slice(0, 10)).sort();
     let total = 0;
-    for (let i = 1; i < sorted.length; i++) total += (sorted[i] - sorted[i-1]);
-    return Math.round(total / (sorted.length - 1) / 86400000);
+    for (let i = 1; i < ds.length; i++) {
+      const gap = Math.round((new Date(ds[i] + "T00:00:00") - new Date(ds[i-1] + "T00:00:00")) / 86400000);
+      total += Math.max(0, gap - dtOverlap(ds[i-1], ds[i])); // days AO3 was down don't count against the author
+    }
+    return Math.round(total / (ds.length - 1));
   }
 
   // ─────────────────────────────
@@ -1245,7 +1360,7 @@ try {
     // gaps between consecutive updates, in days
     const gaps = [];
     for (let i = 1; i < sorted.length; i++) {
-      gaps.push(Math.round((sorted[i] - sorted[i-1]) / 86400000));
+      gaps.push(Math.max(0, Math.round((sorted[i] - sorted[i-1]) / 86400000) - dtOverlap(sorted[i-1], sorted[i])));
     }
 
     // Recency-weighted average — more recent gaps count more (weight = index + 1).
@@ -1275,11 +1390,12 @@ try {
     const base = (fic.lastUpdate && !isNaN(new Date(fic.lastUpdate + "T00:00:00")))
       ? new Date(fic.lastUpdate + "T00:00:00")
       : sorted[sorted.length - 1];
-    const predictedDate = new Date(base.getTime() + Math.round(weightedAvgGap) * 86400000);
+    // days AO3 was down since the last update are pushed onto the prediction (authors couldn't post)
+    const predictedDate = new Date(base.getTime() + (Math.round(weightedAvgGap) + dtOverlap(base, new Date())) * 86400000);
 
     const last = sorted[sorted.length - 1];
     const today = new Date(); today.setHours(0,0,0,0);
-    const daysSinceLast = Math.floor((today - last) / 86400000);
+    const daysSinceLast = Math.max(0, Math.floor((today - last) / 86400000) - dtOverlap(last, today));
     const daysUntilPredicted = Math.floor((predictedDate - today) / 86400000);
 
     // "Could drop today" if today is within ±1 day of the predicted date,
@@ -2150,7 +2266,7 @@ try {
     const sorted = dates.map(d => new Date(d + "T00:00:00")).filter(d => !isNaN(d)).sort((a, b) => a - b);
     if (sorted.length < 2) return null;
     const gaps = [];
-    for (let i = 1; i < sorted.length; i++) gaps.push(Math.max(0, Math.round((sorted[i] - sorted[i - 1]) / 86400000)));
+    for (let i = 1; i < sorted.length; i++) gaps.push(Math.max(0, Math.round((sorted[i] - sorted[i - 1]) / 86400000) - dtOverlap(sorted[i - 1], sorted[i])));
 
     // recency-weighted log-normal fit on ln(gap + 1)
     let ws = 0, wt = 0;
@@ -2164,7 +2280,7 @@ try {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const base = (fic.lastUpdate && !isNaN(new Date(fic.lastUpdate + "T00:00:00")))
       ? new Date(fic.lastUpdate + "T00:00:00") : sorted[sorted.length - 1];
-    const w = Math.max(0, Math.floor((today - base) / 86400000)); // days waited so far
+    const w = Math.max(0, Math.floor((today - base) / 86400000) - dtOverlap(base, today)); // days waited so far (AO3-down days left out)
     const gap = Math.max(1, pr.medianGap);
 
     // chance of landing on day d from today, given it hasn't updated yet
@@ -3963,7 +4079,7 @@ try {
     let adj = 0;
     const dts = (fic.chapterDates || []).map(d => new Date(d + "T00:00:00")).filter(d => !isNaN(d)).sort((a, b) => a - b);
     const gaps = [];
-    for (let i = 1; i < dts.length; i++) gaps.push(Math.max(0, Math.round((dts[i] - dts[i - 1]) / 86400000)));
+    for (let i = 1; i < dts.length; i++) gaps.push(Math.max(0, Math.round((dts[i] - dts[i - 1]) / 86400000) - dtOverlap(dts[i - 1], dts[i])));
     if (gaps.length >= 4) {
       const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
       const ratio = avg(gaps.slice(-3)) / Math.max(1, avg(gaps));
@@ -4696,7 +4812,8 @@ try {
   // ─────────────────────────────
   function daysSince(dateStr) {
     if (!dateStr) return null;
-    return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+    // days since the date, not counting days AO3 was down
+    return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000) - dtOverlap(dateStr, new Date()));
   }
   function stalenessColor(days) {
     if (days === null) return P.accentFaint;
@@ -18860,7 +18977,8 @@ try {
     try { list = JSON.parse(localStorage.getItem("ao3_fic_tracker_v1") || "[]"); } catch (e) { return []; }
     if (!Array.isArray(list)) return [];
     const STALE = 120;
-    const since = d => (d ? Math.floor((Date.now() - new Date(d).getTime()) / 86400000) : null);
+    const dtO = (a, b) => (window.__ao3Dt ? window.__ao3Dt.overlap(a, b) : 0);
+    const since = d => (d ? Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000) - dtO(d, new Date())) : null);
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     // WIP rank from the tracker (position among current WIPs in the saved ranking)
     const isWipF = f => !f.finished && f.manualAbandoned !== true
@@ -18879,7 +18997,7 @@ try {
       if (!dates || dates.length < 2) return;
       const sorted = [...dates].map(d => new Date(d + "T00:00:00")).sort((a, b) => a - b);
       const gaps = [];
-      for (let i = 1; i < sorted.length; i++) gaps.push(Math.round((sorted[i] - sorted[i - 1]) / 86400000));
+      for (let i = 1; i < sorted.length; i++) gaps.push(Math.max(0, Math.round((sorted[i] - sorted[i - 1]) / 86400000) - dtO(sorted[i - 1], sorted[i])));
       let ws = 0, wt = 0;
       gaps.forEach((g, i) => { ws += g * (i + 1); wt += i + 1; });
       const weightedAvgGap = ws / wt;
@@ -18890,10 +19008,10 @@ try {
       for (let i = 1; i < 7; i++) if (dayCounts[i] > dayCounts[commonDay]) commonDay = i;
       const strongDay = dayCounts[commonDay] / sorted.length >= 0.5 && dates.length >= 3;
       const base = (f.lastUpdate && !isNaN(new Date(f.lastUpdate + "T00:00:00"))) ? new Date(f.lastUpdate + "T00:00:00") : sorted[sorted.length - 1];
-      const predicted = new Date(base.getTime() + Math.round(weightedAvgGap) * 86400000);
+      const predicted = new Date(base.getTime() + (Math.round(weightedAvgGap) + dtO(base, new Date())) * 86400000);
       const last = sorted[sorted.length - 1];
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      const daysSinceLast = Math.floor((today - last) / 86400000);
+      const daysSinceLast = Math.max(0, Math.floor((today - last) / 86400000) - dtO(last, today));
       const daysUntil = Math.floor((predicted - today) / 86400000);
       const within = Math.abs(daysUntil) <= 1;
       const matchesDay = strongDay && today.getDay() === commonDay && daysSinceLast >= Math.floor(avgGap * 0.6);
