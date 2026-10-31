@@ -26640,6 +26640,19 @@ try {
   }
 
   periodBtn.onclick       = openPeriodTracker;
+
+  // Web app only (index.html sets __ao3WebApp): a separate "Daily Brief" button beside the cycle-day
+  // button. The morning-brief pill inside the cycle tracker stays exactly as it was.
+  if (window.__ao3WebApp) {
+    const briefLi = document.createElement("li");
+    const briefBtn = document.createElement("a");
+    briefBtn.textContent = "Daily Brief";
+    briefBtn.href = "javascript:void(0)";
+    briefBtn.style.cursor = "pointer";
+    briefBtn.onclick = () => showMorningBrief(getPeriodStats());
+    briefLi.appendChild(briefBtn);
+    periodNavLi.after(briefLi);
+  }
   periodCloseBtn.onclick  = closePeriodTracker;
   periodOverlay.addEventListener("click", e => { if (e.target === periodOverlay) closePeriodTracker(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && periodOverlay.style.display === "block") closePeriodTracker(); });
