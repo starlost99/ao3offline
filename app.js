@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AO3 Reading Dashboard (Toggle Logging)
 // @namespace    http://tampermonkey.net/
-// @version      18.6
+// @version      18.8
 // @description  One combined script: AO3 Reading Dashboard + AO3 Fic Tracker + AO3 Notes Folder -> iOS Shortcut. The parts work exactly as before and are not connected, except for backup: every Export/Import button now uses ONE combined JSON file covering everything.
 // @match        https://archiveofourown.org/*
 // @match        https://www.archiveofourown.org/*
@@ -3401,7 +3401,8 @@ try {
   // fireflies), crows on the gate, a visitors' book with your graveyard stats, a groundskeeper who
   // walks the path with a lantern, a cat who sits on graves, a drifting ghost, a koi pond with a frog,
   // five will-o-wisps that come back every month, wishing-well streaks, grave search and a random visit.
-  // It never changes your graves. Its own little preferences (time of day, weather, wishes, this
+  // Tap a grave to lay flowers (with an optional note) or light a candle; it saves exactly like the full
+  // graveyard does. The extras' own little preferences (time of day, weather, wishes, this
   // month's wisps) live in one local key, ao3-gg-prefs, and are not synced.
   function openGraveyardGrounds() {
     const old = document.getElementById("ao3-grounds");
@@ -3492,9 +3493,9 @@ try {
 
     const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;");
     box.appendChild(field);
-    const card = el("div", "flex:0 0 auto;display:none;padding:12px 14px;border-top:1px solid rgba(190,170,255,0.25);background:rgba(18,12,34,0.96);text-align:center;");
+    const card = el("div", "flex:0 0 auto;max-height:55%;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none;padding:12px 14px;border-top:1px solid rgba(190,170,255,0.25);background:rgba(18,12,34,0.96);text-align:center;");
     box.appendChild(card);
-    const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);", graves.length ? "tap a grave \u00B7 tap the well at the end of the path \u00B7 \u2715 returns to the graveyard" : "");
+    const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);", graves.length ? "tap a grave to lay flowers or light a candle \u00B7 tap the well at the end of the path \u00B7 \u2715 returns to the graveyard" : "");
     box.appendChild(caption);
 
     let strolling = false, raf = 0;
@@ -3599,6 +3600,13 @@ try {
       setTimeout(() => g.remove(), 1100);
     };
 
+    const rise = (txt, x, y) => {      // a little emoji that floats up from a grave
+      const h = sv("text", { x, y, "text-anchor": "middle", "font-size": 14 }, svg);
+      h.textContent = txt;
+      anim(h, "animation:ggHeart 1.1s ease-out forwards;");
+      setTimeout(() => h.remove(), 1150);
+    };
+
     // a little jack-o'-lantern
     const pumpkin = (parent, px, py, s, seed) => {
       const g = sv("g", { transform: `translate(${px.toFixed(1)} ${py.toFixed(1)}) scale(${s})` }, parent);
@@ -3670,7 +3678,7 @@ try {
       const done = el("button", bcss, "Close"); done.type = "button";
       done.onclick = () => { card.style.display = "none"; };
       row.appendChild(done); card.appendChild(row);
-      card.style.display = "block";
+      card.style.display = "block"; card.scrollTop = 0;
     };
     {
       const lx = pathX(112) + 40, ly = 114;
@@ -3742,6 +3750,39 @@ try {
       if (total) bits.push(`${total} flower${total === 1 ? "" : "s"} left`);
       if (lit) bits.push(`candle lit \u00B7 ${gyLeft(rec.lit - Date.now())} left`);
       if (bits.length) card.appendChild(el("div", "font-size:10.5px;color:rgba(217,208,245,0.7);", bits.join(" \u00B7 ")));
+      // ── tend the grave: lay a flower (with an optional note) or light a candle ──
+      // Saved with the graveyard's own functions, so it shows up in the full graveyard too.
+      const node = graveNodes.find(x => x.g === g);
+      const redo = () => { picked = null; showCard(g, mark); };
+      const lastNote = rec.notes[rec.notes.length - 1];
+      if (lastNote) card.appendChild(el("div", "font-size:11px;font-style:italic;color:rgba(217,208,245,0.6);margin-top:4px;", `${lastNote.e} \u201C${lastNote.t}\u201D`));
+      const noteIn = el("input", "width:100%;box-sizing:border-box;margin-top:10px;padding:8px 10px;border-radius:8px;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.07);color:#e6dcf5;font-family:inherit;font-size:16px;outline:none;text-align:center;");
+      noteIn.type = "text"; noteIn.maxLength = 100; noteIn.placeholder = "Leave a few words with your flower (optional)";
+      card.appendChild(noteIn);
+      const fr = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:8px;");
+      GY_FLOWERS.forEach(t => {
+        const b = el("button", "cursor:pointer;font-size:20px;line-height:1;padding:6px 8px;border-radius:10px;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);", t.e);
+        b.type = "button"; b.title = `Lay a ${t.n.toLowerCase()}`;
+        b.onclick = () => {
+          gyAddFlower(f.workId, t.e, noteIn.value);
+          try { if (navigator.vibrate) navigator.vibrate(10); } catch {}
+          if (node) { node.paintDyn(); rise(t.e, node.gx + 14, node.gy + 6); }
+          redo();
+        };
+        fr.appendChild(b);
+      });
+      card.appendChild(fr);
+      const cb = el("button", "cursor:pointer;font:inherit;font-family:inherit;font-size:12.5px;font-weight:600;width:100%;margin-top:8px;border-radius:8px;padding:8px 10px;border:1px solid rgba(255,190,100,0.4);background:rgba(255,190,100,0.08);color:#ffe2b3;");
+      cb.type = "button";
+      cb.textContent = lit ? `\u{1F56F}\uFE0F Candle lit \u00B7 burns out in ${gyLeft(rec.lit - Date.now())} \u00B7 tap to relight` : "\u{1F56F}\uFE0F Light a candle (burns 3 days)";
+      if (lit) cb.style.boxShadow = "0 0 14px rgba(255,180,80,0.35)";
+      cb.onclick = () => {
+        gyLight(f.workId);
+        try { if (navigator.vibrate) navigator.vibrate(12); } catch {}
+        if (node) { node.paintDyn(); sparkle(node.gx + 33, node.gy + 28, 6); }
+        redo();
+      };
+      card.appendChild(cb);
       const row = el("div", "display:flex;justify-content:center;gap:8px;margin-top:10px;");
       const bcss = "cursor:pointer;font:inherit;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;";
       const open = el("button", bcss, "Back to the graveyard"); open.type = "button";
@@ -3750,7 +3791,7 @@ try {
       done.onclick = () => { picked.setAttribute("opacity", 0); picked = null; card.style.display = "none"; };
       row.appendChild(open); row.appendChild(done);
       card.appendChild(row);
-      card.style.display = "block";
+      card.style.display = "block"; card.scrollTop = 0;
     };
 
     const graveNodes = [];
@@ -3774,26 +3815,32 @@ try {
         if (moss) sv("ellipse", { cx: 8, cy: 35, rx: 9, ry: 3, fill: "#4f7a5a", opacity: 0.8 }, stone);
         if (season === "winter") sv("path", { d: "M2.2 7 A14 14 0 0 1 25.8 7 Q21 5.5 17.5 8.5 Q14 5 10.5 8.5 Q6 5.5 2.2 7 Z", fill: "#f4f7ff", opacity: 0.92 }, stone);
         if (season === "halloween" && gyHash(g.f.workId) % 5 === 0) pumpkin(grp, 2, 40, 0.55, "g" + g.f.workId);
-        const rec = gyRec(g.f.workId);
-        const tot = gyTotal(rec);
-        if (tot) {
-          const best = Object.keys(rec.c).sort((a, b) => rec.c[b] - rec.c[a])[0];
-          const ft = sv("text", { x: 14, y: 46, "text-anchor": "middle", "font-size": 11 }, grp); ft.textContent = best || "\u{1F339}";
-        }
-        if (rec.lit && rec.lit > Date.now()) {
-          const cg = sv("g", {}, grp);
-          sv("circle", { cx: 33, cy: 32, r: 11, fill: "url(#gg-glow)" }, cg);
-          sv("rect", { x: 31.5, y: 31, width: 3, height: 6, fill: "#f3ead2" }, cg);
-          sv("ellipse", { cx: 33, cy: 29.5, rx: 1.8, ry: 3, fill: "#ffcf5a" }, cg);
-          anim(cg, `animation:ggFlicker ${(1.6 + rnd("c" + g.f.workId)).toFixed(1)}s ease-in-out infinite;transform-origin:33px 32px;`);
-        }
+        const dyn = sv("g", {}, grp);       // flowers + candle: repainted live when you tend the grave
+        const paintDyn = () => {
+          dyn.textContent = "";
+          const rec = gyRec(g.f.workId);
+          const kinds = Object.keys(rec.c).filter(k => rec.c[k] > 0).sort((a, b) => rec.c[b] - rec.c[a]).slice(0, 3);
+          const xs = kinds.length === 1 ? [14] : kinds.length === 2 ? [8, 20] : [3, 14, 25];
+          kinds.forEach((k, ki) => {
+            const ft = sv("text", { x: xs[ki], y: 46, "text-anchor": "middle", "font-size": kinds.length > 1 ? 9 : 11 }, dyn);
+            ft.textContent = k;
+          });
+          if (rec.lit && rec.lit > Date.now()) {
+            const cg = sv("g", {}, dyn);
+            sv("circle", { cx: 33, cy: 32, r: 11, fill: "url(#gg-glow)" }, cg);
+            sv("rect", { x: 31.5, y: 31, width: 3, height: 6, fill: "#f3ead2" }, cg);
+            sv("ellipse", { cx: 33, cy: 29.5, rx: 1.8, ry: 3, fill: "#ffcf5a" }, cg);
+            anim(cg, `animation:ggFlicker ${(1.6 + rnd("c" + g.f.workId)).toFixed(1)}s ease-in-out infinite;transform-origin:33px 32px;`);
+          }
+        };
+        paintDyn();
         const mark = sv("rect", { x: -3, y: -4, width: 34, height: 44, rx: 8, fill: "#fff", opacity: 0 }, grp);
         mark.style.pointerEvents = "none";
         const hit = sv("rect", { x: -3, y: -4, width: 34, height: 52, fill: "transparent" }, grp);
         hit.style.cursor = "pointer";
         const tl = sv("title", {}, hit); tl.textContent = titleOf(g.f);
         hit.addEventListener("click", () => showCard(g, mark));
-        graveNodes.push({ g, gx, gy, mark });
+        graveNodes.push({ g, gx, gy, mark, paintDyn });
       });
     });
 
@@ -3942,7 +3989,10 @@ try {
       });
     }
 
-    // the groundskeeper walks the whole path with a lantern, very slowly
+    // ── Bram, the groundskeeper ──
+    // Walks the path with a lantern (driven by script, so he can stop for a chat). Tap him and he
+    // talks about YOUR graveyard: quiet fics, flowers, candles, wisps, anniversaries, the weather.
+    // A glowing "!" over his hat means he has news (an anniversary today, or candles about to go out).
     {
       const keeper = sv("g", {}, svg);
       const fig = sv("g", { transform: "translate(24 0)" }, keeper);
@@ -3954,18 +4004,128 @@ try {
       const gl = sv("circle", { cx: 11, cy: -8, r: 18, fill: "url(#gg-glow)" }, fig);
       anim(gl, "animation:ggFlicker 2.4s ease-in-out infinite;transform-origin:11px -8px;");
       sv("rect", { x: 9, y: -10, width: 4, height: 6, rx: 1, fill: "#ffd98a" }, fig);
-      const hit = sv("rect", { x: -9, y: -34, width: 30, height: 42, fill: "transparent" }, fig);
+      const badge = sv("text", { x: 0, y: -36, "text-anchor": "middle", "font-size": 13, "font-weight": 700, fill: "#ffd98a" }, fig);
+      badge.textContent = "!";
+      anim(badge, "animation:ggBob 1.6s ease-in-out infinite;");
+      badge.style.display = "none";
+      const hit = sv("rect", { x: -9, y: -42, width: 30, height: 50, fill: "transparent" }, fig);
       hit.style.cursor = "pointer";
-      hit.addEventListener("click", () => say(pick([
-        "\u201CEvening. I just keep the lanterns lit.\u201D",
-        "\u201CMind the third stone from the left. It has opinions.\u201D",
-        "\u201CMost of these folks would have finished, given a little more time.\u201D",
-        "\u201CThe cat? Never seen her before in my life. She lives here.\u201D",
-        "\u201CIf you hear whispering near the well, that\u2019s the authors, apologizing.\u201D",
-        "\u201CThe wisps come back every month. Don\u2019t ask me how they know.\u201D"
-      ])));
-      if (reduce) keeper.setAttribute("transform", `translate(${pathX(260).toFixed(1)} 260)`);
-      else sv("animateMotion", { dur: "180s", repeatCount: "indefinite", path: d, rotate: "0" }, keeper);
+
+      const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+      const q2 = s => `\u2018${s}\u2019`;
+      const todayMD = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const todayKey = `${now.getFullYear()}-${todayMD}`;
+      const nodeOf = g => graveNodes.find(n => n.g === g);
+      const lows = () => {                       // candles with under 12 hours left
+        const st = gyStore(), t = Date.now();
+        return graves.filter(g => { const r = gyRec(g.f.workId, st); return r.lit > t && r.lit - t < 43200000; });
+      };
+      const anniv = () => graves.filter(g => g.f.lastUpdate && String(g.f.lastUpdate).slice(5, 10) === todayMD && +String(g.f.lastUpdate).slice(0, 4) < now.getFullYear());
+      const hasNews = () => (anniv().length > 0 && prefs.kd !== todayKey) || lows().length > 0;
+      const updateBadge = () => { badge.style.display = hasNews() ? "" : "none"; };
+
+      const heard = [];
+      const candidates = () => {
+        const out = [];
+        const add = (t, node) => out.push({ t, node });
+        const st = gyStore();
+        let flowers = 0, candles = 0;
+        graves.forEach(g => { const r = gyRec(g.f.workId, st); flowers += gyTotal(r); if (r.lit > Date.now()) candles++; });
+        const q = graves.slice().sort((a, b) => b.quiet - a.quiet)[0];
+        const big = graves.slice().sort((a, b) => (b.f.words || 0) - (a.f.words || 0))[0];
+        const crowd = live.slice().sort((a, b) => b.graves.length - a.graves.length)[0];
+        const left = WISPS - wispFound().length;
+        // about your graveyard
+        add(`${q2(titleOf(q.f))} has been quiet for ${gyAgo(q.quiet)}. I still sweep round it.`, nodeOf(q));
+        if (big.f.words) add(`${q2(titleOf(big.f))} is the biggest stone here. ${big.f.words.toLocaleString()} words. I\u2019ve peeked at a few.`, nodeOf(big));
+        add(`${crowd.name} is the busiest plot: ${plural(crowd.graves.length, "stone")}. Hardest to sweep.`);
+        add(flowers ? `${plural(flowers, "flower")} laid so far. I counted. Twice.` : "Not one flower laid yet. Go on, I\u2019ll look away.");
+        add(candles ? `${plural(candles, "candle")} burning tonight. I keep an eye on them.` : "No candles lit. Awfully dark for company.");
+        if (left === WISPS) add("Five wisps loose this month. Keep your eyes soft and they\u2019ll find you.");
+        else if (left > 0) add(`${plural(left, "wisp")} still loose this month. They like the gravel.`);
+        else add("You caught every wisp this month. Show-off.");
+        if (prefs.wishes) add(`${plural(prefs.wishes, "wish")} down the well, and it\u2019s never once granted mine.`);
+        // about the moment
+        add(["The moon\u2019s good company. Better than most readers.", "Dusk. My favourite hour. The lamps just starting to matter.", "Dawn already? I never did sleep."][tI]);
+        const wk = WX[wxI][0];
+        if (wk === "rain") add("Rain again. Good for the moss, bad for my hat.");
+        if (wk === "fog") add("Can\u2019t see my own lantern in this. Mind your feet.");
+        if (wk === "snow") add("Snow\u2019s the kindest weather. Quiet as the residents.");
+        add({ halloween: "Everyone dresses up tonight. I came as a groundskeeper. Very convincing, no?", winter: "I swept the snow off every stone. Twice.", spring: "Petals everywhere. I don\u2019t mind.", summer: "Fireflies out in force. Free lanterns.", autumn: "Leaves. Leaves. More leaves." }[season]);
+        // old favourites
+        [
+          "Evening. I just keep the lanterns lit.",
+          "Mind the third stone from the left. It has opinions.",
+          "Most of these folks would have finished, given a little more time.",
+          "The cat? Never seen her before in my life. She lives here.",
+          "If you hear whispering near the well, that\u2019s the authors, apologizing."
+        ].forEach(t => add(t));
+        return out;
+      };
+      const nextLine = () => {
+        const all = candidates();
+        const fresh = all.filter(l => !heard.includes(l.t));
+        const l = pick(fresh.length ? fresh : all);
+        heard.push(l.t); if (heard.length > 10) heard.shift();
+        return l;
+      };
+      const firstLine = () => {                  // what he opens with: news first, then small talk
+        const an = anniv();
+        if (an.length && prefs.kd !== todayKey) {
+          prefs.kd = todayKey; savePrefs();
+          const g = an[0], yrs = now.getFullYear() - (+String(g.f.lastUpdate).slice(0, 4));
+          return { t: `Years ago today, ${q2(titleOf(g.f))} went quiet. ${plural(yrs, "year")} now.` + (an.length > 1 ? ` And ${plural(an.length - 1, "other")} besides.` : "") + " Thought you\u2019d want to know.", node: nodeOf(g) };
+        }
+        const lo = lows();
+        if (lo.length) return { t: `${lo.length === 1 ? "A candle is" : plural(lo.length, "candle") + " are"} nearly burnt out. Shall I relight ${lo.length === 1 ? "it" : "them"}?` };
+        return nextLine();
+      };
+      const isTalking = () => card.style.display !== "none" && card.firstChild && card.firstChild.dataset && card.firstChild.dataset.bram === "1";
+      const talk = line => {
+        if (picked) { picked.setAttribute("opacity", 0); picked = null; }
+        card.textContent = "";
+        const head = el("div", "font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,217,138,0.85);", "\u{1F3EE} Bram \u00B7 groundskeeper");
+        head.dataset.bram = "1";
+        card.appendChild(head);
+        card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13.5px;line-height:1.45;margin:8px 0 2px;color:#e6dcf5;", `\u201C${line.t}\u201D`));
+        const row = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:10px;");
+        const btn = (label, fn) => { const b = el("button", bcss, label); b.type = "button"; b.onclick = fn; row.appendChild(b); };
+        if (line.node) btn("Show me", () => goTo(line.node));
+        const lo = lows();
+        if (lo.length) btn(`\u{1F56F}\uFE0F Relight ${lo.length === 1 ? "it" : "them"}`, () => {
+          lo.forEach(g => { gyLight(g.f.workId); const n = nodeOf(g); if (n) { n.paintDyn(); sparkle(n.gx + 33, n.gy + 28, 5); } });
+          try { if (navigator.vibrate) navigator.vibrate(12); } catch {}
+          updateBadge();
+          talk({ t: pick(["There. Good for another three days.", "Lit and lovely. They\u2019ll see you right.", "Done. Nobody sits in the dark on my watch."]) });
+        });
+        btn("Chat", () => talk(nextLine()));
+        btn("Close", () => { card.style.display = "none"; });
+        card.appendChild(row);
+        card.style.display = "block"; card.scrollTop = 0;
+        updateBadge();
+      };
+      hit.addEventListener("click", () => talk(firstLine()));
+
+      // walking: along an invisible copy of the path, paused while he's talking
+      const track = sv("path", { d, fill: "none", stroke: "none" }, svg);
+      let total = 0;
+      try { total = track.getTotalLength(); } catch {}
+      if (reduce || !total) keeper.setAttribute("transform", `translate(${pathX(260).toFixed(1)} 260)`);
+      else {
+        let s = total * 0.03, lastT = 0, lastBadge = 0;
+        const put = () => { const p = track.getPointAtLength(s); keeper.setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`); };
+        put();
+        const step = ts => {
+          if (!back.isConnected) return;
+          if (!lastT) lastT = ts;
+          const dt = Math.min(64, ts - lastT) / 1000; lastT = ts;
+          if (!isTalking()) { s += dt * 10; if (s >= total) s -= total; put(); }
+          if (ts - lastBadge > 30000) { lastBadge = ts; updateBadge(); }
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
+      updateBadge();
     }
 
     // a koi pond with lily pads and a frog, below the well
