@@ -3610,6 +3610,108 @@ try {
     document.body.appendChild(back);
   }
 
+  // ── 📚 FIC BOOKSHELF ──
+  // Every tracked fic is a book spine on a shelf: taller = more words, colour = status
+  // (gold/red finished, blue-green still reading, dusty grey abandoned). Tap a spine and
+  // it slides out a little with its title below. Read-only: it stores nothing.
+  // Reached from a faint link at the bottom of the tracker, next to "constellation".
+  function openBookshelf() {
+    const old = document.getElementById("ao3-bookshelf");
+    if (old) old.remove();
+    const el = (tag, css, text) => {
+      const e = document.createElement(tag);
+      if (css) e.style.cssText = css;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const titleOf = f => f.title || `Work ${f.workId}`;
+    const statusOf = f => f.finished ? "finished" : (isWip(f) ? "active" : "abandoned");
+    const PAL = {
+      finished:  ["#8c2f39", "#b5483f", "#c28a3a", "#7a4e2d", "#9b5b6e"],
+      active:    ["#2f6f73", "#3d5a80", "#4f7c6b", "#5b7fa6", "#386fa4"],
+      abandoned: ["#6e6a85", "#7b6f8f", "#5f5a6e", "#85808f"]
+    };
+    const ORDER = { finished: 0, active: 1, abandoned: 2 };
+    const h32 = x => Math.abs(Math.floor(gyHash(String(x))));
+    const books = getTracked().map(f => {
+      const st = statusOf(f), hv = h32(f.workId || titleOf(f));
+      const words = Number(f.words) || 0;
+      const hgt = words > 0 ? 84 + Math.round(86 * Math.min(1, Math.log10(words + 1) / 6)) : 110;
+      return { f, st, title: titleOf(f), words, h: hgt, w: 22 + (hv % 13),
+               color: PAL[st][hv % PAL[st].length], band: (hv >> 3) % 2 === 0 };
+    }).sort((a, b) => ORDER[a.st] - ORDER[b.st]);
+
+    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000002;");
+    back.id = "ao3-bookshelf";
+    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;font-family:inherit;color:#f6e9d6;background:linear-gradient(180deg,#34241b,#241812);box-shadow:0 10px 40px rgba(0,0,0,0.5);");
+    back.appendChild(box);
+
+    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(246,233,214,0.15);");
+    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#f6e9d6;", "\u{1F4DA} Fic Bookshelf"));
+    ttl.appendChild(el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(246,233,214,0.6);", `${books.length} book${books.length === 1 ? "" : "s"}`));
+    topbar.appendChild(ttl);
+    const xBtn = el("button", "background:none;border:none;color:rgba(246,233,214,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
+    topbar.appendChild(xBtn);
+    box.appendChild(topbar);
+
+    const shelves = el("div", "flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 10px 8px;");
+    box.appendChild(shelves);
+    const caption = el("div", "flex:0 0 auto;min-height:54px;padding:8px 14px calc(8px + 2px);text-align:center;border-top:1px solid rgba(246,233,214,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;display:flex;flex-direction:column;justify-content:center;gap:2px;");
+    caption.appendChild(el("div", "", books.length ? "tap a book" : ""));
+    caption.appendChild(el("div", "font-style:normal;font-family:inherit;font-size:10px;color:rgba(246,233,214,0.55);", "taller = more words \u00B7 gold/red finished \u00B7 blue-green reading \u00B7 grey abandoned"));
+    box.appendChild(caption);
+
+    const onKey = e => { if (e.key === "Escape") close(); };
+    const close = () => { back.remove(); document.removeEventListener("keydown", onKey); };
+    xBtn.onclick = close;
+    back.addEventListener("click", e => { if (e.target === back) close(); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(back);
+
+    if (!books.length) {
+      const empty = el("div", "text-align:center;padding:50px 24px;");
+      empty.appendChild(el("div", "font-size:34px;", "\u{1F4DA}"));
+      empty.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-size:15px;margin-top:8px;", "The shelf is empty."));
+      empty.appendChild(el("div", "font-size:12px;color:rgba(246,233,214,0.6);margin-top:4px;", "Track a fic and its book will appear."));
+      shelves.appendChild(empty);
+      return;
+    }
+
+    // fill each shelf row up to the available width
+    const avail = Math.max(200, shelves.clientWidth - 36);
+    const rows = []; let cur = [], used = 0;
+    books.forEach(b => {
+      if (cur.length && used + b.w + 3 > avail) { rows.push(cur); cur = []; used = 0; }
+      cur.push(b); used += b.w + 3;
+    });
+    if (cur.length) rows.push(cur);
+
+    let picked = null;
+    const pick = (b, spine) => {
+      if (picked) picked.style.transform = "";
+      if (picked === spine) { picked = null; caption.firstChild.textContent = "tap a book"; return; }
+      picked = spine; spine.style.transform = "translateY(-12px)";
+      const label = { finished: "finished", active: "still reading", abandoned: "abandoned" }[b.st];
+      caption.firstChild.textContent = `${b.title} \u00B7 ${label}${b.words ? " \u00B7 " + b.words.toLocaleString() + " words" : ""}`;
+    };
+    rows.forEach(r => {
+      const row = el("div", "margin-bottom:20px;");
+      const line = el("div", "display:flex;align-items:flex-end;justify-content:center;gap:3px;padding:0 8px;");
+      r.forEach(b => {
+        const spine = el("div", `position:relative;flex:0 0 auto;width:${b.w}px;height:${b.h}px;border-radius:3px 3px 1px 1px;cursor:pointer;overflow:hidden;background:linear-gradient(90deg,rgba(0,0,0,0.28),rgba(255,255,255,0.14) 22%,rgba(0,0,0,0.22)),${b.color};transition:transform 0.18s;box-shadow:0 1px 3px rgba(0,0,0,0.4);`);
+        spine.title = b.title;
+        if (b.band) spine.appendChild(el("div", "position:absolute;left:0;right:0;top:9px;height:3px;background:rgba(246,233,214,0.55);"));
+        spine.appendChild(el("div", "position:absolute;left:0;right:0;top:18px;bottom:6px;writing-mode:vertical-rl;font-family:Georgia,'Times New Roman',serif;font-size:10px;line-height:" + b.w + "px;text-align:left;color:#fdf3e0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0;", b.title));
+        spine.onclick = () => pick(b, spine);
+        line.appendChild(spine);
+      });
+      row.appendChild(line);
+      row.appendChild(el("div", "height:9px;border-radius:2px;background:linear-gradient(180deg,#8a6244,#5e402a);box-shadow:0 4px 8px rgba(0,0,0,0.45);"));
+      shelves.appendChild(row);
+    });
+  }
+
   // ── 🐠 FIC AQUARIUM ──
   // Every tracked fic is a little fish. Lively = a WIP that's updating on schedule,
   // slow = a WIP that's gone quiet for a while (about 2.5x its usual gap, min. 21 days),
@@ -6466,6 +6568,7 @@ try {
       };
       cnWrap.appendChild(quietLink("constellation", "See your fics as a night sky", () => openConstellation()));
       cnWrap.appendChild(quietLink("aquarium", "See your fics as little fish", () => openAquarium()));
+      cnWrap.appendChild(quietLink("bookshelf", "See your fics as books on a shelf", () => openBookshelf()));
       content.appendChild(cnWrap);
     }
   }
@@ -6982,7 +7085,7 @@ try {
     });
   }, 1000);
   // Web app only: hand the four keepsake views to the web app's "Keepsakes" button.
-  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium };
+  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf };
 })();
 } catch (e) { console.error("[AO3 bundle] Fic Tracker failed to load:", e); }
 
@@ -26673,7 +26776,8 @@ try {
       const box = document.createElement("div");
       box.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:22px;background:var(--fb-card,#fffdfb);border:1.5px solid var(--fb-line,#ecd3cf);box-shadow:0 8px 28px rgba(0,0,0,0.25);min-width:220px;";
       [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F389} Celebrations", "openCelebration"],
-       ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"]].forEach(([label, fn]) => {
+       ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"],
+       ["\u{1F4DA} Bookshelf", "openBookshelf"]].forEach(([label, fn]) => {
         const b = document.createElement("button");
         b.textContent = label;
         b.style.cssText = "padding:12px 16px;border-radius:999px;border:1.5px solid var(--fb-line,#ecd3cf);background:var(--fb-card,#fffdfb);color:var(--fb-ink,#3f3b6f);font:500 15px/1.2 inherit;font-family:inherit;cursor:pointer;";
