@@ -170,12 +170,12 @@
 
   // The buttons (used on the maintenance page too)
   css +=
-    "#ao3-offline-header{padding:14px 12px}" +
-    "#ao3-offline-header ul.primary.navigation{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;list-style:none;margin:0;padding:0}" +
+    "#ao3-offline-header{padding:8px 6px}" +
+    "#ao3-offline-header ul.primary.navigation{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;list-style:none;margin:0;padding:0}" +
     "#ao3-offline-header ul.primary.navigation li{margin:0;padding:0;list-style:none}" +
-    "#ao3-offline-header ul.primary.navigation li a{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:44px!important;box-sizing:border-box!important;padding:0 20px!important;margin:0!important;line-height:1!important;border-radius:999px;" +
+    "#ao3-offline-header ul.primary.navigation li a{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:38px!important;box-sizing:border-box!important;padding:0 14px!important;margin:0!important;line-height:1!important;border-radius:999px;" +
       "background:var(--fb-card);color:var(--fb-ink);border:1.5px solid var(--fb-line);box-shadow:0 2px 6px var(--fb-shadow);" +
-      "font:500 16px/1 " + FONT + ";text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s,box-shadow .12s,border-color .12s}" +
+      "font:500 14.5px/1 " + FONT + ";text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .12s,box-shadow .12s,border-color .12s}" +
     "#ao3-offline-header ul.primary.navigation li a:hover{border-color:var(--fb-accent)}" +
     "#ao3-offline-header ul.primary.navigation li a:active{transform:translateY(1px);box-shadow:0 1px 3px var(--fb-shadow)}";
 
@@ -235,7 +235,7 @@
   const isOn = () => AO.getAttribute("data-ao3-mode") === "ao3";
   let mockCss =
     "#ao3-fb-modewrap{display:flex;justify-content:center;margin:2px 0 0}" +
-    "#ao3-fb-mode{height:40px;padding:0 18px;border-radius:999px;border:1.5px solid var(--fb-line);background:var(--fb-card);color:var(--fb-ink);font:500 15px/1 " + FONT + ";cursor:pointer;box-shadow:0 2px 6px var(--fb-shadow);-webkit-tap-highlight-color:transparent}" +
+    "#ao3-fb-mode{height:34px;padding:0 14px;border-radius:999px;border:1.5px solid var(--fb-line);background:var(--fb-card);color:var(--fb-ink);font:500 13.5px/1 " + FONT + ";cursor:pointer;box-shadow:0 2px 6px var(--fb-shadow);-webkit-tap-highlight-color:transparent}" +
     "#ao3-fb-mode[aria-pressed=\"true\"]{background:var(--fb-accent);border-color:var(--fb-accent);color:#fff}" +
     "#ao3-mock{display:none;margin-top:16px;font-family:" + FONT + ";color:var(--fb-ink)}" +
     "html[data-ao3-mode=\"ao3\"] #ao3-mock{display:block}" +
