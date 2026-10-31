@@ -3712,6 +3712,155 @@ try {
     });
   }
 
+  // ── 🌷 FIC GARDEN ──
+  // Every tracked fic is a plant in a little garden. A WIP grows taller the further you've read
+  // (sprout, then bud), a finished fic is in full bloom, and an abandoned one droops. Tap a plant
+  // for its title and progress; "water" sends a short rain shower. Just for show: nothing is stored.
+  // Reached from a faint link at the bottom of the tracker, next to "constellation".
+  function openGarden() {
+    const old = document.getElementById("ao3-garden");
+    if (old) old.remove();
+    nvEnsureCss(); // provides the .nv-anim reduced-motion rule
+    if (!document.getElementById("ao3-gd-css")) {
+      const st = document.createElement("style");
+      st.id = "ao3-gd-css";
+      st.textContent = `
+        @keyframes gdSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+        @keyframes gdRain{0%{transform:translateY(-20px);opacity:0}15%{opacity:.9}100%{transform:translateY(105vh);opacity:0}}
+        @keyframes gdPerk{0%,100%{transform:scale(1)}40%{transform:scale(1.12,1.06)}}
+      `;
+      (document.head || document.documentElement).appendChild(st);
+    }
+    const el = (tag, css, text) => {
+      const e = document.createElement(tag);
+      if (css) e.style.cssText = css;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const NS = "http://www.w3.org/2000/svg";
+    const sv = (tag, attrs) => {
+      const e = document.createElementNS(NS, tag);
+      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+      return e;
+    };
+    const titleOf = f => f.title || `Work ${f.workId}`;
+    const h32 = x => Math.abs(Math.floor(gyHash(String(x))));
+    const PETALS = ["#f29bb5", "#f7b267", "#c9a7eb", "#f4d35e", "#ee8572", "#9ad1d4", "#ff9fc2"];
+    const ORDER = { finished: 0, active: 1, abandoned: 2 };
+    const plants = getTracked().map(f => {
+      const st = f.finished ? "finished" : (isWip(f) ? "active" : "abandoned");
+      const total = Number(f.totalChapters) || 0;
+      let read = 0; try { read = Number(readChapterFor(f)) || 0; } catch (e) { read = 0; }
+      const p = st === "finished" ? 1 : (total ? Math.max(0.1, Math.min(1, read / total)) : 0.45);
+      const hv = h32(f.workId || titleOf(f));
+      return { f, st, p, read, total, title: titleOf(f), color: PETALS[hv % PETALS.length], hv };
+    }).sort((a, b) => ORDER[a.st] - ORDER[b.st]);
+
+    const drawPlant = pl => {
+      const svg = sv("svg", { viewBox: "0 0 72 110" });
+      svg.style.cssText = "width:100%;height:auto;display:block;overflow:visible;";
+      const dead = pl.st === "abandoned";
+      const stemC = dead ? "#9a8c63" : "#5c9a62", leafC = dead ? "#a89a72" : "#78b87a";
+      svg.appendChild(sv("ellipse", { cx: 36, cy: 101, rx: 26, ry: 6, fill: "#7a5638" }));
+      svg.appendChild(sv("ellipse", { cx: 36, cy: 99, rx: 20, ry: 4, fill: "#946b47" }));
+      const g = sv("g");
+      if (!dead) { g.style.cssText = `transform-origin:36px 100px;animation:gdSway ${(3.4 + (pl.hv % 20) / 10).toFixed(1)}s ease-in-out infinite;`; g.setAttribute("class", "nv-anim"); }
+      const top = 100 - (20 + 62 * pl.p);
+      const tipX = dead ? 56 : 36, tipY = dead ? top + 18 : top;
+      g.appendChild(sv("path", { d: `M36 100 Q36 ${(100 + top) / 2} ${tipX} ${tipY}`, stroke: stemC, "stroke-width": 3, fill: "none", "stroke-linecap": "round" }));
+      const nLeaves = pl.p > 0.7 ? 3 : (pl.p > 0.35 ? 2 : 1);
+      for (let i = 0; i < nLeaves; i++) {
+        const ly = 94 - i * ((100 - top) / (nLeaves + 0.6)), side = i % 2 ? 1 : -1;
+        const lx = 36 + (dead ? i * 4 : 0);
+        g.appendChild(sv("ellipse", { cx: lx + side * 8, cy: ly, rx: 8, ry: 3.6, fill: leafC,
+          transform: `rotate(${dead ? side * 50 : side * -28} ${lx + side * 8} ${ly})` }));
+      }
+      if (pl.st === "finished") {
+        for (let i = 0; i < 6; i++) g.appendChild(sv("ellipse", { cx: tipX, cy: tipY - 9, rx: 5, ry: 9, fill: pl.color,
+          transform: `rotate(${i * 60} ${tipX} ${tipY})`, opacity: 0.95 }));
+        g.appendChild(sv("circle", { cx: tipX, cy: tipY, r: 5, fill: "#f6c453" }));
+      } else if (!dead && pl.p >= 0.55) {
+        g.appendChild(sv("ellipse", { cx: tipX, cy: tipY - 5, rx: 5, ry: 8, fill: pl.color }));
+        g.appendChild(sv("path", { d: `M${tipX - 5} ${tipY + 1} Q${tipX} ${tipY + 7} ${tipX + 5} ${tipY + 1}`, fill: leafC }));
+      } else if (!dead) {
+        g.appendChild(sv("ellipse", { cx: tipX - 5, cy: tipY - 2, rx: 6, ry: 3.2, fill: leafC, transform: `rotate(-30 ${tipX - 5} ${tipY - 2})` }));
+        g.appendChild(sv("ellipse", { cx: tipX + 5, cy: tipY - 2, rx: 6, ry: 3.2, fill: leafC, transform: `rotate(30 ${tipX + 5} ${tipY - 2})` }));
+      } else {
+        [[-6, 6, 20], [2, 9, -10], [9, 4, -40]].forEach(([dx, dy, rot]) =>
+          g.appendChild(sv("ellipse", { cx: tipX + dx, cy: tipY + dy, rx: 3.4, ry: 7, fill: "#b9a58c", transform: `rotate(${rot} ${tipX + dx} ${tipY + dy})`, opacity: 0.9 })));
+      }
+      svg.appendChild(g);
+      return svg;
+    };
+
+    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000002;");
+    back.id = "ao3-garden";
+    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;font-family:inherit;color:#3b4a3a;background:linear-gradient(180deg,#d4ecf7 0%,#f6efd9 70%,#e5d7b4 100%);box-shadow:0 10px 40px rgba(0,0,0,0.4);");
+    back.appendChild(box);
+    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(59,74,58,0.15);background:rgba(255,255,255,0.35);");
+    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;", "\u{1F337} Fic Garden"));
+    const cnt = { finished: 0, active: 0, abandoned: 0 }; plants.forEach(p => cnt[p.st]++);
+    ttl.appendChild(el("div", "font-size:10px;letter-spacing:0.04em;opacity:0.7;", `${cnt.finished} in bloom \u00B7 ${cnt.active} growing \u00B7 ${cnt.abandoned} drooping`));
+    topbar.appendChild(ttl);
+    const waterBtn = el("button", "flex:0 0 auto;border:1.5px solid rgba(59,74,58,0.3);background:rgba(255,255,255,0.6);color:inherit;border-radius:999px;padding:5px 12px;font:600 12px/1 inherit;font-family:inherit;cursor:pointer;", "\u{1F4A7} water");
+    const xBtn = el("button", "background:none;border:none;color:inherit;opacity:0.7;cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
+    topbar.appendChild(waterBtn); topbar.appendChild(xBtn);
+    box.appendChild(topbar);
+
+    const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 8px 8px;");
+    box.appendChild(field);
+    const caption = el("div", "flex:0 0 auto;min-height:54px;padding:8px 14px;text-align:center;border-top:1px solid rgba(59,74,58,0.15);background:rgba(255,255,255,0.35);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;display:flex;flex-direction:column;justify-content:center;gap:2px;");
+    caption.appendChild(el("div", "", plants.length ? "tap a plant" : ""));
+    caption.appendChild(el("div", "font-style:normal;font-family:inherit;font-size:10px;opacity:0.6;", "taller = further read \u00B7 flower = finished \u00B7 bud/sprout = reading \u00B7 droopy = abandoned"));
+    box.appendChild(caption);
+
+    const onKey = e => { if (e.key === "Escape") close(); };
+    const close = () => { back.remove(); document.removeEventListener("keydown", onKey); };
+    xBtn.onclick = close;
+    back.addEventListener("click", e => { if (e.target === back) close(); });
+    document.addEventListener("keydown", onKey);
+
+    if (!plants.length) {
+      const empty = el("div", "text-align:center;padding:50px 24px;");
+      empty.appendChild(el("div", "font-size:34px;", "\u{1F331}"));
+      empty.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-size:15px;margin-top:8px;", "The garden is empty."));
+      empty.appendChild(el("div", "font-size:12px;opacity:0.65;margin-top:4px;", "Track a fic and a seedling will pop up."));
+      field.appendChild(empty);
+    } else {
+      const grid = el("div", "display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px 4px;");
+      let picked = null;
+      plants.forEach(pl => {
+        const cell = el("div", "cursor:pointer;padding:2px;border-radius:10px;transition:background 0.15s;");
+        cell.title = pl.title;
+        cell.appendChild(drawPlant(pl));
+        cell.onclick = () => {
+          if (picked) picked.style.background = "";
+          if (picked === cell) { picked = null; caption.firstChild.textContent = "tap a plant"; return; }
+          picked = cell; cell.style.background = "rgba(255,255,255,0.55)";
+          const label = { finished: "in full bloom", active: "growing", abandoned: "drooping" }[pl.st];
+          const prog = pl.st === "finished" ? "" : (pl.total ? ` \u00B7 ch ${pl.read}/${pl.total}` : (pl.read ? ` \u00B7 ch ${pl.read}` : ""));
+          caption.firstChild.textContent = `${pl.title} \u00B7 ${label}${prog}`;
+        };
+        grid.appendChild(cell);
+      });
+      field.appendChild(grid);
+    }
+
+    waterBtn.onclick = () => {
+      if (!plants.length) return;
+      const rain = el("div", "position:absolute;left:0;right:0;top:0;height:0;pointer-events:none;z-index:5;");
+      for (let i = 0; i < 28; i++) {
+        const d = el("div", `position:absolute;left:${(Math.random() * 100).toFixed(1)}%;top:0;width:2px;height:12px;border-radius:2px;background:#6fb4e6;opacity:0;animation:gdRain ${(0.9 + Math.random() * 0.8).toFixed(2)}s ${(Math.random() * 0.9).toFixed(2)}s linear forwards;`);
+        d.className = "nv-anim"; rain.appendChild(d);
+      }
+      box.appendChild(rain);
+      field.querySelectorAll("svg").forEach(s => { s.style.animation = "gdPerk 0.6s ease-in-out 1.1s 1"; s.classList.add("nv-anim"); });
+      setTimeout(() => { rain.remove(); field.querySelectorAll("svg").forEach(s => { s.style.animation = ""; }); }, 2700);
+    };
+    document.body.appendChild(back);
+  }
+
   // ── 🐠 FIC AQUARIUM ──
   // Every tracked fic is a little fish. Lively = a WIP that's updating on schedule,
   // slow = a WIP that's gone quiet for a while (about 2.5x its usual gap, min. 21 days),
@@ -6569,6 +6718,7 @@ try {
       cnWrap.appendChild(quietLink("constellation", "See your fics as a night sky", () => openConstellation()));
       cnWrap.appendChild(quietLink("aquarium", "See your fics as little fish", () => openAquarium()));
       cnWrap.appendChild(quietLink("bookshelf", "See your fics as books on a shelf", () => openBookshelf()));
+      cnWrap.appendChild(quietLink("garden", "See your fics as a little garden", () => openGarden()));
       content.appendChild(cnWrap);
     }
   }
@@ -7085,7 +7235,7 @@ try {
     });
   }, 1000);
   // Web app only: hand the four keepsake views to the web app's "Keepsakes" button.
-  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf };
+  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden };
 })();
 } catch (e) { console.error("[AO3 bundle] Fic Tracker failed to load:", e); }
 
@@ -26777,7 +26927,7 @@ try {
       box.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:22px;background:var(--fb-card,#fffdfb);border:1.5px solid var(--fb-line,#ecd3cf);box-shadow:0 8px 28px rgba(0,0,0,0.25);min-width:220px;";
       [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F389} Celebrations", "openCelebration"],
        ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"],
-       ["\u{1F4DA} Bookshelf", "openBookshelf"]].forEach(([label, fn]) => {
+       ["\u{1F4DA} Bookshelf", "openBookshelf"], ["\u{1F337} Garden", "openGarden"]].forEach(([label, fn]) => {
         const b = document.createElement("button");
         b.textContent = label;
         b.style.cssText = "padding:12px 16px;border-radius:999px;border:1.5px solid var(--fb-line,#ecd3cf);background:var(--fb-card,#fffdfb);color:var(--fb-ink,#3f3b6f);font:500 15px/1.2 inherit;font-family:inherit;cursor:pointer;";
