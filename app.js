@@ -272,6 +272,7 @@
   const card = el("div", "ao3-fb-card");
   card.appendChild(el("h1", null, "AO3 is taking a break ♡"));
   card.appendChild(el("p", null, "Your tracker, dashboard and period tracker still work from the buttons above. Links to fics will open again once AO3 is back."));
+  card.appendChild(el("div", null, "offline mode · your data syncs from your account")).className = "ao3-fb-chip";
   main.appendChild(card);
 
   // ── AO3 look-alike (toggle) ──
@@ -282,8 +283,8 @@
   const AO = document.documentElement;
   const isOn = () => AO.getAttribute("data-ao3-mode") === "ao3";
   let mockCss =
-    "#ao3-fb-modewrap{display:flex;justify-content:center;margin:18px 0 0}" +
-    "#ao3-fb-mode{padding:7px 14px;border-radius:999px;border:0;background:var(--fb-chip);color:var(--fb-accent2);font:600 12.5px/1.2 " + FONT + ";cursor:pointer;-webkit-tap-highlight-color:transparent}" +
+    "#ao3-fb-modewrap{display:flex;justify-content:center;margin:2px 0 0}" +
+    "#ao3-fb-mode{height:34px;padding:0 14px;border-radius:999px;border:1.5px solid var(--fb-line);background:var(--fb-card);color:var(--fb-ink);font:500 13.5px/1 " + FONT + ";cursor:pointer;box-shadow:0 2px 6px var(--fb-shadow);-webkit-tap-highlight-color:transparent}" +
     "#ao3-fb-mode[aria-pressed=\"true\"]{background:var(--fb-accent);border-color:var(--fb-accent);color:#fff}" +
     "#ao3-mock{display:none;margin-top:16px;font-family:" + FONT + ";color:var(--fb-ink)}" +
     "html[data-ao3-mode=\"ao3\"] #ao3-mock{display:block}" +
@@ -330,14 +331,15 @@
   mockCss += mockCss2;
   const mockStyle = document.createElement("style"); mockStyle.textContent = mockCss; document.head.appendChild(mockStyle);
 
-  // toggle: lives in the "offline mode" chip at the bottom of the page
+  // toggle (inline at the top, so it can never sit under the sync pill)
   const modeWrap = el("div", "ao3-fb-modewrap");
   const modeBtn = el("button", "ao3-fb-mode"); modeBtn.type = "button";
   modeWrap.appendChild(modeBtn);
+  main.insertBefore(modeWrap, card);
 
   // ── AO3 downtime control (so update predictions stay fair) ──
   const dtCss =
-    "#ao3-fb-dt{margin:10px 0 0;text-align:center}" +
+    "#ao3-fb-dt{margin:14px 0 0;text-align:center}" +
     "#ao3-fb-dtbtn{min-height:34px;padding:6px 14px;border-radius:999px;border:1.5px solid var(--fb-line);background:var(--fb-card);color:var(--fb-ink);font:500 13px/1.25 " + FONT + ";cursor:pointer;box-shadow:0 2px 6px var(--fb-shadow);-webkit-tap-highlight-color:transparent}" +
     "#ao3-fb-dtpanel{display:none;margin:10px 0 0;padding:14px;border-radius:20px;background:var(--fb-card);border:1.5px solid var(--fb-line);box-shadow:0 4px 14px var(--fb-shadow);text-align:left}" +
     "#ao3-fb-dtpanel.open{display:block}" +
@@ -366,7 +368,7 @@
   const dtMsg = el("div", "ao3-fb-dtmsg");
   dtPanel.appendChild(dtMsg);
   dtWrap.appendChild(dtBtn); dtWrap.appendChild(dtPanel);
-  main.insertBefore(dtWrap, card);
+  card.appendChild(dtWrap); // sits inside the card, under the "offline mode" chip
   const fmtD = iso => { const p = iso.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
   const paintDt = () => {
     const st = DT && DT.status();
@@ -451,7 +453,6 @@
   fb.appendChild(saveFic); fb.appendChild(cancelFic); form.appendChild(fb);
   mock.appendChild(mHead); mock.appendChild(filters); mock.appendChild(addRow); mock.appendChild(form); mock.appendChild(msg); mock.appendChild(list); mock.appendChild(foot);
   main.appendChild(mock);
-  main.appendChild(modeWrap);
 
   const readFics = () => {
     try { const a = JSON.parse(localStorage.getItem("ao3_fic_tracker_v1") || "[]"); return Array.isArray(a) ? a : []; }
@@ -661,7 +662,7 @@
   sInput.addEventListener("keydown", e => e.stopPropagation());
 
   const paintMode = () => {
-    modeBtn.textContent = isOn() ? "offline mode · AO3 view: on" : "offline mode · AO3 view: off";
+    modeBtn.textContent = isOn() ? "AO3 view: on" : "AO3 view: off";
     modeBtn.setAttribute("aria-pressed", String(isOn()));
     if (isOn()) renderMock();
   };
