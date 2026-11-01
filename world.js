@@ -6237,7 +6237,7 @@ window.__ao3WorldInit = function (core) {
   // Drawn from scratch, shared by the basement table and the fort's inside. FIG gives each one's size and shoulder points;
   // the plaid pattern "bs-plaid" must exist in the calling scene's <defs>. A pose's blush:true deepens the cheeks.
   function bsKit(sv, anim, FIG) {
-    const SKIN_A = "#ecc6a6", SKIN_B = "#e7c0a1", TEAL = "#2c8aa6", TEAL_D = "#1f6a82", GREY = "#5e6770", THERMAL = "#aab0bb";
+    const SKIN_A = "#ecc6a6", SKIN_B = "#eec4a2", TEAL = "#2c8aa6", TEAL_D = "#1f6a82", GREY = "#5e6770", THERMAL = "#aab0bb";
     // two-bone arm: the shoulder S and the hand target T (local units), the elbow bends out and down
     const solveArm = (S, T, u, f, left) => {
       let dx = T[0] - S[0], dy = T[1] - S[1], d = Math.hypot(dx, dy);
@@ -6255,8 +6255,8 @@ window.__ao3WorldInit = function (core) {
       const [E, Hd] = solveArm(S, T, F.u, F.f, left);
       const w = isA ? 10.6 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
       seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
-      seg(S, E, isA ? "url(#bs-plaid)" : TEAL, w); seg(E, Hd, isA ? "url(#bs-plaid)" : TEAL, w - 1.6);
-      if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], GREY, w - 0.6, "butt"); }
+      seg(S, E, isA ? "url(#bs-plaid)" : "url(#bs-knit)", w); seg(E, Hd, isA ? "url(#bs-plaid)" : "url(#bs-knit)", w - 1.6);
+      if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], "#1f2331", w - 0.6, "butt"); }
       if (isA && left) { const k = 0.78, wx = E[0] + (Hd[0] - E[0]) * k, wy = E[1] + (Hd[1] - E[1]) * k, ang = Math.atan2(Hd[1] - E[1], Hd[0] - E[0]) * 180 / Math.PI; const wg = sv("g", { transform: `translate(${wx.toFixed(1)} ${wy.toFixed(1)}) rotate(${ang.toFixed(1)})` }, g); sv("rect", { x: -1.9, y: -3.9, width: 3.8, height: 7.8, rx: 0.8, fill: "#2a2a36" }, wg); sv("rect", { x: -0.9, y: -1.6, width: 1.8, height: 3.2, fill: "#9ac6e0", opacity: 0.9 }, wg); }
       sv("circle", { cx: Hd[0].toFixed(1), cy: Hd[1].toFixed(1), r: 4.4, fill: isA ? SKIN_A : SKIN_B, stroke: "#b98f72", "stroke-width": 0.6 }, g);
       return Hd;
@@ -6291,19 +6291,14 @@ window.__ao3WorldInit = function (core) {
       sv("path", { d: "M-9 -9 Q0 -2.6 9 -9", stroke: "#4a5a8a", "stroke-width": 0.5, fill: "none", opacity: 0.6 }, g);
       sv("path", { d: "M-17 12 Q-19.4 34 -17.6 58 M17 12 Q19.4 34 17.6 58", stroke: "#7a6a5e", "stroke-width": 0.7, fill: "none", opacity: 0.5 }, g);
     };
-    const torsoB = g => {                                   // the teal pullover: grey shoulder panels, a snap collar, a pocket with a grey triangle
-      sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.8 }, g);
-      sv("path", { d: "M-27 11 Q-27 -3 -14 -6 L-3 -6 L-9 6 Q-18 9 -27 15 Z", fill: GREY }, g);
-      sv("path", { d: "M27 11 Q27 -3 14 -6 L3 -6 L9 6 Q18 9 27 15 Z", fill: GREY }, g);
-      sv("rect", { x: -5, y: -13, width: 10, height: 9, fill: "#d9b090" }, g);
-      sv("path", { d: "M-8.6 -6 Q0 3.6 8.6 -6 L7.8 -9.4 Q0 -4 -7.8 -9.4 Z", fill: "#f1efe9" }, g);
-      sv("polygon", { points: "-10.4,-7.4 -1.6,-3 -11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
-      sv("polygon", { points: "10.4,-7.4 1.6,-3 11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
-      sv("path", { d: "M0 -1 V15", stroke: TEAL_D, "stroke-width": 0.9 }, g);
-      [3, 10].forEach(y => sv("circle", { cx: 0, cy: y, r: 1, fill: "#cfd4de" }, g));
-      sv("rect", { x: 8, y: 15.5, width: 12.5, height: 11, rx: 1, fill: "none", stroke: TEAL_D, "stroke-width": 0.9 }, g);
-      sv("polygon", { points: "9,16.4 19.7,16.4 19.7,25.4", fill: "#6a737a" }, g);
-      sv("rect", { x: -28, y: 54, width: 56, height: 8, fill: GREY, opacity: 0.9 }, g);
+    const torsoB = g => {                                   // a chunky dark knit with maroon patches, a ribbed navy crew neck over a white tee
+      sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: "url(#bs-knit)", stroke: "#171b28", "stroke-width": 0.8 }, g);
+      sv("rect", { x: -5, y: -13, width: 10, height: 9, fill: "#e4b898" }, g);
+      sv("path", { d: "M-11 -5 Q0 7 11 -5 L9.4 -9.4 Q0 -2.6 -9.4 -9.4 Z", fill: "#1f2331" }, g);
+      for (let k = 1; k < 10; k++) { const t = k / 10, xo = -11 + 22 * t, yo = (1 - t) * (1 - t) * -5 + 2 * t * (1 - t) * 7 + t * t * -5, xi = -9.4 + 18.8 * t, yi = (1 - t) * (1 - t) * -9.4 + 2 * t * (1 - t) * -2.6 + t * t * -9.4; sv("path", { d: `M${xi.toFixed(1)} ${yi.toFixed(1)} L${xo.toFixed(1)} ${yo.toFixed(1)}`, stroke: "#3c4562", "stroke-width": 0.55, opacity: 0.8 }, g); }
+      sv("path", { d: "M-8.6 -9.6 Q0 -4.2 8.6 -9.6", stroke: "#f1efe9", "stroke-width": 1.5, fill: "none", "stroke-linecap": "round" }, g);
+      sv("path", { d: "M-19 14 Q-22 36 -20 60 M19 14 Q22 36 20 60", stroke: "#131622", "stroke-width": 0.8, fill: "none", opacity: 0.55 }, g);
+      sv("rect", { x: -28, y: 55, width: 56, height: 7, fill: "#1f2331" }, g);
     };
     // a neck that follows the head: joins the neck base on the torso to the underside of the (shifted, tilted) head, so leaning never snaps it
     const neckTo = (g, p, baseY, topY, hw) => {
@@ -6317,7 +6312,7 @@ window.__ao3WorldInit = function (core) {
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
       const HAIR = "#4a2e22", HAIR_D = "#2f1d15";
       // 1. the back of the hair: a round dome that comes down on both sides to the jaw
-      sv("path", { d: "M-14.6 -12 C-21.4 -18 -23 -32 -17.6 -39.4 C-12 -46.4 -4 -48 2 -47.6 C10 -47.4 17.4 -44.2 20 -37 C23.2 -30 22 -19 13.6 -12 Q0 -8 -14.6 -12 Z", fill: HAIR }, h);
+      sv("path", { d: "M-12.6 -8.4 C-21.4 -16 -23 -32 -17.6 -39.6 C-12 -47.4 -4 -49 2 -48.6 C10 -48.4 17.4 -45 20 -37.4 C23.2 -30 22.4 -18 12.4 -7.8 Q9 -11.6 5 -13 L-5 -13 Q-9 -11.8 -12.6 -8.4 Z", fill: HAIR }, h);
       // 2. ears, then the face
       [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 15.4, cy: -20, rx: 2.5, ry: 3.1, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
       sv("ellipse", { cx: 0, cy: -24, rx: 14.8, ry: 15.5, fill: SKIN_A }, h);
@@ -6328,16 +6323,21 @@ window.__ao3WorldInit = function (core) {
       face(h, p, { ex: 5.9, ey: -22.4, by: -26.8, my: -13.4, brow: "#2f1d15", er: 1.32, bw: 1.6, eye: "#3a2018", cheek: true, open: true });
       sv("circle", { cx: 9.4, cy: -18, r: 0.65, fill: "#5a3226" }, h);      // his mole
     };
-    const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
+    const headB = (g, p) => {                               // soft, wavy dark curls: a full mass that falls past the ears, a parted fringe of curls
       neckTo(g, p, -9, -18, 5);
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      const HAIR = "#231a1c";
-      [[-13, -38, 8.6], [13, -38, 8.6], [-16, -29, 6.4], [16, -29, 6.4], [-7, -45, 8.6], [7, -45, 8.6], [0, -47, 8.6]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
+      const HAIR = "#3a251d", HAIR_L = "#5c3a2c";
+      // 1. the back of the hair: a wavy outline, full on top and down both sides
+      sv("path", { d: "M-15 -12 Q-19 -13 -19.6 -17.6 Q-23.4 -19 -22 -24 Q-25.4 -27 -22.6 -31.4 Q-25 -35.6 -21 -38.6 Q-22.4 -43.4 -17.6 -45 Q-17 -48.4 -11.4 -48.6 Q-8.4 -52.6 -3 -50.4 Q1.6 -53.6 6.4 -50.4 Q11.6 -52.2 13.6 -48 Q19 -47.8 19 -43.4 Q23.4 -42.4 21.6 -37.4 Q25.4 -34 22.4 -29.4 Q25 -25.4 21.6 -22 Q22.6 -17.4 18.4 -16.2 Q17 -12.4 13 -12.6 Q0 -8 -15 -12 Z", fill: HAIR }, h);
+      // 2. ears, then the face
+      [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 14.9, cy: -25.4, rx: 2.6, ry: 3.3, fill: SKIN_B, stroke: "#b98f72", "stroke-width": 0.5 }, h));
       sv("ellipse", { cx: 0, cy: -28, rx: 14.4, ry: 17.4, fill: SKIN_B }, h);
-      sv("path", { d: "M-15.8 -27 C-19.4 -40 -9 -49.5 0 -49.5 C9 -49.5 19.4 -40 15.8 -27 C14.6 -30 13 -32 10.6 -33.4 Q8.4 -36.6 5.8 -33 Q3.6 -38 0.4 -34.4 Q-2.6 -38.4 -5.6 -33.6 Q-8.6 -37.4 -10.8 -32.6 Q-13.6 -30.6 -15.8 -27 Z", fill: HAIR }, h);
-      face(h, p, { ex: 5.8, ey: -26.2, by: -30.6, my: -17.4, brow: "#1a1214" });
+      // 3. the front: a centre-ish parting, curls falling to either side over the forehead, a few at the temples
+      sv("path", { d: "M-14.8 -27 Q-17.4 -35 -13.6 -41 Q-12.4 -46.2 -5 -46.8 Q0 -49.6 5.8 -47.2 Q13.4 -47 14.6 -42 Q18.4 -38 15.4 -29 Q15.6 -32.6 13.2 -34 Q12 -36.4 9.6 -34.6 Q7.4 -36.4 5.4 -34.2 Q3 -35.6 -0.6 -38.2 Q-3 -36 -5.8 -35 Q-7.6 -33 -10 -34.2 Q-11.8 -31.8 -13.2 -32.6 Q-14.8 -30.6 -14.8 -27 Z", fill: HAIR }, h);
+      sv("path", { d: "M-10 -45 q3 -3.4 6.4 -1 q2.2 2 -0.4 3.8 M4 -47 q3.6 -2.4 6.6 0.4 q1.6 2.6 -1 3.6 M-16.6 -36 q-1.6 -3.6 1 -5.2 M15.4 -40 q2.6 1.4 1.4 4.2 M-19 -26 q-2.6 2.6 0.2 5 M19.6 -27 q2.4 2.6 -0.4 5 M-17.4 -16.8 q-1.4 1.6 1 3 M17 -17 q1.6 1.6 -0.6 3", stroke: HAIR_L, "stroke-width": 0.9, fill: "none", "stroke-linecap": "round", opacity: 0.8 }, h);
+      face(h, p, { ex: 5.9, ey: -26.2, by: -30.8, my: -17.4, brow: "#33201a", bw: 1.4, er: 1.12, eye: "#1a1214", cheek: true });
     };
-    return { solveArm, drawArm, face, torsoA, torsoB, headA, headB };
+        return { solveArm, drawArm, face, torsoA, torsoB, headA, headB };
   }
 
   // ── the Wheelers' basement (reached through the window well) ──
@@ -6408,6 +6408,9 @@ window.__ao3WorldInit = function (core) {
     // the flannel: tan with blue bands and thin orange lines
     const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);   // Will's striped sweater (bsKit asks for this id)
     sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
+    const knit = sv("pattern", { id: "bs-knit", width: 30, height: 30, patternUnits: "userSpaceOnUse" }, defs);   // Mike's chunky patterned sweater
+    sv("rect", { width: 30, height: 30, fill: "#272d41" }, knit); sv("rect", { x: 2, y: 3, width: 13, height: 10, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 15, width: 11, height: 12, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 2, width: 9, height: 9, fill: "#1c2030" }, knit); sv("rect", { x: 3, y: 18, width: 10, height: 8, fill: "#1c2030" }, knit);
+    sv("path", { d: "M0 14.5 H30 M15.5 0 V30", stroke: "#74703f", "stroke-width": 0.7, "stroke-dasharray": "2 1.2", opacity: 0.5 }, knit); sv("path", { d: "M4 6 h3 M20 20 h3 M9 22 h2 M22 5 h2", stroke: "#8a4050", "stroke-width": 0.6, opacity: 0.6 }, knit);
     const mapClip = sv("clipPath", { id: "bs-mapclip" }, defs);
     sv("polygon", { points: "112,331 248,331 270,366 90,366" }, mapClip);
 
@@ -7093,6 +7096,9 @@ window.__ao3WorldInit = function (core) {
     sv("rect", { width: 10, height: 10, fill: "#8a8260" }, olive); sv("path", { d: "M5 1 L9 5 L5 9 L1 5 Z", fill: "#c9a86a", opacity: 0.5 }, olive); sv("circle", { cx: 5, cy: 5, r: 0.9, fill: "#5a4a38", opacity: 0.8 }, olive);
     const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);   // Will's striped sweater (bsKit asks for this id)
     sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
+    const knit = sv("pattern", { id: "bs-knit", width: 30, height: 30, patternUnits: "userSpaceOnUse" }, defs);   // Mike's chunky patterned sweater
+    sv("rect", { width: 30, height: 30, fill: "#272d41" }, knit); sv("rect", { x: 2, y: 3, width: 13, height: 10, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 15, width: 11, height: 12, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 2, width: 9, height: 9, fill: "#1c2030" }, knit); sv("rect", { x: 3, y: 18, width: 10, height: 8, fill: "#1c2030" }, knit);
+    sv("path", { d: "M0 14.5 H30 M15.5 0 V30", stroke: "#74703f", "stroke-width": 0.7, "stroke-dasharray": "2 1.2", opacity: 0.5 }, knit); sv("path", { d: "M4 6 h3 M20 20 h3 M9 22 h2 M22 5 h2", stroke: "#8a4050", "stroke-width": 0.6, opacity: 0.6 }, knit);
     const quilt = sv("pattern", { id: "fi-quilt", width: 36, height: 36, patternUnits: "userSpaceOnUse" }, defs);
     [["#b9566a", 0, 0], ["#e8c8a0", 18, 0], ["#e8c8a0", 0, 18], ["#5f8a8a", 18, 18]].forEach(([c, x, y]) => { sv("rect", { x, y, width: 18, height: 18, fill: c }, quilt); sv("path", { d: `M${x + 2} ${y + 2} H${x + 16} V${y + 16} H${x + 2} Z`, stroke: "#fff4e0", "stroke-width": 0.6, "stroke-dasharray": "2 2", fill: "none", opacity: 0.6 }, quilt); });
     const soft = sv("filter", { id: "fi-soft", x: "-20%", y: "-20%", width: "140%", height: "140%" }, defs); sv("feGaussianBlur", { stdDeviation: 3 }, soft);
