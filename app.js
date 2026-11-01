@@ -3934,7 +3934,7 @@ try {
       if (prefs.bt) {
         const b = prefs.bt;
         if (b.total == null) b.total = b.tips || 0;     // older saves: tips was the lifetime count
-        b.tips = 0; b.lan = "gold"; b.hat = "dflt";
+        b.tips = 0; b.lan = "gold"; b.hat = "dflt"; b.fl = [];
       }
       savePrefs();
     }
@@ -4285,8 +4285,8 @@ try {
         if (wk === "snow") add("Snow\u2019s the kindest weather. Quiet as the residents.");
         add({ halloween: "Everyone dresses up tonight. I came as a groundskeeper. Very convincing, no?", winter: "I swept the snow off every stone. Twice.", spring: "Petals everywhere. I don\u2019t mind.", summer: "Fireflies out in force. Free lanterns.", autumn: "Leaves. Leaves. More leaves." }[season]);
         // about Bram himself
-        { const b = bt(), fl = b.fl || [];
-          if (fl.length) add(`I\u2019ll wear this ${fl[fl.length - 1]} until it wilts. Then I\u2019ll wear whatever you bring next.`);
+        { const b = bt(), fl = b.gd === dayKey ? (b.fl || []) : [];
+          if (fl.length) add(`I\u2019ll wear this ${fl[fl.length - 1]} until morning. Then I\u2019ll be wanting a fresh one.`);
           if (b.hat !== "dflt") add("Like the hat? Paid for in wisps. Best trade I ever made. Back to the old one by morning, mind.");
           if (b.lan !== "gold") add("Never thought the lantern could be anything but gold. Look at it now.");
           if (solved()) ["Wrote a sentence last night. One. Don\u2019t clap.", "Every stone here is somebody\u2019s drawer. I just keep the dust off.", "Funny. Sweeping other people\u2019s endings is what got me writing again."].forEach(t => add(t)); }
@@ -4324,9 +4324,9 @@ try {
       };
       const isTalking = () => card.style.display !== "none" && card.firstChild && card.firstChild.dataset && card.firstChild.dataset.bram === "1";
       // ── Bram's extras: errands, gifts, the wisp tip jar, and his story ──
-      // Saved in ao3-gg-prefs under prefs.bt (local, not synced):
-      //   tips = wisps given today (resets at 2 am), total = wisps given in all, lan / hat = what he has on, fl = flowers tucked in his hat (last three),
-      //   gifts / gdays = flowers given (and on how many different days), cl / cd = story pieces told (and the day of the last),
+      // Saved under prefs.bt, which lives in the synced ao3_gg_sync_v1 key:
+      //   tips = wisps given today (resets at 2 am), total = wisps given in all, lan / hat = what he has on, fl = today's flower in his hat band (one a day, cleared at 2 am),
+      //   gifts / gdays = flowers given in all (and on how many days; gd = the day of the last one), cl / cd = story pieces told (and the day of the last),
       //   fd / fc = wisps he has fetched today.
       const bt = () => prefs.bt || (prefs.bt = { tips: 0, total: 0, lan: "gold", hat: "dflt", fl: [], gifts: 0, gdays: 0, cl: 0, cd: "", fd: "", fc: 0 });
       const LANTERNS = {
@@ -4394,7 +4394,8 @@ try {
       const paintHatFlowers = () => {
         hatFl.textContent = "";
         const b = bt(), by = HAT_BAND[HATS[b.hat] ? b.hat : "dflt"];
-        (b.fl || []).slice(-3).forEach((e, i) => {
+        (b.gd === dayKey ? (b.fl || []).slice(-1) : []).forEach(e => {
+          const i = 1;                                  // one flower a day, tucked into the middle of the band
           const t = sv("text", { x: FL_X[i], y: by + 1.6, "text-anchor": "middle", "font-size": 6.4, transform: `rotate(${(i - 1) * 16} ${FL_X[i]} ${by + 1})` }, hatFl);
           t.textContent = e;
         });
@@ -4501,18 +4502,23 @@ try {
         "Wilted rose": ["Ha! A wilted one. You understand the job.", "Wilted, is it? Suits the grounds. Suits me, honestly."]
       };
       const giveFlower = t => {
-        const b = bt(), full = (b.fl || []).length >= 3;
-        b.fl = (b.fl || []).concat(t.e).slice(-3);
+        const b = bt();
+        if (b.gd === dayKey) return;                    // one flower a day
+        b.fl = [t.e];                                   // today's flower; gone again by morning, like the hat and lantern
         b.gifts = (b.gifts || 0) + 1;
-        if (b.gd !== dayKey) { b.gd = dayKey; b.gdays = (b.gdays || 0) + 1; }
+        b.gd = dayKey; b.gdays = (b.gdays || 0) + 1;
         savePrefs(); paintHatFlowers();
         try { if (navigator.vibrate) navigator.vibrate(10); } catch {}
         rise(t.e, bm.x, bm.y - 32);
-        talk({ t: pick(FLOWER_SAY[t.n] || ["Well. Aren\u2019t you kind."]), n: `He tucks the ${t.n.toLowerCase()} into his hat band.` + (full ? " The oldest one goes in his pocket." : "") });
+        talk({ t: pick(FLOWER_SAY[t.n] || ["Well. Aren\u2019t you kind."]), n: `He tucks the ${t.n.toLowerCase()} into his hat band. It\u2019ll see him through to morning.` });
       };
       const giftMenu = () => {
         const b = bt();
-        bramCard({ t: (b.fl || []).length ? "Another for the hat? Go on, then." : "A flower? For me? Well." }, ({ btn, add }) => {
+        if (b.gd === dayKey) {                          // today's flower is already in his hat
+          bramCard({ t: pick(["One a day is plenty. It\u2019s looking well in the hat, isn\u2019t it?", "You\u2019ve been generous already today. Tomorrow, eh?"]) }, ({ btn }) => { btn("Back", again); btn("Close", closeCard); });
+          return;
+        }
+        bramCard({ t: "A flower? For me? Well.", n: "One flower a day. He wears it until morning." }, ({ btn, add }) => {
           const fr = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:10px;");
           GY_FLOWERS.forEach(t => {
             const fb = el("button", "cursor:pointer;font-size:20px;line-height:1;padding:6px 8px;border-radius:10px;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);", t.e);
