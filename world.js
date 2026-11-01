@@ -6552,13 +6552,14 @@ window.__ao3WorldInit = function (core) {
       sv("polygon", { points: "9,16.4 19.7,16.4 19.7,25.4", fill: "#6a737a" }, g);
       sv("rect", { x: -28, y: 54, width: 56, height: 8, fill: GREY, opacity: 0.9 }, g);
     };
-    const headA = (g, p) => {                               // the bowl cut: straight fringe, round all the way round
+    const headA = (g, p) => {                               // soft, fluffy, side-swept fringe: full on top, not long
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -22, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
+      const HAIR = "#3b2a20";
+      [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -21.4, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
+      [[-9.5, -43.6, 7.6], [0, -46.4, 8.2], [9.5, -43.6, 7.6], [-14.6, -35.6, 6.4], [14.6, -35.6, 6.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
       sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
-      sv("path", { d: "M-16.4 -19 L-16.4 -33 C-16.4 -49 16.4 -49 16.4 -33 L16.4 -19 L13.2 -19 L13.2 -31 L-13.2 -31 L-13.2 -19 Z", fill: "#3b2a20" }, h);
-      sv("path", { d: "M-12 -43 Q-4 -46 4 -44.6 M-14.6 -36 Q-14 -40 -10.6 -42.6", stroke: "#5a4232", "stroke-width": 1.2, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, h);
-      sv("path", { d: "M-9 -31 v1.6 M-3 -31 v1.6 M3 -31 v1.6 M9 -31 v1.6", stroke: "#2a1c15", "stroke-width": 0.8, opacity: 0.8 }, h);
+      sv("path", { d: "M-16.4 -24 C-20.4 -37 -15 -50 0 -50 C15 -50 20.4 -37 16.4 -24 C15.6 -27.6 14.4 -30.4 12.2 -32.2 Q9.4 -29.4 6.2 -32.2 Q3 -29 -0.6 -32 Q-4.2 -28.8 -7.4 -32.2 Q-10.8 -29.4 -13.2 -31.6 Q-15.4 -28.6 -16.4 -24 Z", fill: HAIR }, h);
+      sv("path", { d: "M-10 -44 Q-3 -48.6 5 -46", stroke: "#5a4232", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
       face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
     };
     const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
