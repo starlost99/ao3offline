@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AO3 Reading Dashboard (Toggle Logging)
 // @namespace    http://tampermonkey.net/
-// @version      18.9
+// @version      18.10
 // @description  One combined script: AO3 Reading Dashboard + AO3 Fic Tracker + AO3 Notes Folder -> iOS Shortcut. The parts work exactly as before and are not connected, except for backup: every Export/Import button now uses ONE combined JSON file covering everything.
 // @match        https://archiveofourown.org/*
 // @match        https://www.archiveofourown.org/*
@@ -709,6 +709,15 @@
 // ═════════ PART 0.5: CLOUD SYNC (Supabase) ═════════
 // Paste this block directly ABOVE the line "// ═════════ PART 1: AO3 FIC TRACKER ═════════"
 // Keeps every localStorage key that starts with "ao3_" in sync with Supabase.
+//
+// How two devices agree (sync v2):
+//  - Every synced key is split into "items" (array entries, or the properties of an object).
+//  - After each sync we remember a tiny fingerprint of every item (so we know what changed since).
+//  - When BOTH devices changed the same key, each item is judged on its own:
+//      only one side touched it         -> that side wins (a delete counts as a touch, so deleted items stay deleted)
+//      both sides touched it            -> the NEWEST edit wins (per-item edit times, in server time)
+//      delete on one side, edit on the other -> whichever happened last wins
+//  - Items are never dropped just because they are missing on one side; they go only through the rules above.
 (function () {
   'use strict';
   if (window.__ao3Sync) return;
@@ -716,25 +725,131 @@
   const SB_KEY = "sb_publishable_50olar8X22QLGtKKrgMk1g_w3xFQB0n";                      // <- your anon public key
   const T = SB_URL + "/rest/v1/ao3_sync";
   const AUTH_K = "ao3sync_auth", META_K = "ao3sync_meta", LOG_K = "ao3_word_log_v4", TOT_K = "ao3_word_total_v4";
+  const ITEMS_K = "ao3sync_items";      // local only: per-key item fingerprints + pending edit times
+  const TIMES_ROW = "ao3sync_times";    // one extra cloud row: when each item was last edited or deleted
+  const KEEP_MS = 60 * 86400000;        // edit/delete times are remembered for 60 days
   const SKIP = new Set(["ao3_tracker_bg_checked"]);
+  const ATOMIC = /_today|restock/;      // small "record" keys that must always travel as one piece
   const DEVICE = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "device";
   const eligible = k => typeof k === "string" && k.startsWith("ao3_") && !SKIP.has(k);
   const ls = window.localStorage;
   const rawSet = Storage.prototype.setItem;
   const jget = (k, d) => { try { const v = JSON.parse(ls.getItem(k)); return v == null ? d : v; } catch { return d; } };
-  let meta = jget(META_K, {}), auth = jget(AUTH_K, null);
+  let meta = jget(META_K, {}), auth = jget(AUTH_K, null), items = jget(ITEMS_K, {});
   const saveMeta = () => rawSet.call(ls, META_K, JSON.stringify(meta));
+  const saveItems = () => { try { rawSet.call(ls, ITEMS_K, JSON.stringify(items)); } catch (e) { /* out of space: we just fall back to a gentler merge next time */ } };
   const enc = s => { try { return JSON.parse(s); } catch { return { __raw: s }; } };
   const dec = v => (v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && "__raw" in v) ? v.__raw : JSON.stringify(v);
+  const nowS = () => Date.now() + (Number(meta.__skew) || 0);   // this device's clock, corrected towards the server's
+  const own = o => Object.assign(Object.create(null), o || {});
+
+  // ---- item fingerprints ----
+  const idOf = x => (x && typeof x === "object") ? (x.id ?? x.key ?? x.workId ?? x.date ?? JSON.stringify(x)) : String(x);
+  function canon(v) {
+    if (v === null || typeof v !== "object") return JSON.stringify(v);
+    if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+    return "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}";
+  }
+  function hash(str) {   // cyrb53
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  }
+  const isRaw = v => v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && "__raw" in v;
+  // Splits a value into { kind, map: id -> item, order: [ids] }. Duplicate ids get a #2, #3... suffix so nothing is ever lost.
+  function modelOf(v, atomic) {
+    const map = Object.create(null), order = [];
+    if (!atomic && Array.isArray(v)) {
+      const seen = Object.create(null);
+      v.forEach(x => { let id = String(idOf(x)); const n = (seen[id] = (seen[id] || 0) + 1); if (n > 1) id += "#" + n; order.push(id); map[id] = x; });
+      return { kind: "arr", map, order };
+    }
+    if (!atomic && v && typeof v === "object" && !Array.isArray(v) && !isRaw(v)) {
+      Object.keys(v).forEach(k => { order.push(k); map[k] = v[k]; });
+      return { kind: "obj", map, order };
+    }
+    map[""] = v; order.push("");
+    return { kind: "atom", map, order };
+  }
+  function hashMap(model) { const o = Object.create(null); model.order.forEach(id => { o[id] = hash(canon(model.map[id])); }); return o; }
+
+  // ---- the merge: used only when BOTH sides changed the same key ----
+  // ctx: { atomic, base: {id: hash}|null, lt: {id: ms} local edit times, rt: {id: ms} remote edit times, lKey, rKey: whole-key fallback times }
+  function mergeValues(local, remote, ctx) {
+    let L = modelOf(local, ctx.atomic), R = modelOf(remote, ctx.atomic);
+    if (L.kind !== R.kind) { L = modelOf(local, true); R = modelOf(remote, true); }
+    const base = ctx.base, hL = hashMap(L), hR = hashMap(R);
+    const lT = id => (ctx.lt[id] != null ? ctx.lt[id] : ctx.lKey);
+    const rT = id => (ctx.rt[id] != null ? ctx.rt[id] : ctx.rKey);
+    const pick = Object.create(null);   // id -> "L" | "R" | null (deleted)
+    new Set([...L.order, ...R.order]).forEach(id => {
+      const inL = id in L.map, inR = id in R.map, b = base ? base[id] : undefined;
+      let w;
+      if (inL && inR) {
+        if (hL[id] === hR[id]) w = "L";
+        else if (b === undefined) w = lT(id) >= rT(id) ? "L" : "R";    // new on both sides, or no memory yet: newest wins
+        else if (hL[id] === b) w = "R";                                 // only the other device edited it
+        else if (hR[id] === b) w = "L";                                 // only this device edited it
+        else w = lT(id) >= rT(id) ? "L" : "R";                          // both edited it: newest wins
+      } else if (inL) {                                                 // missing on the remote side
+        if (b === undefined) w = "L";                                   // added here
+        else if (hL[id] === b) w = null;                                // deleted there, untouched here: stays deleted
+        else w = lT(id) >= rT(id) ? "L" : null;                         // edited here, deleted there: last one wins
+      } else {                                                          // missing on this side
+        if (b === undefined) w = "R";                                   // added there
+        else if (hR[id] === b) w = null;                                // deleted here, untouched there: stays deleted
+        else w = rT(id) > lT(id) ? "R" : null;                          // edited there, deleted here: last one wins
+      }
+      pick[id] = w;
+    });
+    // order: follow the side that was written most recently, then slot in the other side's extra items after their neighbour
+    const first = ctx.lKey >= ctx.rKey ? L : R, second = first === L ? R : L;
+    const ids = first.order.filter(id => pick[id]);
+    const have = new Set(ids);
+    let prev = null;
+    second.order.forEach(id => {
+      if (!pick[id]) return;
+      if (!have.has(id)) { ids.splice(prev === null ? 0 : ids.indexOf(prev) + 1, 0, id); have.add(id); }
+      prev = id;
+    });
+    const get = id => (pick[id] === "L" ? L.map[id] : R.map[id]);
+    let value;
+    if (L.kind === "arr") value = ids.map(get);
+    else if (L.kind === "obj") { value = {}; ids.forEach(id => { value[id] = get(id); }); }
+    else value = get("");
+    return { value, pick, kind: L.kind };
+  }
 
   // ---- notice every change the other parts of this script make ----
-  let timer = null;
+  let timer = null, stampTimer = null;
+  const stampQ = new Set();
   const schedule = ms => { clearTimeout(timer); timer = setTimeout(sync, ms); };
-  function markDirty(k) { const m = meta[k] || (meta[k] = {}); m.dirty = true; m.v = (m.v || 0) + 1; }
+  const st = k => items[k] || (items[k] = {});
+  function markDirty(k) { const m = meta[k] || (meta[k] = {}); m.dirty = true; m.v = (m.v || 0) + 1; m.lw = nowS(); stampQ.add(k); }
+  // Works out which items of a key were edited or deleted since we last looked, and when.
+  function stampKey(k) {
+    const raw = ls.getItem(k); if (raw === null) return;
+    const S = st(k), cur = hashMap(modelOf(enc(raw), ATOMIC.test(k)));
+    if (!S.cur && !S.base) { S.cur = cur; return; }       // first time we see this key: nothing to compare with yet
+    const prev = own(S.cur || S.base), t = S.t || (S.t = {}), now = nowS(), cutoff = now - KEEP_MS;
+    for (const id in cur) if (prev[id] !== cur[id]) t[id] = now;
+    for (const id in prev) if (!(id in cur)) t[id] = now;  // deleted
+    for (const id in t) if (t[id] < cutoff) delete t[id];
+    S.cur = cur;
+  }
+  function flushStamps() {
+    clearTimeout(stampTimer);
+    if (!stampQ.size) return;
+    const ks = [...stampQ]; stampQ.clear();
+    ks.forEach(k => { try { stampKey(k); } catch (e) { console.warn("[AO3 sync] stamp", k, e); } });
+    saveItems();
+  }
   Storage.prototype.setItem = function (k, v) {
     const same = this === ls && ls.getItem(k) === String(v);
     rawSet.call(this, k, v);
-    if (this === ls && eligible(k) && !same) { markDirty(k); saveMeta(); schedule(4000); }
+    if (this === ls && eligible(k) && !same) { markDirty(k); saveMeta(); schedule(4000); clearTimeout(stampTimer); stampTimer = setTimeout(flushStamps, 1500); }
   };
 
   // ---- sign-in ----
@@ -766,16 +881,28 @@
     return r.status === 204 ? null : r.json();
   }
 
-  // ---- when BOTH sides changed the same key: keep everything from both ----
-  const idOf = x => (x && typeof x === "object") ? (x.id ?? x.key ?? x.workId ?? x.date ?? JSON.stringify(x)) : String(x);
-  function merge(local, remote) {
-    if (Array.isArray(local) && Array.isArray(remote)) {
-      const seen = new Set(local.map(idOf)), out = local.slice();
-      remote.forEach(x => { if (!seen.has(idOf(x))) out.push(x); });
-      return out;
-    }
-    if (local && remote && typeof local === "object" && typeof remote === "object" && !Array.isArray(local) && !Array.isArray(remote)) return { ...remote, ...local };
-    return local;
+  // ---- shared edit times (one small extra row) ----
+  async function getTimes() {
+    const r = await api("?select=value&key=eq." + TIMES_ROW);
+    return (r && r[0] && r[0].value && typeof r[0].value === "object") ? r[0].value : {};
+  }
+  // Publishes the edit/delete times this device is still holding back, then forgets them locally.
+  async function publishTimes() {
+    const pend = {};
+    Object.keys(items).forEach(k => { const t = items[k] && items[k].t; if (t && Object.keys(t).length) pend[k] = { ...t }; });
+    if (!Object.keys(pend).length) return;
+    const row = await getTimes(), cutoff = nowS() - KEEP_MS;
+    Object.keys(pend).forEach(k => {
+      const o = row[k] || (row[k] = {});
+      Object.keys(pend[k]).forEach(id => { if (!(o[id] >= pend[k][id])) o[id] = pend[k][id]; });
+    });
+    Object.keys(row).forEach(k => {
+      Object.keys(row[k]).forEach(id => { if (row[k][id] < cutoff) delete row[k][id]; });
+      if (!Object.keys(row[k]).length) delete row[k];
+    });
+    await api("?on_conflict=user_id,key", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify([{ user_id: auth.uid, key: TIMES_ROW, value: row, device: DEVICE }]) });
+    Object.keys(pend).forEach(k => { const t = items[k] && items[k].t; if (t) Object.keys(pend[k]).forEach(id => { if (t[id] === pend[k][id]) delete t[id]; }); });
   }
 
   // ---- the sync itself ----
@@ -785,8 +912,11 @@
     if (!auth) return say("☁ sign in");
     busy = true; say("☁ syncing…");
     try {
+      meta = jget(META_K, meta); items = jget(ITEMS_K, items);   // pick up anything another tab saved
+      Object.keys(meta).forEach(k => { if (meta[k] && meta[k].dirty && eligible(k)) stampQ.add(k); });
+      flushStamps();
       const remote = {};
-      (await api("?select=key,updated_at")).forEach(r => remote[r.key] = r.updated_at);
+      (await api("?select=key,updated_at")).forEach(r => { if (eligible(r.key)) remote[r.key] = r.updated_at; });
       const keys = new Set(Object.keys(remote));
       for (let i = 0; i < ls.length; i++) { const k = ls.key(i); if (eligible(k)) keys.add(k); }
       const pull = [], push = [];
@@ -795,41 +925,63 @@
         const dirty = has && (m.dirty || !m.remoteAt);
         if (remote[k] && remote[k] !== m.remoteAt) pull.push([k, dirty]);
         else if (dirty) push.push(k);
+        else if (has && remote[k] && !st(k).base) {   // already in step: remember what "in step" looks like
+          const S = st(k); S.base = S.cur = hashMap(modelOf(enc(ls.getItem(k)), ATOMIC.test(k)));
+        }
       });
-      let applied = 0;
+      let applied = 0, logMerged = null;
       if (pull.length) {
         const rows = await api("?select=key,value,updated_at&key=in.(" + pull.map(p => '"' + p[0] + '"').join(",") + ")");
+        let times = {};
+        if (pull.some(p => p[1])) { try { times = await getTimes(); } catch (e) { times = {}; } }
         rows.forEach(r => {
-          const wasDirty = pull.find(p => p[0] === r.key)[1], m = meta[r.key];
+          const k = r.key, wasDirty = pull.find(p => p[0] === k)[1], m = meta[k], S = st(k), atomic = ATOMIC.test(k);
           if (wasDirty) {
-            const merged = merge(enc(ls.getItem(r.key)), r.value);
-            rawSet.call(ls, r.key, dec(merged));
-            markDirty(r.key); push.push(r.key);
-            if (r.key === LOG_K && Array.isArray(merged)) {   // keep the running total honest
-              rawSet.call(ls, TOT_K, String(merged.reduce((s, x) => s + (x.words || 0), 0)));
-              markDirty(TOT_K); if (!push.includes(TOT_K)) push.push(TOT_K);
+            const localVal = enc(ls.getItem(k));
+            const out = mergeValues(localVal, r.value, { atomic, base: S.base ? own(S.base) : null, lt: own(S.t), rt: own(times[k]),
+              lKey: m.lw || 0, rKey: Date.parse(r.updated_at) || 0 });
+            rawSet.call(ls, k, dec(out.value));
+            // our own pending edit times only stay if our side won that item
+            if (S.t) {
+              const was = hashMap(modelOf(localVal, atomic)), now = hashMap(modelOf(out.value, atomic));
+              Object.keys(S.t).forEach(id => { if (now[id] !== was[id]) delete S.t[id]; });
             }
-          } else { rawSet.call(ls, r.key, dec(r.value)); m.dirty = false; }
+            S.cur = hashMap(modelOf(out.value, atomic));
+            markDirty(k); push.push(k);
+            if (k === LOG_K && Array.isArray(out.value)) logMerged = out.value;
+          } else {
+            rawSet.call(ls, k, dec(r.value)); m.dirty = false;
+            S.base = S.cur = hashMap(modelOf(r.value, atomic));
+          }
           m.remoteAt = r.updated_at; applied++;
         });
+        if (logMerged) {   // keep the running total honest
+          rawSet.call(ls, TOT_K, String(logMerged.reduce((s, x) => s + (x.words || 0), 0)));
+          markDirty(TOT_K); if (!push.includes(TOT_K)) push.push(TOT_K);
+        }
       }
       for (const k of push) {
-        const m = meta[k], v0 = m.v || 0;
+        const m = meta[k], v0 = m.v || 0, val = enc(ls.getItem(k));
         const res = await api("?on_conflict=user_id,key", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-          body: JSON.stringify([{ user_id: auth.uid, key: k, value: enc(ls.getItem(k)), device: DEVICE }]) });
+          body: JSON.stringify([{ user_id: auth.uid, key: k, value: val, device: DEVICE }]) });
         m.remoteAt = res[0].updated_at;
-        if ((m.v || 0) === v0) m.dirty = false;
+        const S = st(k); S.base = hashMap(modelOf(val, ATOMIC.test(k)));
+        if (!S.cur) S.cur = S.base;
+        if ((m.v || 0) === v0) { m.dirty = false; S.cur = S.base; }
+        const srv = Date.parse(res[0].updated_at);     // how far this device's clock is from the server's
+        if (srv) { const d = srv - Date.now(); meta.__skew = Math.abs(d) < 2000 ? 0 : d; }
       }
-      saveMeta();
+      try { await publishTimes(); } catch (e) { console.warn("[AO3 sync] times", e); }   // not fatal: kept and retried next time
       const t = new Date().toTimeString().slice(0, 5);
       if (applied && first && Date.now() - Number(sessionStorage.getItem("ao3sync_rl") || 0) > 30000) {
-        sessionStorage.setItem("ao3sync_rl", String(Date.now())); location.reload(); return;
+        sessionStorage.setItem("ao3sync_rl", String(Date.now())); saveMeta(); saveItems(); location.reload(); return;
       }
       if (applied) { reloadNeeded = true; say("☁ new data, tap to reload"); } else say("☁ synced " + t);
     } catch (e) {
       console.warn("[AO3 sync]", e);
       say(e.message === "signed-out" ? "☁ sign in" : navigator.onLine ? "☁ blocked or error" : "☁ offline");
     }
+    try { saveMeta(); saveItems(); } catch (e) { /* ignore */ }
     first = false; busy = false;
   }
 
@@ -854,7 +1006,7 @@
   window.addEventListener("online", () => schedule(500));
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") schedule(500); });
   setInterval(() => { if (document.visibilityState === "visible") sync(); }, 300000);
-  window.__ao3Sync = { sync, signIn };
+  window.__ao3Sync = { sync, signIn, flush: flushStamps, merge: mergeValues };
   if (auth) schedule(1500); else say("☁ sign in");
 })();
 
