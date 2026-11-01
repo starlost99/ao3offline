@@ -3401,6 +3401,7 @@ try {
   //   🃏 Tarot     pick one of three face-down cards; one card a day, same card all day (the deck is shuffled by the date)
   // Only tiny bits are kept, in ao3_cottage_v1 (so cloud sync carries it): visits, today's tea, your tea counts, today's card.
   function openBramCottage() {
+    const getLog = () => { try { const v = JSON.parse(localStorage.getItem("ao3_word_log_v4") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };   // (this part of the bundle has no getLog of its own)
     const old = document.getElementById("ao3-cottage");
     if (old) old.remove();
     if (!document.getElementById("ao3-cot-css")) {
