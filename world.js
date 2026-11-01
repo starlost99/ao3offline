@@ -5530,10 +5530,12 @@ window.__ao3WorldInit = function (core) {
   // ── 🚌 HAWKINS, INDIANA ──
   // The bus stop in Hollowbrook (tap the shelter at the end of the Hawkins road, answer "board") takes you here:
   // a simplified night-time map of the town. Everything is drawn from scratch as flat shapes (no artwork reused).
-  // For now only ONE place can be entered, the Wheelers' house (top right); the rest are labelled but closed, and
-  // tapping one just says so. The bus parked at the bottom takes you back to Hollowbrook.
+  // For now only ONE place can be entered, the Wheelers' house (top right): its front lawn, and through the basement
+  // window, the basement. The rest are labelled but closed, and tapping one just says so. The bus parked at the bottom
+  // takes you back to Hollowbrook.
   //  · openHawkins(arrive)  the map. arrive = true plays the short bus ride in first (tap to skip).
-  //  · openWheelers()       the front of the house: lit windows, porch light, a knock on the door.
+  //  · openWheelers()       the front of the house: Mike's lit window, the glowing basement window (the way in), weather and season.
+  //  · openBasement()       through the window well: a table, a map, a radio, the stairs up.
   // Same night / dusk / dawn switch as the village and the grounds (the "tm" value in ao3-gg-prefs).
   // Nothing in here saves anything except that one time-of-day value.
 
@@ -5578,6 +5580,14 @@ window.__ao3WorldInit = function (core) {
         @keyframes hkFlicker{0%,100%{opacity:.8}30%{opacity:1}60%{opacity:.62}}
         @keyframes hkPulse{0%,100%{opacity:.35}50%{opacity:.9}}
         @keyframes hkMist{0%,100%{opacity:.08;transform:translateX(-8px)}50%{opacity:.2;transform:translateX(8px)}}
+        @keyframes hkRain{from{transform:translateY(-30px)}to{transform:translateY(60px)}}
+        @keyframes hkFall{0%{transform:translate(0,-20px)}50%{transform:translate(12px,30px)}100%{transform:translate(-6px,80px)}}
+        @keyframes hkFog{0%,100%{opacity:.18;transform:translateX(-14px)}50%{opacity:.34;transform:translateX(14px)}}
+        @keyframes hkSmoke{0%{opacity:.55;transform:translate(0,0)}100%{opacity:0;transform:translate(9px,-26px)}}
+        @keyframes hkTwinkle{0%,100%{opacity:.35}50%{opacity:1}}
+        @keyframes hkWave{0%,100%{transform:rotate(-16deg)}50%{transform:rotate(20deg)}}
+        @keyframes hkRing{0%{opacity:.8;transform:scale(.4)}100%{opacity:0;transform:scale(2.6)}}
+        @keyframes hkFirefly{0%,100%{opacity:.1;transform:translate(0,0)}25%{opacity:1;transform:translate(8px,-7px)}50%{opacity:.3;transform:translate(-5px,-14px)}75%{opacity:1;transform:translate(7px,-5px)}}
         @media (prefers-reduced-motion: reduce){.hk-anim{animation:none !important}}
       `;
       (document.head || document.documentElement).appendChild(st);
@@ -5798,12 +5808,61 @@ window.__ao3WorldInit = function (core) {
     } catch {}
   }
 
+  // the grounds' own preferences, read the way the grounds read them (time of day, weather, Halloween override),
+  // so the house always has the same night / dusk / dawn, the same weather and the same season as the grounds
+  function hkPrefs() {
+    let p = {};
+    try { p = JSON.parse(localStorage.getItem("ao3-gg-prefs") || "{}") || {}; } catch { p = {}; }
+    try { const s = JSON.parse(localStorage.getItem("ao3_gg_sync_v1") || "null"); if (s && typeof s === "object" && "hw" in s) p.hw = s.hw; } catch {}
+    return p;
+  }
+  const HK_WX = [["clear", "\u2600\uFE0F clear"], ["rain", "\u{1F327}\uFE0F rain"], ["fog", "\u{1F32B}\uFE0F fog"], ["snow", "\u2744\uFE0F snow"]];
+  const hkWxGet = () => Math.max(0, Math.min(HK_WX.length - 1, hkPrefs().wx | 0));
+  const hkWxSet = i => { try { const p = JSON.parse(localStorage.getItem("ao3-gg-prefs") || "{}") || {}; p.wx = i; localStorage.setItem("ao3-gg-prefs", JSON.stringify(p)); } catch {} };
+  const HK_SEASON_TAG = { halloween: "\u{1F383} spooky season", winter: "\u2744\uFE0F winter", spring: "\u{1F338} spring", summer: "\u2600\uFE0F summer", autumn: "\u{1F342} autumn" };
+  function hkSeason() {
+    const m = new Date().getMonth(), p = hkPrefs();
+    const hw = p.hw === true ? true : p.hw === false ? false : m === 9;
+    return hw ? "halloween" : (m === 11 || m <= 1) ? "winter" : m <= 4 ? "spring" : m <= 7 ? "summer" : "autumn";
+  }
+
+  // a walkie-talkie coming alive: a little squelch chirp, then bursts of static (obeys the bell tower's sound setting)
+  function hkCrackle() {
+    const ac = bellUnlock();
+    if (!ac || ac.state !== "running" || bellMuted()) return;
+    try {
+      const t0 = ac.currentTime + 0.01, len = 1;
+      const chirp = ac.createOscillator(), cg = ac.createGain();
+      chirp.type = "square"; chirp.frequency.setValueAtTime(1500, t0); chirp.frequency.setValueAtTime(1100, t0 + 0.05);
+      cg.gain.setValueAtTime(0.0001, t0); cg.gain.exponentialRampToValueAtTime(0.03, t0 + 0.01); cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+      chirp.connect(cg); cg.connect(ac.destination); chirp.start(t0); chirp.stop(t0 + 0.1);
+      const buf = ac.createBuffer(1, Math.ceil(ac.sampleRate * len), ac.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < 0.06 ? 1 : 0.35);
+      const src = ac.createBufferSource(); src.buffer = buf;
+      const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 0.9;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, t0 + 0.1);
+      [[0.12, 0.3], [0.4, 0.52], [0.62, 0.9]].forEach(([a, b]) => { g.gain.linearRampToValueAtTime(0.05, t0 + a); g.gain.linearRampToValueAtTime(0.0001, t0 + b); });
+      src.connect(bp); bp.connect(g); g.connect(ac.destination); src.start(t0 + 0.1); src.stop(t0 + len);
+    } catch {}
+  }
+
   // ── the Wheelers' house, from the front lawn ──
+  // A two-storey at dusk (or night, or dawn: the same switch as the grounds), porch light on, a mailbox, two bikes dropped on the
+  // lawn leaning on each other. Two lit windows: Mike's room upstairs (fairy lights) and a small basement window at ground level.
+  // The basement window is the way in (it climbs through to openBasement); there is no menu. Weather, season and time of day come
+  // from the grounds' own settings, so a snowy evening is the cosiest version. Small living details: a curtain twitches,
+  // a walkie-talkie crackles from the basement now and then, and somebody waves from Mike's window when you arrive.
   function openWheelers() {
     const sh = hkShell("ao3-wheelers", "\u{1F3E1} The Wheelers\u2019");
-    const { sv, rnd, anim } = sh.kit;
-    const { box, sub, field, caption, pill, close } = sh;
-    let tI = hkTimeGet(), nKnock = 0, nWin = 0;
+    const { sv, rnd, anim, el } = sh.kit;
+    const { box, sub, field, caption, pill, close, later } = sh;
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const season = hkSeason();
+    const say = t => { caption.textContent = t; };
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    let tI = hkTimeGet(), wxI = hkWxGet(), nKnock = 0, nWin = 0, nBike = 0, nBox = 0, entering = false, gone = false;
+    sh.onClose = () => { gone = true; };
     const W = 360, H = 540;
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
     svg.style.cssText = "width:100%;height:auto;display:block;";
@@ -5811,7 +5870,21 @@ window.__ao3WorldInit = function (core) {
     const glow = sv("radialGradient", { id: "wh-glow" }, defs);
     sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.8" }, glow);
     sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
-    const lits = [];
+    const lits = [], hits = [];
+    const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
+    // a drooping string of little lights from (x0,y0) to (x1,y1), sagging by d
+    const strand = (g, x0, y0, x1, y1, d, n, seed, r) => {
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 + d * 2;
+      sv("path", { d: `M${x0} ${y0} Q${cx} ${cy} ${x1} ${y1}`, stroke: "#2a1d1a", "stroke-width": 0.7, fill: "none" }, g);
+      for (let i = 0; i < n; i++) {
+        const t = n === 1 ? 0.5 : i / (n - 1), u = 1 - t;
+        const bx = (u * u * x0 + 2 * u * t * cx + t * t * x1).toFixed(1), by = (u * u * y0 + 2 * u * t * cy + t * t * y1 + 1).toFixed(1);
+        const col = BULB[(i + seed) % BULB.length];
+        sv("circle", { cx: bx, cy: by, r: r * 2.6, fill: col, opacity: 0.22 }, g);
+        const b = sv("circle", { cx: bx, cy: by, r, fill: col }, g);
+        anim(b, `animation:hkTwinkle ${(1.6 + rnd("tw" + seed + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("tz" + seed + i) * 3).toFixed(1)}s infinite;`);
+      }
+    };
 
     const starG = sv("g", {}, svg);
     for (let i = 0; i < 40; i++) sv("circle", { cx: (rnd("wsx" + i) * W).toFixed(1), cy: (rnd("wsy" + i) * 150).toFixed(1), r: (0.5 + rnd("wsr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("wso" + i) * 0.6).toFixed(2) }, starG);
@@ -5842,34 +5915,83 @@ window.__ao3WorldInit = function (core) {
     for (let yy = 274, r = 0; yy < 346; yy += 6, r++) { sv("path", { d: `M58 ${yy} H302`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.8 }, svg); for (let xx = 58 + (r % 2) * 8; xx < 302; xx += 16) sv("path", { d: `M${xx} ${yy} v6`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.6 }, svg); }
     sv("rect", { x: 54, y: 266, width: 252, height: 4, fill: "#2a2236" }, svg);
     sv("rect", { x: 54, y: 344, width: 252, height: 5, fill: "#3a3347" }, svg);
-    // the upstairs windows: shutters, warm light, curtains. The middle one is the one somebody left on
-    const wins = [];
-    [[80, 1], [165, 1], [250, 0.8]].forEach(([wx, lum], i) => {
+
+    // the upstairs windows. Only the middle one (Mike's room) is lit: fairy lights, curtains, a desk. The left one is dark with a
+    // curtain that twitches now and then; the right one has its blind half down.
+    const winFrame = wx => {
       sv("rect", { x: wx - 7, y: 208, width: 6, height: 34, fill: "#3a2a4a" }, svg);
       sv("rect", { x: wx + 32, y: 208, width: 6, height: 34, fill: "#3a2a4a" }, svg);
       sv("rect", { x: wx - 2, y: 207, width: 36, height: 36, fill: "#e6e0ef" }, svg);
       sv("rect", { x: wx, y: 209, width: 32, height: 32, fill: "#120d22" }, svg);
-      lits.push(g => {
-        const gg = sv("g", {}, g);
-        sv("circle", { cx: wx + 16, cy: 225, r: 34, fill: "url(#wh-glow)", opacity: 0.4 * lum }, gg);
-        sv("rect", { x: wx, y: 209, width: 32, height: 32, fill: "#f0b45a", opacity: 0.85 * lum }, gg);
-        sv("path", { d: `M${wx + 11} 209 q-1 14 1 32 M${wx + 21} 209 q1 14 -1 32`, stroke: "#b9772a", "stroke-width": 1.6, fill: "none", opacity: 0.8 }, gg);
-        if (i === 1) anim(gg, "animation:hkFlicker 3.4s ease-in-out infinite;");
-      });
-      sv("path", { d: `M${wx + 16} 209 V241 M${wx} 225 H${wx + 32}`, stroke: "#e6e0ef", "stroke-width": 1.4 }, svg);
-      const hit = sv("rect", { x: wx - 7, y: 205, width: 46, height: 40, fill: "transparent" }, svg);
-      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", "An upstairs window");
-      wins.push(hit);
+    };
+    const winBars = wx => sv("path", { d: `M${wx + 16} 209 V241 M${wx} 225 H${wx + 32}`, stroke: "#e6e0ef", "stroke-width": 1.4 }, svg);
+    // left window, dark, with the curtain that twitches
+    winFrame(80);
+    const curtain = sv("g", {}, svg);
+    sv("rect", { x: 81, y: 210, width: 13, height: 30, fill: "#4a4263", opacity: 0.8 }, curtain);
+    const curtain2 = sv("g", {}, svg);
+    sv("rect", { x: 98, y: 210, width: 13, height: 30, fill: "#4a4263", opacity: 0.8 }, curtain2);
+    const sliver = sv("rect", { x: 94, y: 210, width: 4, height: 30, fill: "#f0b45a", opacity: 0 }, svg);
+    sliver.style.transition = "opacity .3s";
+    winBars(80);
+    // right window, blind half down
+    winFrame(250);
+    sv("rect", { x: 250, y: 209, width: 32, height: 15, fill: "#4a4263", opacity: 0.85 }, svg);
+    sv("path", { d: "M250 224 H282", stroke: "#6a6088", "stroke-width": 1.2 }, svg);
+    winBars(250);
+    // Mike's window: lit
+    winFrame(165);
+    lits.push(g => {
+      const wx = 165, gg = sv("g", {}, g);
+      anim(sv("circle", { cx: wx + 16, cy: 225, r: 40, fill: "url(#wh-glow)", opacity: 0.7 }, gg), "animation:hkFlicker 3.4s ease-in-out infinite;");
+      sv("rect", { x: wx, y: 209, width: 32, height: 32, fill: "#ffcb70" }, gg);
+      sv("path", { d: `M${wx} 209 H${wx + 8} Q${wx + 5} 225 ${wx + 7} 241 H${wx} Z M${wx + 32} 209 H${wx + 24} Q${wx + 27} 225 ${wx + 25} 241 H${wx + 32} Z`, fill: "#b9772a", opacity: 0.75 }, gg);
+      sv("rect", { x: wx, y: 235, width: 32, height: 6, fill: "#4a2f1c", opacity: 0.75 }, gg);                 // the desk under the window
+      sv("rect", { x: wx + 3, y: 231, width: 6, height: 4, fill: "#6a4a30", opacity: 0.8 }, gg);               // a stack of comics, maybe
+      strand(g, wx + 1, 211, wx + 31, 211, 5, 7, 1, 1.15);                                                    // the fairy lights, two swags
+      strand(g, wx + 1, 222, wx + 31, 222, 4, 6, 3, 1.05);
+      sv("path", { d: `M${wx + 16} 209 V241 M${wx} 225 H${wx + 32}`, stroke: "#e6e0ef", "stroke-width": 1.4 }, g);
     });
-    const WIN_SAY = ["A light has been left on upstairs.", "A curtain moves. Or the draught does.", "Somewhere up there, a radio is playing very quietly."];
-    wins.forEach(h => h.addEventListener("click", () => { caption.textContent = WIN_SAY[nWin++ % WIN_SAY.length]; }));
-    // the garage door and a window beside the front door
-    sv("rect", { x: 68, y: 284, width: 62, height: 62, fill: "#d9d4e4", stroke: "#a8a2bb", "stroke-width": 1.2 }, svg);
-    for (let i = 0; i < 4; i++) sv("rect", { x: 71, y: 287 + i * 15, width: 56, height: 12, rx: 1, fill: "none", stroke: "#b4aec7", "stroke-width": 0.9 }, svg);
+    // somebody who waves from Mike's window when you arrive (a silhouette in the light, hidden until then)
+    const fig = sv("g", {}, svg);
+    fig.style.opacity = 0; fig.style.transition = "opacity .5s";
+    sv("circle", { cx: 181, cy: 224, r: 4.3, fill: "#1b1226" }, fig);
+    sv("path", { d: "M172 241 Q173 231 181 231 Q189 231 190 241 Z", fill: "#1b1226" }, fig);
+    const armPos = sv("g", { transform: "translate(188 236)" }, fig);
+    const arm = sv("g", { class: "hk-anim" }, armPos);
+    sv("path", { d: "M0 0 L4 -12", stroke: "#1b1226", "stroke-width": 2.8, "stroke-linecap": "round", fill: "none" }, arm);
+    sv("circle", { cx: 4.4, cy: -13.4, r: 2.2, fill: "#1b1226" }, arm);
+    let waving = false;
+    const wave = () => {
+      if (waving || gone) return; waving = true;
+      fig.style.opacity = 1;
+      arm.style.cssText = "transform-box:fill-box;transform-origin:0% 100%;animation:hkWave .55s ease-in-out infinite;";
+      later(() => { fig.style.opacity = 0; waving = false; arm.style.animation = "none"; }, reduce ? 2600 : 3800);
+    };
+    // ground-floor window beside the front door: curtains drawn, dark
     sv("rect", { x: 244, y: 288, width: 40, height: 34, fill: "#e6e0ef" }, svg);
     sv("rect", { x: 246, y: 290, width: 36, height: 30, fill: "#120d22" }, svg);
-    lits.push(g => { sv("rect", { x: 246, y: 290, width: 36, height: 30, fill: "#f0b45a", opacity: 0.7 }, g); sv("circle", { cx: 264, cy: 305, r: 30, fill: "url(#wh-glow)", opacity: 0.3 }, g); });
+    sv("rect", { x: 246, y: 290, width: 36, height: 30, fill: "#4a4263", opacity: 0.55 }, svg);
     sv("path", { d: "M264 290 V320 M246 305 H282", stroke: "#e6e0ef", "stroke-width": 1.2 }, svg);
+    // the garage door
+    sv("rect", { x: 68, y: 284, width: 62, height: 62, fill: "#d9d4e4", stroke: "#a8a2bb", "stroke-width": 1.2 }, svg);
+    for (let i = 0; i < 4; i++) sv("rect", { x: 71, y: 287 + i * 15, width: 56, height: 12, rx: 1, fill: "none", stroke: "#b4aec7", "stroke-width": 0.9 }, svg);
+    // the basement window: small, at ground level, with a window well in front. It glows, and it is the way in.
+    sv("ellipse", { cx: 156, cy: 350, rx: 25, ry: 9, fill: "#0e1117" }, svg);
+    sv("path", { d: "M132 350 Q156 366 180 350", stroke: "#3a3a52", "stroke-width": 1.4, fill: "none" }, svg);
+    for (let i = 0; i < 4; i++) sv("path", { d: `M${140 + i * 6} ${354 + i} q${5 - i} 4 ${8 - i * 2} 0`, stroke: "#2a2a3c", "stroke-width": 0.8, fill: "none" }, svg);
+    sv("rect", { x: 133, y: 322, width: 46, height: 24, fill: "#8c86a0" }, svg);
+    sv("rect", { x: 136, y: 325, width: 40, height: 18, fill: "#120d22" }, svg);
+    const bsGlow = sv("g", {}, svg);                                                                            // moves with the radio crackle
+    lits.push(g => {
+      const bg = sv("g", {}, g);
+      anim(sv("circle", { cx: 156, cy: 334, r: 46, fill: "url(#wh-glow)", opacity: 0.85 }, bg), "animation:hkFlicker 2.8s ease-in-out infinite;");
+      sv("rect", { x: 136, y: 325, width: 40, height: 18, fill: "#ffd27a" }, bg);
+      sv("path", { d: "M136 334 H176 M146 325 V343 M166 325 V343", stroke: "#b87a2a", "stroke-width": 0.9, opacity: 0.8 }, bg);
+      sv("circle", { cx: 142, cy: 328, r: 1.3, fill: "#ff7a7a" }, bg); sv("circle", { cx: 156, cy: 329, r: 1.3, fill: "#7ad6ff" }, bg); sv("circle", { cx: 170, cy: 328, r: 1.3, fill: "#9be58f" }, bg);
+      g.appendChild(bsGlow);
+    });
+    sv("path", { d: "M136 343 H176", stroke: "#a8a2bb", "stroke-width": 1.4 }, svg);
     // the front door under a little porch roof, with the porch light
     sv("polygon", { points: "184,284 238,284 232,272 190,272", fill: "#35283f" }, svg);
     sv("rect", { x: 188, y: 284, width: 3, height: 62, fill: "#e6e0ef" }, svg);
@@ -5880,52 +6002,295 @@ window.__ao3WorldInit = function (core) {
     sv("rect", { x: 190, y: 346, width: 40, height: 5, fill: "#4a4468" }, svg);
     sv("rect", { x: 193, y: 351, width: 34, height: 4, fill: "#3f3a5a" }, svg);
     sv("rect", { x: 207, y: 282, width: 6, height: 7, rx: 1.5, fill: "#ffe3a0" }, svg);
-    const porch = sv("g", {}, svg);                                                                   // the porch light's glow, so a knock can make it buzz
+    const porch = sv("g", {}, svg);                                                                             // the porch light's glow, so a knock can make it buzz
     lits.push(g => { porch.setAttribute("class", "hk-anim"); porch.style.cssText = "animation:hkFlicker 2.6s ease-in-out infinite;"; sv("circle", { cx: 210, cy: 290, r: 26, fill: "url(#wh-glow)" }, porch); g.appendChild(porch); });
-    const door = sv("rect", { x: 186, y: 282, width: 50, height: 72, fill: "transparent" }, svg);
-    door.style.cursor = "pointer"; door.setAttribute("role", "button"); door.setAttribute("aria-label", "Knock on the front door");
-    const KNOCK = ["You knock. Somewhere inside, a floorboard creaks.", "You knock again. Nobody comes.", "The porch light buzzes. Maybe later."];
-    door.addEventListener("click", () => {
-      hkKnock();
-      try { if (navigator.vibrate) navigator.vibrate([12, 60, 12, 60, 12]); } catch {}
-      caption.textContent = KNOCK[nKnock++ % KNOCK.length];
-      try { if (porch.animate) porch.animate([{ opacity: 1 }, { opacity: 0.15 }, { opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 700 }); } catch {}
-    });
-    // hedges, the garage lamp, a mailbox, two trees
-    [[150, 350, 24, 10], [262, 352, 36, 11], [100, 352, 0, 0]].forEach(([hx, hy, hr, hh]) => { if (hr) { sv("ellipse", { cx: hx, cy: hy, rx: hr, ry: hh, fill: "#1b2f2b" }, svg); sv("ellipse", { cx: hx - 4, cy: hy - 3, rx: hr * 0.6, ry: hh * 0.6, fill: "#223d36" }, svg); } });
+    // seasonal dressing on the house itself
+    if (season === "winter") {                                                                                  // a wreath, and lights along the porch eave
+      sv("circle", { cx: 211, cy: 330, r: 6.5, fill: "none", stroke: "#2f6a42", "stroke-width": 3.2 }, svg);
+      sv("circle", { cx: 207, cy: 326, r: 1.1, fill: "#c9482e" }, svg); sv("circle", { cx: 215, cy: 334, r: 1.1, fill: "#c9482e" }, svg);
+      sv("path", { d: "M209 336 l2 4 l2 -4", stroke: "#c9482e", "stroke-width": 1.6, fill: "none" }, svg);
+      lits.push(g => strand(g, 186, 285, 236, 285, 3, 9, 2, 1.2));
+    }
+    if (season === "halloween") {                                                                               // two jack-o'-lanterns on the porch step
+      [[196, 346, 1], [226, 347, 0.75]].forEach(([px, py, s], i) => {
+        sv("ellipse", { cx: px - 3 * s, cy: py - 4 * s, rx: 5 * s, ry: 6 * s, fill: "#d9731f" }, svg);
+        sv("ellipse", { cx: px + 3 * s, cy: py - 4 * s, rx: 5 * s, ry: 6 * s, fill: "#d9731f" }, svg);
+        sv("ellipse", { cx: px, cy: py - 4 * s, rx: 4 * s, ry: 6.5 * s, fill: "#ee8a2c" }, svg);
+        sv("rect", { x: px - 0.8, y: py - 12 * s, width: 1.8, height: 3 * s, fill: "#4f6b3a" }, svg);
+        lits.push(g => {
+          sv("circle", { cx: px, cy: py - 4 * s, r: 14 * s, fill: "url(#wh-glow)", opacity: 0.6 }, g);
+          sv("path", { d: `M${px - 3.5 * s} ${py - 7 * s} l2.6 0 l-1.3 2.4 Z M${px + 0.9 * s} ${py - 7 * s} l2.6 0 l-1.3 2.4 Z M${px - 3 * s} ${py - 2 * s} l1.6 -1.6 l1.4 1.2 l1.4 -1.2 l1.6 1.6 l-1.6 0.8 l-1.4 -1 l-1.4 1 Z`, fill: "#ffe27a" }, g);
+          anim(g.lastChild, `animation:hkFlicker ${(1.8 + i * 0.7).toFixed(1)}s ease-in-out infinite;`);
+        });
+      });
+    }
+    // two trees, the lamp, the mailbox
     [[30, 330, 32], [336, 336, 28]].forEach(([tx, ty, tr]) => { sv("rect", { x: tx - 3, y: ty, width: 6, height: 70, fill: "#2c2028" }, svg); sv("circle", { cx: tx, cy: ty - 6, r: tr, fill: "#1f3a37" }, svg); sv("circle", { cx: tx - 8, cy: ty - 14, r: tr * 0.6, fill: "#27483f" }, svg); });
+    sv("ellipse", { cx: 262, cy: 352, rx: 36, ry: 11, fill: "#1b2f2b" }, svg);                                  // the hedge by the window
+    sv("ellipse", { cx: 258, cy: 349, rx: 22, ry: 6.6, fill: "#223d36" }, svg);
     sv("rect", { x: 282, y: 428, width: 3, height: 34, fill: "#4a3326" }, svg);
     sv("rect", { x: 272, y: 418, width: 24, height: 12, rx: 5, fill: "#3a4a66" }, svg);
     sv("rect", { x: 296, y: 414, width: 2, height: 10, fill: "#c9482e" }, svg);
     const mt = sv("text", { x: 284, y: 427, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 4.2, fill: "#e6dcf5" }, svg); mt.textContent = "WHEELER";
-    sv("rect", { x: 150, y: 424, width: 2.4, height: 38, fill: "#2c2438" }, svg);
-    sv("rect", { x: 146.5, y: 416, width: 9, height: 9, rx: 2, fill: "#ffd98a" }, svg);
-    lits.push(g => anim(sv("circle", { cx: 151, cy: 420, r: 26, fill: "url(#wh-glow)" }, g), "animation:hkFlicker 3s ease-in-out infinite;"));
-    const mail = sv("rect", { x: 266, y: 412, width: 36, height: 50, fill: "transparent" }, svg);
-    mail.style.cursor = "pointer"; mail.setAttribute("role", "button"); mail.setAttribute("aria-label", "The mailbox");
-    mail.addEventListener("click", () => { caption.textContent = "The mailbox. A flyer from a pizza place and nothing else."; });
+    sv("rect", { x: 100, y: 424, width: 2.4, height: 38, fill: "#2c2438" }, svg);                               // the garden lamp
+    sv("rect", { x: 96.5, y: 416, width: 9, height: 9, rx: 2, fill: "#ffd98a" }, svg);
+    lits.push(g => anim(sv("circle", { cx: 101, cy: 420, r: 26, fill: "url(#wh-glow)" }, g), "animation:hkFlicker 3s ease-in-out infinite;"));
     sv("ellipse", { cx: 110, cy: 440, rx: 70, ry: 10, fill: "#c8bee6", opacity: 0.08 }, svg);
+
+    // the two bikes, dropped on the lawn and leaning against each other
+    const bike = (bx, by, rot, flip, body) => {
+      const g = sv("g", { transform: `translate(${bx} ${by}) rotate(${rot}) scale(${flip ? -1.05 : 1.05} 1.05)` }, svg);
+      [-13, 13].forEach(cx => {
+        sv("circle", { cx, cy: -9.5, r: 9.5, fill: "none", stroke: "#14111f", "stroke-width": 2.4 }, g);
+        sv("circle", { cx, cy: -9.5, r: 7.4, fill: "none", stroke: "#8a86a0", "stroke-width": 0.7 }, g);
+        sv("path", { d: `M${cx - 7} -9.5 H${cx + 7} M${cx} -16.5 V-2.5 M${cx - 5} -14.5 L${cx + 5} -4.5 M${cx + 5} -14.5 L${cx - 5} -4.5`, stroke: "#8a86a0", "stroke-width": 0.5 }, g);
+      });
+      sv("path", { d: "M-13 -9.5 L-1 -8 L-5 -22 M-1 -8 L9 -21 M-5 -21 L9 -21 M9 -21 L13 -9.5 M-13 -9.5 L-5 -21", stroke: body, "stroke-width": 2, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
+      sv("path", { d: "M-9 -23.4 H-2 M6 -26 L10 -21 M6 -26 H14", stroke: "#14111f", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, g);
+      sv("circle", { cx: -1, cy: -8, r: 2.4, fill: "none", stroke: "#8a86a0", "stroke-width": 1 }, g);
+    };
+    sv("ellipse", { cx: 46, cy: 447, rx: 44, ry: 4.5, fill: "#000", opacity: 0.3 }, svg);
+    bike(26, 444, 15, false, "#c9482e");
+    bike(66, 445, -15, true, "#3f7fd0");
+
+    const dynG = sv("g", {}, svg);                                                                             // snow cover, warm spill, smoke, puddles: rebuilt when the weather changes
+    dynG.style.pointerEvents = "none";
     const lit = sv("g", {}, svg);
+    lit.style.pointerEvents = "none";
     lits.forEach(f => f(lit));
+    svg.appendChild(fig);                                                                                       // the waving figure sits in front of the lit window
+
+    // tappable things (kept on top of the glows so they always answer)
+    const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
+    const WIN_SAY = ["Mike\u2019s room. Fairy lights strung along the glass.", "Somebody waves, then points down towards the basement.", "The lights blink on, off, on. A code, maybe."];
+    hit(158, 205, 46, 40, "Mike\u2019s window", () => { say(WIN_SAY[nWin++ % WIN_SAY.length]); wave(); });
+    hit(73, 205, 46, 40, "An upstairs window", () => { say("Dark upstairs. A curtain stirs."); twitch(); });
+    hit(243, 205, 46, 40, "An upstairs window", () => say("The blind is half down. Nothing moves."));
+    hit(244, 288, 40, 34, "The living-room window", () => say("Curtains drawn. Nobody is watching. Obviously."));
+    hit(186, 282, 50, 72, "Knock on the front door", () => {
+      hkKnock();
+      try { if (navigator.vibrate) navigator.vibrate([12, 60, 12, 60, 12]); } catch {}
+      say(["You knock. Somewhere inside, a floorboard creaks.", "You knock again. Nobody comes.", "The porch light buzzes. Try the little window instead."][nKnock++ % 3]);
+      try { if (porch.animate) porch.animate([{ opacity: 1 }, { opacity: 0.15 }, { opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 700 }); } catch {}
+    });
+    hit(266, 410, 36, 52, "The mailbox", () => say(["The mailbox. A flyer from a pizza place and nothing else.", "Still just the flyer."][nBox++ % 2]));
+    hit(0, 396, 92, 60, "Two bikes, dropped on the lawn", () => say(["Two bikes, dropped mid-argument, leaning on each other like they are holding each other up.", "One bell, one rattly chain. Both of them wet from the grass."][nBike++ % 2]));
+    hit(126, 316, 60, 52, "Climb in through the basement window", () => goIn());
+    const hitG = sv("g", {}, svg);
+    hits.forEach(([x, y, w, h, label, fn]) => {
+      const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG);
+      r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label);
+      r.addEventListener("click", fn);
+    });
+
+    // weather and season, drawn over everything and never tappable
+    const overlay = sv("g", {}, svg);
+    overlay.style.pointerEvents = "none";
+    const wxG = sv("g", {}, overlay);
+    const seasonG = sv("g", {}, overlay);
+    if (!reduce && (season === "autumn" || season === "halloween" || season === "spring")) {
+      const cols = season === "spring" ? ["#f6b6cc", "#fbd3e0", "#f09ab8"] : ["#d9731f", "#b5541a", "#e0a032", "#8a4a1e"];
+      for (let i = 0; i < 26; i++) {
+        const p = sv("ellipse", { cx: (rnd("lx" + i) * W).toFixed(1), cy: (rnd("ly" + i) * H).toFixed(1), rx: 3, ry: 1.6, fill: cols[i % cols.length], opacity: 0.8 }, seasonG);
+        anim(p, `animation:hkFall ${(6 + rnd("ld" + i) * 6).toFixed(1)}s linear -${(rnd("lz" + i) * 8).toFixed(1)}s infinite;`);
+      }
+    }
+    if (season === "autumn" || season === "halloween") {                                                          // leaves on the lawn
+      for (let i = 0; i < 14; i++) sv("ellipse", { cx: (10 + rnd("lf" + i) * 340).toFixed(1), cy: (362 + rnd("lg" + i) * 96).toFixed(1), rx: 3, ry: 1.5, fill: ["#d9731f", "#b5541a", "#e0a032"][i % 3], opacity: 0.7 }, seasonG);
+    }
+    if (season === "summer") {                                                                                    // fireflies over the lawn
+      for (let i = 0; i < 14; i++) {
+        const f = sv("circle", { cx: (10 + rnd("ff" + i) * 340).toFixed(1), cy: (340 + rnd("fg" + i) * 120).toFixed(1), r: 1.7, fill: "#e8ff8a" }, seasonG);
+        anim(f, `animation:hkFirefly ${(4 + rnd("fd" + i) * 4).toFixed(1)}s ease-in-out -${(rnd("fz" + i) * 5).toFixed(1)}s infinite;`);
+      }
+    }
     const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
     field.appendChild(svg);
 
+    const paintWeather = () => {
+      const kind = HK_WX[wxI][0], cozy = kind === "snow";
+      wxG.textContent = "";
+      if (kind === "rain") {
+        sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#0a1230", opacity: 0.14 }, wxG);
+        if (!reduce) for (let i = 0; i < 70; i++) {
+          const x = rnd("rx" + i) * (W + 20), y = rnd("ry" + i) * H;
+          anim(sv("line", { x1: x.toFixed(1), y1: y.toFixed(1), x2: (x - 2.5).toFixed(1), y2: (y + 9).toFixed(1), stroke: "#a9bcff", "stroke-width": 1, opacity: 0.45 }, wxG), `animation:hkRain ${(0.6 + rnd("rd" + i) * 0.5).toFixed(2)}s linear -${rnd("rs" + i).toFixed(2)}s infinite;`);
+        }
+      } else if (cozy && !reduce) {
+        for (let i = 0; i < 90; i++) anim(sv("circle", { cx: (rnd("nx" + i) * W).toFixed(1), cy: (rnd("ny" + i) * H).toFixed(1), r: (1 + rnd("nr" + i) * 1.4).toFixed(1), fill: "#fff", opacity: 0.85 }, wxG), `animation:hkFall ${(5 + rnd("nd" + i) * 5).toFixed(1)}s linear -${(rnd("nz" + i) * 8).toFixed(1)}s infinite;`);
+      } else if (cozy) {
+        for (let i = 0; i < 60; i++) sv("circle", { cx: (rnd("nx" + i) * W).toFixed(1), cy: (rnd("ny" + i) * H).toFixed(1), r: (1 + rnd("nr" + i) * 1.2).toFixed(1), fill: "#fff", opacity: 0.7 }, wxG);
+      } else if (kind === "fog") {
+        for (let i = 0; i < 4; i++) anim(sv("ellipse", { cx: (rnd("fx" + i) * W).toFixed(1), cy: ((i + 0.5) * H / 4).toFixed(1), rx: 190, ry: 46, fill: "#c8bee6", opacity: 0.22 }, wxG), `animation:hkFog ${11 + i % 4 * 3}s ease-in-out infinite;`);
+      }
+      // what the weather and the season leave on the house: snow cover, a warm spill, chimney smoke, puddles
+      dynG.textContent = "";
+      const cover = season === "winter" || cozy;
+      if (cover) {
+        sv("rect", { x: 0, y: 352, width: W, height: 110, fill: "#e8eefc", opacity: 0.2 }, dynG);
+        for (let i = 0; i < 16; i++) sv("ellipse", { cx: (rnd("sa" + i) * W).toFixed(1), cy: (362 + rnd("sb" + i) * 92).toFixed(1), rx: (20 + rnd("sc" + i) * 22).toFixed(1), ry: (3.5 + rnd("sd" + i) * 3).toFixed(1), fill: "#dfe8fb", opacity: 0.5 }, dynG);
+        sv("path", { d: "M72 143 H288 L293 150 Q250 154 180 151 Q110 154 67 150 Z", fill: "#eef2ff", opacity: 0.95 }, dynG);      // the roof, the porch roof, the chimney
+        sv("path", { d: "M44 199 H316", stroke: "#eef2ff", "stroke-width": 3, opacity: 0.8 }, dynG);
+        sv("path", { d: "M190 271 H232", stroke: "#eef2ff", "stroke-width": 3.4, opacity: 0.9 }, dynG);
+        sv("rect", { x: 228, y: 106, width: 22, height: 4, rx: 2, fill: "#f4f7ff" }, dynG);
+        sv("ellipse", { cx: 284, cy: 417, rx: 11, ry: 2.6, fill: "#f4f7ff" }, dynG);                                        // the mailbox
+        [[30, 330, 32], [336, 336, 28]].forEach(([tx, ty, tr]) => sv("ellipse", { cx: tx, cy: ty - 6 - tr * 0.72, rx: tr * 0.7, ry: tr * 0.26, fill: "#f4f7ff", opacity: 0.85 }, dynG));
+        [[27, 418], [65, 419], [46, 420]].forEach(([sx, sy]) => sv("ellipse", { cx: sx, cy: sy, rx: 6, ry: 2.2, fill: "#f4f7ff", opacity: 0.9 }, dynG));  // the bike tops
+        sv("ellipse", { cx: 262, cy: 342, rx: 30, ry: 4, fill: "#f4f7ff", opacity: 0.8 }, dynG);                            // the hedge
+      }
+      if (cozy) {
+        sv("ellipse", { cx: 210, cy: 358, rx: 52, ry: 8, fill: "#ffd98a", opacity: 0.24 }, dynG);                           // light pooling on the snow
+        sv("ellipse", { cx: 156, cy: 357, rx: 36, ry: 6, fill: "#f2b65c", opacity: 0.34 }, dynG);
+        sv("ellipse", { cx: 190, cy: 244, rx: 38, ry: 6, fill: "#ffd98a", opacity: 0.1 }, dynG);
+        for (let i = 0; i < 9; i++) { const t = i / 8; sv("ellipse", { cx: (112 + t * 40 + (i % 2 ? 3 : -3)).toFixed(1), cy: (476 - t * 118).toFixed(1), rx: 2, ry: 3.2, fill: "#a7b4d6", opacity: 0.6 }, dynG); }   // footprints to the basement window
+      }
+      if (cozy || season === "winter") for (let i = 0; i < 4; i++) {                                                          // chimney smoke
+        const p = sv("circle", { cx: 239, cy: 104, r: 4, fill: "#cfc8e6", opacity: 0 }, dynG);
+        if (!reduce) anim(p, `animation:hkSmoke 4s ease-out -${i}s infinite;`); else p.setAttribute("opacity", 0.25 - i * 0.05);
+      }
+      if (kind === "rain") for (let i = 0; i < 4; i++) sv("ellipse", { cx: [210, 90, 270, 150][i], cy: 470 + (i % 2) * 2, rx: 18 - i * 2, ry: 2.4, fill: i === 0 ? "#ffd98a" : "#a9bcff", opacity: i === 0 ? 0.22 : 0.12 }, dynG);   // puddles, the porch light in the first
+    };
+
+    const COZY = { night: "Snow at night. Every lit window feels like a promise kept.", dusk: "A snowy dusk. The whole house is glowing.", dawn: "Snow at dawn. One window is still lit from last night." };
+    const WX_SAY = { clear: "The sky clears. The porch light hums.", rain: "Rain on the roof. Every window looks warmer for it.", fog: "Fog swallows the road. The porch light becomes a small moon.", snow: "Snow. The windows are as cosy as they will ever be." };
     const applyTime = announce => {
-      const t = HK_TIMES[tI];
+      const t = HK_TIMES[tI], kind = HK_WX[wxI][0], cozy = kind === "snow";
+      const over = kind === "clear" ? 1 : kind === "fog" ? 0.4 : 0.2;                                          // cloud hides the stars and dims the moon
       box.style.background = t.sky;
-      starG.setAttribute("opacity", t.stars);
+      starG.setAttribute("opacity", t.stars * over);
       moonDisc.setAttribute("fill", t.orb);
       moonG.setAttribute("transform", `translate(0 ${t.dy})`);
-      lit.setAttribute("opacity", t.lit);
+      moonG.setAttribute("opacity", over < 1 ? 0.3 + over * 0.5 : 1);
+      lit.setAttribute("opacity", Math.min(1, t.lit + (cozy ? 0.12 : 0)));
       tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
       timeBtn.textContent = t.label;
-      sub.textContent = "hawkins \u00B7 " + t.name;
-      if (announce) caption.textContent = t.say.house;
+      sub.textContent = "hawkins \u00B7 " + t.name + " \u00B7 " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
+      if (announce) say(cozy ? COZY[t.name] : t.say.house);
     };
     const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % HK_TIMES.length; hkTimeSet(tI); applyTime(true); });
+    const wxBtn = pill(HK_WX[wxI][1], "Change the weather", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); wxBtn.textContent = HK_WX[wxI][1]; paintWeather(); applyTime(false); say(WX_SAY[HK_WX[wxI][0]]); });
     pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
+
+    // the curtain on the left window twitches, with a sliver of lamplight behind it
+    function twitch() {
+      if (gone) return;
+      sliver.setAttribute("opacity", 0.55);
+      later(() => sliver.setAttribute("opacity", 0), reduce ? 1200 : 900);
+      if (!reduce) { try { curtain2.animate([{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(-6px)" }, { transform: "translateX(0)" }], { duration: 900, easing: "ease-in-out" }); } catch {} }
+    }
+    // a walkie-talkie voice crackles up from the basement window, with rings of signal
+    const ring = () => {
+      const rg = sv("g", { transform: "translate(156 334)" }, bsGlow);
+      if (reduce) { later(() => rg.remove(), 900); return; }
+      for (let i = 0; i < 3; i++) { const c = sv("circle", { cx: 0, cy: 0, r: 7, fill: "none", stroke: "#ffd98a", "stroke-width": 1.2 }, rg); anim(c, `transform-box:fill-box;transform-origin:center;animation:hkRing 1.2s ease-out ${i * 0.28}s both;`); }
+      later(() => rg.remove(), 2000);
+    };
+    const RADIO = ["From the basement, through static: \u201C\u2026do you copy? Over.\u201D", "Crackle. A small voice: \u201CSay again? Over.\u201D", "The window hisses. \u201C\u2026bring snacks. Over.\u201D", "Static. Then: \u201CIs anyone out there? Over.\u201D"];
+    const sched = (fn, lo, hi) => later(() => { if (gone) return; fn(); sched(fn, lo, hi); }, lo + Math.random() * (hi - lo));
+    sched(twitch, 14000, 30000);
+    sched(() => { hkCrackle(); ring(); say(pick(RADIO)); }, 20000, 42000);
+
+    // the basement window is the way in: crouch, the latch gives, and the screen fades to the basement
+    const veil = el("div", `position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:30;transition:opacity ${reduce ? 0 : 0.7}s;`);
+    box.appendChild(veil);
+    function goIn() {
+      if (entering) return; entering = true;
+      say("You crouch at the window well. The latch gives. Down you go.");
+      hkCrackle(); ring();
+      later(() => { veil.style.opacity = 1; }, reduce ? 100 : 500);
+      later(() => { close(); openBasement(); }, reduce ? 300 : 1300);
+    }
+
     applyTime(true);
+    paintWeather();
+    document.body.appendChild(sh.back);
+    const openLine = caption.textContent;
+    later(() => { if (entering) return; if (caption.textContent === openLine) say("Somebody waves from Mike\u2019s window, then points down at the basement."); wave(); }, 1100);   // somebody has seen you coming
+  }
+
+  // ── the Wheelers' basement (reached through the window well; a small first pass: a table, a map, a radio, the stairs up) ──
+  function openBasement() {
+    const sh = hkShell("ao3-basement", "\u{1F3B2} The basement");
+    const { sv, rnd, anim } = sh.kit;
+    const { sub, field, caption, pill, close } = sh;
+    const say = t => { caption.textContent = t; };
+    const W = 360, H = 540, hits = [];
+    let nTable = 0, nDie = 0, nCouch = 0;
+    sh.box.style.background = "#241a26";
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const glow = sv("radialGradient", { id: "bs-glow" }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.85" }, glow);
+    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
+    sv("rect", { x: 0, y: 0, width: W, height: 330, fill: "#3b2a34" }, svg);                                      // the back wall, with wood panelling
+    for (let x = 0; x < W; x += 20) sv("path", { d: `M${x} 40 V330`, stroke: "#2c1f29", "stroke-width": 1, opacity: 0.7 }, svg);
+    sv("rect", { x: 0, y: 0, width: W, height: 40, fill: "#1b1320" }, svg);                                       // the low ceiling
+    sv("rect", { x: 0, y: 36, width: W, height: 6, fill: "#2c2028" }, svg);
+    sv("rect", { x: 0, y: 330, width: W, height: 210, fill: "#2a2030" }, svg);                                     // the carpet, and a rug under the table
+    sv("rect", { x: 34, y: 372, width: 292, height: 130, rx: 10, fill: "#5a2f4a" }, svg);
+    sv("rect", { x: 42, y: 380, width: 276, height: 114, rx: 8, fill: "none", stroke: "#8a5a6a", "stroke-width": 1.4, "stroke-dasharray": "6 5" }, svg);
+    // the high window you came through, showing the sky outside
+    const sky = { night: "#18203a", dusk: "#8a4a62", dawn: "#6e75b0" }[HK_TIMES[hkTimeGet()].name];
+    sv("rect", { x: 22, y: 68, width: 70, height: 30, fill: "#cfc9dc" }, svg);
+    sv("rect", { x: 25, y: 71, width: 64, height: 24, fill: sky }, svg);
+    sv("path", { d: "M57 71 V95", stroke: "#cfc9dc", "stroke-width": 2 }, svg);
+    if (HK_WX[hkWxGet()][0] === "snow") for (let i = 0; i < 8; i++) sv("circle", { cx: 28 + rnd("bf" + i) * 58, cy: 73 + rnd("bg" + i) * 20, r: 1.1, fill: "#fff" }, svg);
+    // the stairs up to the house, on the right
+    sv("polygon", { points: "262,330 350,330 350,60 322,60", fill: "#2c2028" }, svg);
+    for (let i = 0; i < 9; i++) sv("path", { d: `M${262 + i * 6.6} ${330 - i * 30} H350`, stroke: "#4a3340", "stroke-width": 1.6 }, svg);
+    sv("rect", { x: 322, y: 46, width: 28, height: 30, fill: "#f0b45a", opacity: 0.8 }, svg);
+    sv("circle", { cx: 336, cy: 62, r: 24, fill: "url(#bs-glow)", opacity: 0.4 }, svg);
+    // shelves of games on the left wall
+    [[20, 138], [20, 186]].forEach(([sx, sy], r) => {
+      sv("rect", { x: sx, y: sy + 28, width: 112, height: 4, fill: "#4a3326" }, svg);
+      for (let i = 0; i < 7; i++) { const bh = 18 + rnd("bk" + r + i) * 8; sv("rect", { x: sx + 4 + i * 15, y: sy + 28 - bh, width: 12, height: bh, fill: ["#c9482e", "#3f7fd0", "#e0a032", "#4a8a5a", "#8a4a9a"][(i + r) % 5], opacity: 0.85 }, svg); }
+    });
+    // lights along the ceiling beam
+    const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
+    sv("path", { d: "M0 46 Q90 72 180 46 Q270 72 360 46", stroke: "#2a1d1a", "stroke-width": 1, fill: "none" }, svg);
+    for (let i = 0; i < 12; i++) {
+      const t = i / 11, s = (t * 2) % 1, bx = t * 360, by = 46 + 2 * (1 - s) * s * 26 + 1, col = BULB[i % BULB.length];
+      sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 5, fill: col, opacity: 0.2 }, svg);
+      anim(sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 1.8, fill: col }, svg), `animation:hkTwinkle ${(1.6 + rnd("bt" + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("bu" + i) * 3).toFixed(1)}s infinite;`);
+    }
+    // the table: a hand-drawn map, a die, a few little figures, a walkie-talkie, and a lamp hanging over it
+    sv("path", { d: "M180 40 V176", stroke: "#14111f", "stroke-width": 1.4 }, svg);
+    sv("polygon", { points: "160,176 200,176 212,192 148,192", fill: "#3a2a1a" }, svg);
+    anim(sv("circle", { cx: 180, cy: 250, r: 120, fill: "url(#bs-glow)", opacity: 0.4 }, svg), "animation:hkFlicker 4s ease-in-out infinite;");
+    sv("polygon", { points: "72,300 288,300 312,336 48,336", fill: "#6b4630" }, svg);
+    sv("rect", { x: 48, y: 336, width: 264, height: 8, fill: "#4a2f1e" }, svg);
+    sv("rect", { x: 60, y: 344, width: 8, height: 40, fill: "#3a2418" }, svg); sv("rect", { x: 292, y: 344, width: 8, height: 40, fill: "#3a2418" }, svg);
+    sv("polygon", { points: "100,306 232,306 244,330 88,330", fill: "#d8c9a0" }, svg);                           // the map
+    sv("path", { d: "M104 322 Q130 310 150 320 T196 316 T236 322 M120 313 l8 5 l8 -5 M176 326 q10 -8 20 0", stroke: "#5a4a3a", "stroke-width": 1.1, fill: "none" }, svg);
+    sv("path", { d: "M206 312 l8 8 M214 312 l-8 8", stroke: "#c9482e", "stroke-width": 1.6 }, svg);
+    [[132, 324, "#3f7fd0"], [146, 320, "#c9482e"], [160, 325, "#4a8a5a"], [172, 320, "#e0a032"]].forEach(([mx, my, mc]) => { sv("ellipse", { cx: mx, cy: my + 1, rx: 4, ry: 1.4, fill: "#000", opacity: 0.3 }, svg); sv("path", { d: `M${mx - 3} ${my} L${mx} ${my - 9} L${mx + 3} ${my} Z`, fill: mc }, svg); });
+    sv("polygon", { points: "262,320 270,314 278,320 276,328 264,328", fill: "#e6dcf5", stroke: "#8a86a0", "stroke-width": 0.8 }, svg);   // the die
+    sv("rect", { x: 250, y: 296, width: 14, height: 22, rx: 2, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.8 }, svg);      // the walkie-talkie
+    sv("path", { d: "M254 296 V284", stroke: "#4a4a5a", "stroke-width": 1.4 }, svg);
+    sv("rect", { x: 253, y: 301, width: 8, height: 5, fill: "#7a8a6a" }, svg);
+    // the couch on the left
+    sv("rect", { x: 10, y: 388, width: 104, height: 44, rx: 8, fill: "#6a3a4a" }, svg);
+    sv("rect", { x: 10, y: 360, width: 104, height: 36, rx: 8, fill: "#7a4658" }, svg);
+    sv("path", { d: "M62 392 V430", stroke: "#4a2634", "stroke-width": 1.2 }, svg);
+    sv("path", { d: "M18 404 Q40 396 60 408 L60 426 L18 426 Z", fill: "#3f7a6a", opacity: 0.85 }, svg);               // a blanket
+    // tappable things
+    const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
+    hit(72, 296, 180, 44, "The table", () => say(["A campaign in progress. Someone has drawn a dragon, badly.", "The little figures stand in a ring around an X on the map.", "Chips, notes, a half-eaten sandwich on a coaster."][nTable++ % 3]));
+    hit(258, 306, 24, 26, "The die", () => say(`You roll the die. ${1 + Math.floor(Math.random() * 20)}.`));
+    hit(246, 280, 24, 42, "The walkie-talkie", () => { hkCrackle(); say("The walkie-talkie hisses. \u201C\u2026Mike? Where did you go? Over.\u201D"); });
+    hit(262, 60, 90, 270, "The stairs up", () => say("The stairs up to the house. Something warm is cooking up there."));
+    hit(10, 356, 106, 78, "The couch", () => say(["Somebody has been asleep here. The blanket is still warm.", "A sock. Just the one."][nCouch++ % 2]));
+    hit(16, 130, 120, 100, "The games shelves", () => say("Shelves of board games and a very dented box of dice."));
+    hit(20, 66, 74, 34, "The window", () => say("The little window you came through, high up on the wall."));
+    const hitG = sv("g", {}, svg);
+    hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
+    field.appendChild(svg);
+    sub.textContent = "hawkins \u00B7 the basement";
+    say("Warm, low-ceilinged, smelling of popcorn. The window you came through is up by the ceiling.");
+    pill("\u{1F3E1} outside", "Climb back out to the front lawn", () => { close(); openWheelers(); });
+    pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     document.body.appendChild(sh.back);
   }
 
@@ -6383,5 +6748,5 @@ window.__ao3WorldInit = function (core) {
   }
 
 
-  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel, openBellTower, openHawkins, openWheelers };
+  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel, openBellTower, openHawkins, openWheelers, openBasement };
 };
