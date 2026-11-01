@@ -6319,10 +6319,11 @@ window.__ao3WorldInit = function (core) {
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
       const HAIR = "#3b2a20";
       [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -21.4, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
-      [[-8.5, -41.4, 7], [0, -43, 7.4], [8.5, -41.4, 7], [-13, -34, 5.4], [13, -34, 5.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
       sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
-      sv("path", { d: "M-15.2 -24 C-18.4 -35 -13 -47.6 0 -47.6 C13 -47.6 18.4 -35 15.2 -24 C14.6 -27.4 13.4 -30 11.4 -31.8 Q5 -35 -1 -33 Q-8 -31 -12.6 -31.2 Q-14.6 -28.4 -15.2 -24 Z", fill: HAIR }, h);
-      sv("path", { d: "M-8 -42 Q-2 -45.6 5 -43.6", stroke: "#5a4232", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
+      // one shape that sits on the skull: it meets the head at the temples, sweeps to one side, and falls over the tops of the ears
+      sv("path", { d: "M-14.8 -17 C-17.6 -25 -17.6 -38 -9.4 -43.6 C-3.4 -47.6 6 -48 12 -43.8 C17.6 -39.6 18.2 -29 15 -17 C14.6 -20.4 13.6 -24 12.6 -27 Q9.8 -30.6 5.2 -30 C0.6 -29.6 -3.6 -32.6 -7 -35.6 Q-10.6 -33 -12 -28.4 Q-13.4 -23 -14.8 -17 Z", fill: HAIR }, h);
+      sv("path", { d: "M-6.6 -36 C-1.4 -35.6 5.2 -34 11.4 -29.4 M-8.6 -41 Q-1 -45 8 -42.6 M-11.4 -33 Q-14 -29.6 -14.2 -24.6", stroke: "#5a4232", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.55 }, h);
+      sv("path", { d: "M-4 -44.4 Q2 -46.6 8.6 -44", stroke: "#6a5240", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
       face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
     };
     const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
@@ -6642,7 +6643,7 @@ window.__ao3WorldInit = function (core) {
     // tappable things
     const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
     hit(262, 60, 90, 270, "The stairs up", () => say("The stairs up to the house. Something warm is cooking up there."));
-    hit(116, 232, 60, 92, "The one with the bowl cut", shift);
+    hit(116, 232, 60, 92, "The one in the flannel", shift);
     hit(176, 218, 70, 106, "The one with the curly hair", shift);
     hit(90, 328, 180, 40, "The campaign map", () => say(["The campaign map, hand-drawn and much folded. Somebody has marked an X in red pencil.", "The route runs from the little town, through the forest, straight at the mountains. Nobody is happy about that.", "In the corner, in tiny letters: HERE BE DRAGONS. Underlined twice."][nMap++ % 3]));
     hit(100, 347, 38, 22, "The character sheet", () => say("A character sheet. Strength is crossed out and rewritten, twice."));
@@ -7167,10 +7168,19 @@ window.__ao3WorldInit = function (core) {
     const beamG = sv("g", {}, svg);
     sv("polygon", { points: "292,452 330,452 250,150 190,150", fill: "url(#fi-beam)", opacity: 0.28 }, beamG);
     const fore = sv("g", {}, svg);
-    const bowl = sv("g", {}, fore);
-    sv("ellipse", { cx: 62, cy: 492, rx: 26, ry: 8, fill: "#d8d0c0", stroke: "#8a8070", "stroke-width": 0.8 }, bowl);
-    sv("path", { d: "M40 486 L43 497 M52 483 L53 499 M72 483 L71 499 M84 486 L81 497", stroke: "#c9482e", "stroke-width": 2.4, opacity: 0.8 }, bowl);
-    for (let i = 0; i < 14; i++) sv("circle", { cx: (44 + rnd("pc" + i) * 36).toFixed(1), cy: (480 + rnd("pd" + i) * 8).toFixed(1), r: (2.6 + rnd("pe" + i) * 1.2).toFixed(1), fill: i % 2 ? "#f6ead0" : "#efdca8" }, bowl);
+    const bowl = sv("g", {}, fore);       // a striped cinema popcorn bucket, tapered, heaped over the rim
+    sv("ellipse", { cx: 62, cy: 508, rx: 20, ry: 4, fill: "#000", opacity: 0.35 }, bowl);
+    const BT = [40, 84], BB = [46.5, 77.5], BY = [469, 506];
+    for (let k = 0; k < 6; k++) {
+      const a0 = BT[0] + (BT[1] - BT[0]) * k / 6, a1 = BT[0] + (BT[1] - BT[0]) * (k + 1) / 6, b0 = BB[0] + (BB[1] - BB[0]) * k / 6, b1 = BB[0] + (BB[1] - BB[0]) * (k + 1) / 6;
+      sv("polygon", { points: `${a0},${BY[0]} ${a1},${BY[0]} ${b1},${BY[1]} ${b0},${BY[1]}`, fill: k % 2 ? "#f3e9d2" : "#c9482e" }, bowl);
+    }
+    sv("polygon", { points: `62,${BY[0]} ${BT[1]},${BY[0]} ${BB[1]},${BY[1]} 62,${BY[1]}`, fill: "#1a0c16", opacity: 0.25 }, bowl);
+    sv("path", { d: `M${BB[0]} ${BY[1]} Q62 ${BY[1] + 5} ${BB[1]} ${BY[1]}`, fill: "#a8382a" }, bowl);
+    sv("path", { d: `M${BT[0]} ${BY[0]} L${BB[0]} ${BY[1]} M${BT[1]} ${BY[0]} L${BB[1]} ${BY[1]}`, stroke: "#6a2418", "stroke-width": 0.9, fill: "none" }, bowl);
+    sv("ellipse", { cx: 62, cy: BY[0], rx: 22.6, ry: 5.2, fill: "#f6ead0", stroke: "#8a8070", "stroke-width": 0.8 }, bowl);
+    for (let i = 0; i < 16; i++) { const a = rnd("pc" + i), b = rnd("pd" + i), cx = 44 + a * 36, cy = 462 + b * 7 - Math.abs(a - 0.5) * 8; sv("circle", { cx: cx.toFixed(1), cy: cy.toFixed(1), r: (3 + rnd("pe" + i) * 1.3).toFixed(1), fill: i % 2 ? "#f6ead0" : "#efdca8" }, bowl); }
+    for (let i = 0; i < 6; i++) sv("circle", { cx: (50 + rnd("pq" + i) * 24).toFixed(1), cy: (459 + rnd("pr" + i) * 5).toFixed(1), r: 1.2, fill: "#d9a85c", opacity: 0.7 }, bowl);
     [[116, 508], [128, 512], [102, 514]].forEach(([x, y]) => sv("circle", { cx: x, cy: y, r: 2.2, fill: "#f6ead0" }, fore));
     const comics = sv("g", {}, fore);
     [["#3f7fd0", 262, 496, -4], ["#c9482e", 268, 488, 3], ["#e0a032", 264, 481, -2]].forEach(([c, x, y, r]) => { const b = sv("g", { transform: `rotate(${r} ${x + 26} ${y})` }, comics); sv("rect", { x, y, width: 54, height: 9, rx: 1, fill: c }, b); sv("rect", { x: x + 2, y: y + 1.5, width: 50, height: 6, fill: "#f6ead0", opacity: 0.85 }, b); sv("path", { d: `M${x + 6} ${y + 4.5} h20 M${x + 30} ${y + 4.5} h10`, stroke: c, "stroke-width": 1.2 }, b); });
@@ -7242,7 +7252,7 @@ window.__ao3WorldInit = function (core) {
       hand: ["Two hands, one blanket. Nobody is looking at them. Everybody is looking at them.", "A thumb moves, very slightly, back and forth. It is a small, serious gesture."],
       lights: ["The fairy lights twinkle faster. Somebody up there is very pleased with themselves.", "Red, gold, blue, green, pink. Mike strung them up; Will rearranged them when he wasn’t looking."],
       torch: ["The flashlight is pointed at the ceiling, painting a long pale stripe across the blankets.", "Somebody’s been reading comics by it. The batteries are almost certainly borrowed."],
-      corn: ["The popcorn bowl is mostly kernels now. A single piece sits on its own, saved for somebody.", "Half the popcorn is on the quilt. The other half is also on the quilt."],
+      corn: ["The popcorn bucket is mostly kernels now. A single piece sits on its own, saved for somebody.", "Half the popcorn is on the quilt. The other half is also on the quilt."],
       comic: ["Comics, in a leaning stack. One has two names inked inside the cover, very small, and a doodled heart between them.", "The top issue is open at a page nobody has turned in an hour."],
       draw: ["A crayon heart, pinned up very crooked. M + W. Nobody has ever been asked about it."]
     };
@@ -7255,7 +7265,7 @@ window.__ao3WorldInit = function (core) {
     });
     hit(20, 60, 320, 70, "The fairy lights", () => { say(SAY.lights[nLights++ % SAY.lights.length]); puff(2); });
     hit(286, 430, 60, 30, "The flashlight", () => say(SAY.torch[nTorch++ % SAY.torch.length]));
-    hit(30, 466, 70, 40, "The popcorn", () => say(SAY.corn[nCorn++ % SAY.corn.length]));
+    hit(30, 450, 64, 60, "The popcorn", () => say(SAY.corn[nCorn++ % SAY.corn.length]));
     hit(256, 474, 60, 36, "The comics", () => say(SAY.comic[nComic++ % SAY.comic.length]));
     hit(56, 228, 70, 66, "The crayon heart", () => say(SAY.draw[nDraw++ % SAY.draw.length]));
     const hitG = sv("g", {}, svg);
