@@ -6307,37 +6307,38 @@ window.__ao3WorldInit = function (core) {
       const l = top(-hw), r = top(hw);
       sv("polygon", { points: `${-hw},${baseY} ${hw},${baseY} ${r[0]},${r[1]} ${l[0]},${l[1]}`, fill: "#d9b090" }, g);
     };
-    const headA = (g, p) => {                               // a soft bowl cut: blunt, slightly ragged bangs, hair down past the ears, dark brown
+    const headA = (g, p) => {                               // a thick, soft mop of warm brown: a heavy fringe swept across the forehead in chunky locks, side hair over the ears
       neckTo(g, p, -9, -16, 4.6);
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      const HAIR = "#4a2e22", HAIR_D = "#2f1d15";
-      // 1. the back of the hair: a round dome that comes down on both sides to the jaw
-      sv("path", { d: "M-12.6 -8.4 C-21.4 -16 -23 -32 -17.6 -39.6 C-12 -47.4 -4 -49 2 -48.6 C10 -48.4 17.4 -45 20 -37.4 C23.2 -30 22.4 -18 12.4 -7.8 Q9 -11.6 5 -13 L-5 -13 Q-9 -11.8 -12.6 -8.4 Z", fill: HAIR }, h);
+      const HAIR = "#3f291c", HAIR_D = "#26170f", HAIR_L = "#7a5238";
+      // 1. the back of the hair: a full dome that comes down behind the ears
+      sv("path", { d: "M-15.6 -13 C-20.8 -19 -21.4 -32 -17.2 -39.2 C-12 -47.2 -3 -49.6 3 -49.2 C11 -48.8 18.2 -45.2 19.8 -38 C22 -31 21 -21 15.4 -13.4 Q0 -9 -15.6 -13 Z", fill: HAIR }, h);
       // 2. ears, then the face
-      [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 15.4, cy: -20, rx: 2.5, ry: 3.1, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
+      [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 15.2, cy: -19, rx: 2.5, ry: 3.1, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
       sv("ellipse", { cx: 0, cy: -24, rx: 14.8, ry: 15.5, fill: SKIN_A }, h);
-      // 3. the front: straight bangs with a few pointed strands, and the side hair falling over the temples
-      sv("path", { d: "M-14.4 -21 C-15.8 -31 -15.4 -40 -4 -44.4 C4 -46.4 13 -44 15.6 -35 C16.4 -30 15.4 -25 14.4 -21 L13 -25.6 L11.6 -29.6 L10 -30.2 L8.4 -28 L6.8 -30.2 L4.2 -30.4 L2.6 -28.2 L0.8 -30.4 L-1.6 -30.2 L-3 -28 L-4.8 -30.2 L-7.4 -30.4 L-9 -28.4 L-10.6 -30.2 L-12.4 -27 Z", fill: HAIR }, h);
-      sv("path", { d: "M1 -46 Q-3 -40 -2 -31 M-5 -44 Q-9 -38 -8.4 -31 M7 -45.4 Q10.4 -39 8.6 -31.6 M-12 -41 Q-16 -34 -14 -27 M13.4 -40 Q16.6 -34 14 -27 M-19 -32 Q-20.4 -24 -15.6 -15 M19.4 -32 Q20.6 -24 14 -14", stroke: HAIR_D, "stroke-width": 0.9, fill: "none", "stroke-linecap": "round", opacity: 0.5 }, h);
-      sv("path", { d: "M-8 -43.8 Q-1 -46.6 7 -44.6", stroke: "#6e4a38", "stroke-width": 1.6, fill: "none", "stroke-linecap": "round", opacity: 0.45 }, h);
-      face(h, p, { ex: 5.9, ey: -22.4, by: -26.8, my: -13.4, brow: "#2f1d15", er: 1.32, bw: 1.6, eye: "#3a2018", cheek: true, open: true });
+      // 3. the front: a heavy fringe of rounded locks down to the brows, longer toward the right, and side hair falling over the temples
+      sv("path", { d: "M-14.8 -20 C-16.4 -30 -15.6 -39 -6 -44.6 C2 -48.4 12 -45.4 15.2 -37 C16.8 -32 16 -25 15 -19.5 L13.6 -24.4 Q13 -26.4 11.4 -27.4 Q10.6 -29.4 8.8 -30.6 Q7.6 -29.6 6.4 -28.6 Q5.2 -30.2 3.6 -31.2 Q2.2 -30 0.8 -29.2 Q-0.4 -30.6 -2 -31.4 Q-3.4 -30.6 -4.6 -29.6 Q-5.8 -31 -7.4 -31.4 Q-8.8 -30.2 -10 -28.6 Q-11.8 -29 -12.6 -27 Q-13.6 -24 -14.8 -20 Z", fill: HAIR }, h);
+      sv("path", { d: "M-2 -47 Q1 -39 -4.4 -30.4 M3 -47.4 Q7 -39 6.2 -29.4 M9 -46 Q13.4 -39 11.2 -28.2 M-8 -44 Q-9 -37 -10 -29.6 M-14 -38 Q-17.6 -30 -14.4 -22 M16 -36 Q18.6 -28 15.4 -21", stroke: HAIR_D, "stroke-width": 0.9, fill: "none", "stroke-linecap": "round", opacity: 0.6 }, h);
+      sv("path", { d: "M-6 -44 Q-1 -46.8 6 -45.6 M1 -41.6 Q5 -37 4 -33 M-10 -40 Q-12.4 -36 -11.6 -32", stroke: HAIR_L, "stroke-width": 1.3, fill: "none", "stroke-linecap": "round", opacity: 0.5 }, h);
+      face(h, p, { ex: 5.9, ey: -22.4, by: -26.8, my: -13.4, brow: "#26170f", er: 1.32, bw: 1.6, eye: "#3a2018", cheek: true, open: true });
       sv("circle", { cx: 9.4, cy: -18, r: 0.65, fill: "#5a3226" }, h);      // his mole
     };
-    const headB = (g, p) => {                               // soft, wavy dark curls: a full mass that falls past the ears, a parted fringe of curls
+    const headB = (g, p) => {                               // dark, shaggy and soft: a swept fringe over the forehead, side hair over the ears that flicks out at the ends
       neckTo(g, p, -9, -18, 5);
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      const HAIR = "#3a251d", HAIR_L = "#5c3a2c";
-      // 1. the back of the hair: a wavy outline, full on top and down both sides
-      sv("path", { d: "M-15 -12 Q-19 -13 -19.6 -17.6 Q-23.4 -19 -22 -24 Q-25.4 -27 -22.6 -31.4 Q-25 -35.6 -21 -38.6 Q-22.4 -43.4 -17.6 -45 Q-17 -48.4 -11.4 -48.6 Q-8.4 -52.6 -3 -50.4 Q1.6 -53.6 6.4 -50.4 Q11.6 -52.2 13.6 -48 Q19 -47.8 19 -43.4 Q23.4 -42.4 21.6 -37.4 Q25.4 -34 22.4 -29.4 Q25 -25.4 21.6 -22 Q22.6 -17.4 18.4 -16.2 Q17 -12.4 13 -12.6 Q0 -8 -15 -12 Z", fill: HAIR }, h);
+      const HAIR = "#1d1517", HAIR_L = "#43323a";
+      // 1. the back: full on top, longer at the sides and the nape, with a little wave to the edge
+      sv("path", { d: "M-15 -9 Q-19 -14 -19.4 -20 Q-23 -22 -21.4 -27 Q-24.4 -32 -20 -37 Q-21 -44 -15 -47 Q-10 -53 -2 -52 Q6 -54 12 -50 Q19 -49 20 -42 Q24 -37 21 -31 Q23 -25 20 -21 Q20.4 -14 15 -11 Q0 -15 -15 -9 Z", fill: HAIR }, h);
       // 2. ears, then the face
-      [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 14.9, cy: -25.4, rx: 2.6, ry: 3.3, fill: SKIN_B, stroke: "#b98f72", "stroke-width": 0.5 }, h));
+      [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 14.9, cy: -23, rx: 2.6, ry: 3.3, fill: SKIN_B, stroke: "#b98f72", "stroke-width": 0.5 }, h));
       sv("ellipse", { cx: 0, cy: -28, rx: 14.4, ry: 17.4, fill: SKIN_B }, h);
-      // 3. the front: a centre-ish parting, curls falling to either side over the forehead, a few at the temples
-      sv("path", { d: "M-14.8 -27 Q-17.4 -35 -13.6 -41 Q-12.4 -46.2 -5 -46.8 Q0 -49.6 5.8 -47.2 Q13.4 -47 14.6 -42 Q18.4 -38 15.4 -29 Q15.6 -32.6 13.2 -34 Q12 -36.4 9.6 -34.6 Q7.4 -36.4 5.4 -34.2 Q3 -35.6 -0.6 -38.2 Q-3 -36 -5.8 -35 Q-7.6 -33 -10 -34.2 Q-11.8 -31.8 -13.2 -32.6 Q-14.8 -30.6 -14.8 -27 Z", fill: HAIR }, h);
-      sv("path", { d: "M-10 -45 q3 -3.4 6.4 -1 q2.2 2 -0.4 3.8 M4 -47 q3.6 -2.4 6.6 0.4 q1.6 2.6 -1 3.6 M-16.6 -36 q-1.6 -3.6 1 -5.2 M15.4 -40 q2.6 1.4 1.4 4.2 M-19 -26 q-2.6 2.6 0.2 5 M19.6 -27 q2.4 2.6 -0.4 5 M-17.4 -16.8 q-1.4 1.6 1 3 M17 -17 q1.6 1.6 -0.6 3", stroke: HAIR_L, "stroke-width": 0.9, fill: "none", "stroke-linecap": "round", opacity: 0.8 }, h);
-      face(h, p, { ex: 5.9, ey: -26.2, by: -30.8, my: -17.4, brow: "#33201a", bw: 1.4, er: 1.12, eye: "#1a1214", cheek: true });
+      // 3. the front: a thick fringe with soft wavy tips just above the brows, side locks falling over the temples
+      sv("path", { d: "M-14.8 -22 Q-17.6 -32 -14.2 -40 Q-12 -47 -4 -48.4 Q4 -51 11 -47.6 Q16.8 -44 15.6 -35 Q16.4 -29 14.8 -22 L13.4 -27 Q13 -30.4 11.8 -32.2 Q10 -34.8 8 -35.6 Q6.4 -34.8 4.4 -33.4 Q2.6 -35.2 0.4 -36.4 Q-1.2 -34.6 -3.2 -32.6 Q-5 -34.4 -7 -35.2 Q-8.6 -33.8 -10.6 -31.4 Q-12.4 -30 -13.4 -27 Z", fill: HAIR }, h);
+      sv("path", { d: "M-2 -49 Q-6 -42 -3.2 -33.6 M6 -50 Q9.4 -42 6 -35 M-10 -45 Q-13 -38 -10.8 -32.6 M12 -45 Q14.8 -39 13 -33 M-19 -34 Q-21.4 -27 -17 -19 M20 -34 Q22.4 -26 18 -18", stroke: HAIR_L, "stroke-width": 0.9, fill: "none", "stroke-linecap": "round", opacity: 0.75 }, h);
+      sv("path", { d: "M-6 -48.6 Q0 -51 7 -49.6", stroke: HAIR_L, "stroke-width": 1.6, fill: "none", "stroke-linecap": "round", opacity: 0.5 }, h);
+      face(h, p, { ex: 5.9, ey: -26.2, by: -30.8, my: -17.4, brow: "#1d1517", bw: 1.4, er: 1.12, eye: "#1a1214", cheek: true });
     };
-        return { solveArm, drawArm, face, torsoA, torsoB, headA, headB };
+    return { solveArm, drawArm, face, torsoA, torsoB, headA, headB };
   }
 
   // ── the Wheelers' basement (reached through the window well) ──
