@@ -2494,7 +2494,7 @@ try {
   // bookshelf, garden, stained glass) are drawn by world.js, which only the web app ships. It is
   // fetched the first time one is opened, so AO3 pages never carry it and the app's first paint
   // doesn't wait for it. `keepsakes.openX()` is what every button in the app calls.
-  const WORLD_NAMES = ["openGraveyard","openGraveyardGrounds","openCelebration","openConstellation","openAquarium","openBookshelf","openGarden","openStainedGlass","openHollowbrook"];
+  const WORLD_NAMES = ["openGraveyard","openGraveyardGrounds","openCelebration","openConstellation","openAquarium","openBookshelf","openGarden","openStainedGlass","openHollowbrook","openChapel"];
   const WORLD_URL = (document.currentScript && document.currentScript.src) ? new URL("world.js", document.currentScript.src).href : "world.js";
   let worldPromise = null;
   function loadWorld() {
@@ -4960,7 +4960,7 @@ try {
       cnWrap.appendChild(quietLink("aquarium", "See your fics as little fish", () => keepsakes.openAquarium()));
       cnWrap.appendChild(quietLink("bookshelf", "See your fics as books on a shelf", () => keepsakes.openBookshelf()));
       cnWrap.appendChild(quietLink("garden", "See your fics as a little garden", () => keepsakes.openGarden()));
-      cnWrap.appendChild(quietLink("window", "See your fics as stained glass", () => keepsakes.openStainedGlass()));
+      cnWrap.appendChild(quietLink("chapel", "Step into the chapel: stained glass, candles and a pew", () => keepsakes.openChapel()));
       content.appendChild(cnWrap);
     }
   }
@@ -25167,7 +25167,7 @@ try {
       box.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:22px;background:var(--fb-card,#fffdfb);border:1.5px solid var(--fb-line,#ecd3cf);box-shadow:0 8px 28px rgba(0,0,0,0.25);min-width:220px;";
       [["\u{1FAA6} Graveyard", "openGraveyard"], ["\u{1F389} Celebrations", "openCelebration"],
        ["\u2726 Constellations", "openConstellation"], ["\u{1F420} Fish tank", "openAquarium"],
-       ["\u{1F4DA} Bookshelf", "openBookshelf"], ["\u{1F337} Garden", "openGarden"], ["\u{1FA9F} Stained glass", "openStainedGlass"]].forEach(([label, fn]) => {
+       ["\u{1F4DA} Bookshelf", "openBookshelf"], ["\u{1F337} Garden", "openGarden"], ["\u26EA Chapel", "openChapel"]].forEach(([label, fn]) => {
         const b = document.createElement("button");
         b.textContent = label;
         b.style.cssText = "padding:12px 16px;border-radius:999px;border:1.5px solid var(--fb-line,#ecd3cf);background:var(--fb-card,#fffdfb);color:var(--fb-ink,#3f3b6f);font:500 15px/1.2 inherit;font-family:inherit;cursor:pointer;";
