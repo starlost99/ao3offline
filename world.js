@@ -6661,10 +6661,10 @@ window.__ao3WorldInit = function (core) {
 
   // ── 🏕️ THE BLANKET FORT (off to the left of the Wheelers' basement) ──
   // Reached from the basement: tap the couch on the left edge, the little ◀ arrow, or the "◀ fort" pill. The screen fades
-  // through black, like the window well. This is the fort seen from OUTSIDE (stage 1): a blanket draped over every couch
-  // cushion in the house, lit from within so that only two shadows show on the fabric, with a few small hearts drifting
-  // up out of the top. A TV hums to itself nearby and the couch has been stripped bare.
-  //  · tap the tent: the shadows lean together and a few hearts puff up (stage 2 will take you inside, see "peek" below)
+  // through black, like the window well. This is the fort seen from OUTSIDE (stage 1): blankets and sheets thrown over the
+  // furniture (a striped one down the side, an olive one across the top, a pom-pom garland and fairy lights), with a thin sheet over
+  // the opening, lit from within so that only two shadows show on the fabric, and a few small hearts drifting up out of the top. A TV hums to itself nearby and the couch has been stripped bare.
+  //  · tap the fort: the shadows lean together and a few hearts puff up (stage 2 will take you inside, see "peek" below)
   //  · tap a heart, the TV, the couch, the popcorn trail, the crayon drawing or the sign: each says something
   //  · the ▶ arrow on the right, or the "🎲 table" pill, goes back to the table
   // Nothing in here saves anything. Hearts, flicker and shadows stand still with "reduce motion" switched on.
@@ -6717,15 +6717,17 @@ window.__ao3WorldInit = function (core) {
     const vig = sv("radialGradient", { id: "bf-vig", cx: "42%", cy: "55%", r: "78%" }, defs);
     sv("stop", { offset: "55%", "stop-color": "#0a060e", "stop-opacity": "0" }, vig);
     sv("stop", { offset: "100%", "stop-color": "#0a060e", "stop-opacity": "0.6" }, vig);
-    // the quilt: patches and stitching, laid over the lit fabric so the shadows read as behind cloth
-    const quilt = sv("pattern", { id: "bf-quilt", width: 22, height: 22, patternUnits: "userSpaceOnUse" }, defs);
-    sv("rect", { width: 11, height: 11, fill: "#d6b4e6", opacity: 0.2 }, quilt);
-    sv("rect", { x: 11, y: 11, width: 11, height: 11, fill: "#d6b4e6", opacity: 0.2 }, quilt);
-    sv("rect", { x: 11, y: 0, width: 11, height: 11, fill: "#5a3a78", opacity: 0.22 }, quilt);
-    sv("rect", { x: 0, y: 11, width: 11, height: 11, fill: "#5a3a78", opacity: 0.22 }, quilt);
-    sv("path", { d: "M0 0 H22 M0 11 H22 M0 0 V22 M11 0 V22", stroke: "#f6e6ff", "stroke-width": 0.5, "stroke-dasharray": "2 1.6", opacity: 0.35, fill: "none" }, quilt);
-    const tentClip = sv("clipPath", { id: "bf-tentclip" }, defs);
-    sv("polygon", { points: "14,420 112,176 214,420" }, tentClip);
+    // the striped blanket and the olive print
+    const stripe = sv("pattern", { id: "bf-stripe", width: 22, height: 20, patternUnits: "userSpaceOnUse" }, defs);
+    [["#e8917a", 0, 6], ["#f6dcb8", 6, 3], ["#d95a6a", 9, 6], ["#f6dcb8", 15, 2], ["#f0a860", 17, 5]].forEach(([c, x, w]) => sv("rect", { x, y: 0, width: w, height: 20, fill: c }, stripe));
+    const olive = sv("pattern", { id: "bf-olive", width: 10, height: 10, patternUnits: "userSpaceOnUse" }, defs);
+    sv("rect", { width: 10, height: 10, fill: "#8a8260" }, olive);
+    sv("path", { d: "M5 1 L9 5 L5 9 L1 5 Z", fill: "#c9a86a", opacity: 0.5 }, olive);
+    sv("circle", { cx: 5, cy: 5, r: 0.9, fill: "#5a4a38", opacity: 0.8 }, olive);
+    const tentClip = sv("clipPath", { id: "bf-tentclip" }, defs);                                                     // the sheet over the opening
+    sv("path", { d: "M98 160 Q128 288 176 424 L14 424 Q66 288 98 160 Z" }, tentClip);
+    const rugClip = sv("clipPath", { id: "bf-rugclip" }, defs);
+    sv("path", { d: "M10 440 Q6 410 40 404 Q90 396 140 402 Q200 396 236 410 Q252 440 240 474 Q222 512 150 514 Q70 518 24 500 Q4 480 10 440 Z" }, rugClip);
     const soft = sv("filter", { id: "bf-soft", x: "-10%", y: "-10%", width: "120%", height: "120%" }, defs);
     sv("feGaussianBlur", { stdDeviation: 1.2 }, soft);
     const screenClip = sv("clipPath", { id: "bf-screenclip" }, defs);
@@ -6738,8 +6740,6 @@ window.__ao3WorldInit = function (core) {
     sv("rect", { x: 0, y: 36, width: W, height: 6, fill: "#2c2028" }, svg);
     sv("rect", { x: 0, y: 322, width: W, height: 8, fill: "#2c1f29" }, svg);
     sv("rect", { x: 0, y: 330, width: W, height: 210, fill: "#2a2030" }, svg);
-    sv("rect", { x: 6, y: 392, width: 232, height: 128, rx: 10, fill: "#5a2f4a" }, svg);                               // the rug the fort is on
-    sv("rect", { x: 14, y: 400, width: 216, height: 112, rx: 8, fill: "none", stroke: "#8a5a6a", "stroke-width": 1.4, "stroke-dasharray": "6 5" }, svg);
     // lights along the ceiling beam
     const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
     sv("path", { d: "M0 46 Q90 72 180 46 Q270 72 360 46", stroke: "#2a1d1a", "stroke-width": 1, fill: "none" }, svg);
@@ -6749,7 +6749,7 @@ window.__ao3WorldInit = function (core) {
       anim(sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 1.8, fill: col }, svg), `animation:hkTwinkle ${(1.6 + rnd("fb" + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("fc" + i) * 3).toFixed(1)}s infinite;`);
     }
     // a crayon drawing pinned up: two stick figures and one very big heart
-    const draw = sv("g", {}, svg);
+    const draw = sv("g", { transform: "translate(112 -6)" }, svg);
     sv("polygon", { points: "38,96 86,94 88,142 40,144", fill: "#efe8d6" }, draw);
     sv("circle", { cx: 52, cy: 114, r: 3.2, fill: "none", stroke: "#3f7fd0", "stroke-width": 1.4 }, draw);
     sv("circle", { cx: 72, cy: 114, r: 3.2, fill: "none", stroke: "#4a8a5a", "stroke-width": 1.4 }, draw);
@@ -6785,48 +6785,108 @@ window.__ao3WorldInit = function (core) {
     [276, 296].forEach(ky => { sv("circle", { cx: 328, cy: ky, r: 4.2, fill: "#8a7a60", stroke: "#2c2018", "stroke-width": 0.8 }, svg); sv("path", { d: `M326 ${ky} H330`, stroke: "#2c2018", "stroke-width": 0.8 }, svg); });
     sv("path", { d: "M322 308 H334 M322 312 H334 M322 316 H334 M322 320 H334", stroke: "#2c2018", "stroke-width": 0.9, opacity: 0.8 }, svg);
 
-    // ── the blanket fort ──
-    sv("ellipse", { cx: 114, cy: 424, rx: 112, ry: 12, fill: "#000", opacity: 0.3 }, svg);
+    // ── the blanket fort: a ridge pole with a sheet hung over the open front (the gable), an olive blanket sloping away behind it,
+    //    and a striped one pulled aside like a curtain. Lit from inside, so only shadows show on the sheet. ──
+    const GABLE = "M98 160 Q128 288 176 424 L14 424 Q66 288 98 160 Z";
+    const ROOF = "M98 160 L222 196 Q232 300 230 422 L176 424 Q128 288 98 160 Z";
+    const shade = sv("linearGradient", { id: "bf-roofshade", x1: 0, y1: 0, x2: 1, y2: 0 }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#fff1c0", "stop-opacity": "0.22" }, shade);
+    sv("stop", { offset: "45%", "stop-color": "#000", "stop-opacity": "0" }, shade);
+    sv("stop", { offset: "100%", "stop-color": "#0a050c", "stop-opacity": "0.55" }, shade);
+    const gv = sv("radialGradient", { id: "bf-gabvig", cx: "50%", cy: "55%", r: "50%" }, defs);
+    sv("stop", { offset: "55%", "stop-color": "#1a0a1e", "stop-opacity": "0" }, gv);
+    sv("stop", { offset: "100%", "stop-color": "#1a0a1e", "stop-opacity": "0.6" }, gv);
+    // the fur rug it all sits on
+    const RUG = "M8 440 Q4 410 40 404 Q90 396 140 402 Q200 396 238 410 Q254 440 242 474 Q224 512 150 514 Q70 518 22 500 Q2 480 8 440 Z";
+    sv("path", { d: RUG, fill: "#3b2f35" }, svg);
+    const rugFur = sv("g", { "clip-path": "url(#bf-rugclip)" }, svg);
+    [[90, 470, 46, 16, "#7a6a66", 0.38], [196, 432, 34, 12, "#7a6a66", 0.3], [60, 428, 30, 10, "#1d151b", 0.4], [150, 500, 52, 12, "#1d151b", 0.35]].forEach(([cx, cy, rx, ry, c, o]) => sv("ellipse", { cx, cy, rx, ry, fill: c, opacity: o }, rugFur));
+    for (let i = 0; i < 110; i++) { const fx = 8 + rnd("fx" + i) * 236, fy = 402 + rnd("fy" + i) * 112; sv("path", { d: `M${fx.toFixed(1)} ${fy.toFixed(1)} l${(rnd("fl" + i) * 5 - 2.5).toFixed(1)} ${(2 + rnd("fm" + i) * 3).toFixed(1)}`, stroke: rnd("fk" + i) > 0.5 ? "#9a8a82" : "#1d151b", "stroke-width": 1.1, "stroke-linecap": "round", opacity: 0.55 }, rugFur); }
+    sv("ellipse", { cx: 122, cy: 424, rx: 118, ry: 12, fill: "#000", opacity: 0.32 }, svg);
+    // a warm halo on the wall behind the fort, and a pool of light spilling out onto the rug
+    sv("ellipse", { cx: 120, cy: 280, rx: 150, ry: 140, fill: "url(#bf-glow)", opacity: 0.16 }, svg);
+    anim(sv("ellipse", { cx: 96, cy: 438, rx: 92, ry: 18, fill: "url(#bf-glow)", opacity: 0.6 }, svg), "animation:hkFlicker 4s ease-in-out infinite;");
+
     const tent = sv("g", {}, svg);
-    sv("polygon", { points: "14,420 112,176 214,420", fill: "#4a3258" }, tent);
-    sv("ellipse", { cx: 112, cy: 372, rx: 74, ry: 58, fill: "url(#bf-lit)", "clip-path": "url(#bf-tentclip)" }, tent);
-    const sil = sv("g", { "clip-path": "url(#bf-tentclip)", filter: "url(#bf-soft)", fill: "#1d0f1a", opacity: 0.82 }, tent);
-    // two shadows, shoulder to shoulder; each head sits on a neck so it can tip toward the other
-    sv("path", { d: "M78 414 Q76 381 94 375 Q112 381 110 414 Z" }, sil);
-    sv("path", { d: "M114 414 Q112 379 131 373 Q150 379 148 414 Z" }, sil);
+    // 1. the roof: the olive blanket sloping away to the right, lighter at the front edge, darker toward the back, with deep folds
+    sv("path", { d: ROOF, fill: "url(#bf-olive)" }, tent);
+    sv("path", { d: ROOF, fill: "url(#bf-roofshade)" }, tent);
+    sv("path", { d: "M98 160 Q170 292 190 424 L206 424 Q186 290 98 160 Z", fill: "#241c10", opacity: 0.22 }, tent);
+    sv("path", { d: "M98 160 Q200 280 216 424 L230 422 Q222 300 98 160 Z", fill: "#241c10", opacity: 0.2 }, tent);
+    sv("path", { d: "M98 160 Q150 290 176 424 L188 424 Q166 290 98 160 Z", fill: "#fff1c0", opacity: 0.1 }, tent);
+    sv("path", { d: "M104 166 Q196 214 222 196 M110 180 Q180 236 226 262", stroke: "#2e2618", "stroke-width": 1.2, fill: "none", opacity: 0.35 }, tent);
+    sv("path", { d: "M176 424 Q190 418 204 424 T230 422", stroke: "#2a2214", "stroke-width": 3, fill: "none", opacity: 0.55, "stroke-linecap": "round" }, tent);
+    // 2. the open front: the thin cream sheet, glowing from inside, with the light dying off toward its edges
+    sv("path", { d: GABLE, fill: "#2a1828" }, tent);
+    const inner = sv("g", { "clip-path": "url(#bf-tentclip)" }, tent);
+    sv("ellipse", { cx: 100, cy: 372, rx: 84, ry: 76, fill: "url(#bf-lit)" }, inner);
+    sv("ellipse", { cx: 100, cy: 356, rx: 140, ry: 140, fill: "url(#bf-gabvig)" }, inner);
+    [[50, 414, 17, 10], [148, 416, 15, 9]].forEach(([cx, cy, rx, ry]) => sv("ellipse", { cx, cy, rx, ry, fill: "#f6dcb0", opacity: 0.45 }, inner));        // pillows in there
+    sv("path", { d: "M80 250 Q74 340 80 424 M104 230 Q102 340 104 424 M128 250 Q134 340 126 424", stroke: "#a8683a", "stroke-width": 1, fill: "none", opacity: 0.3 }, inner);   // soft folds in the sheet
+    // two shadows, a blanket round both of their shoulders; each head sits on a neck so it can tip toward the other
+    const sil = sv("g", { transform: "translate(-10 0)", filter: "url(#bf-soft)", fill: "#1d0f1a", opacity: 0.84 }, inner);
+    sv("path", { d: "M72 418 Q70 394 90 386 Q102 380 113 390 Q124 380 138 386 Q156 394 154 418 Z" }, sil);
+    sv("path", { d: "M80 418 Q78 392 94 380 L98 372 L88 372 Z M126 418 Q124 392 134 378 L138 370 L128 370 Z" }, sil);
     const headA = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 90, y: 365, width: 8, height: 12 }, headA); sv("circle", { cx: 94, cy: 355, r: 11 }, headA);
+    sv("rect", { x: 90, y: 366, width: 8, height: 14 }, headA); sv("circle", { cx: 94, cy: 356, r: 10.6 }, headA);
+    [[88, 346.4, 3.4], [94, 345, 3.6], [100, 346.6, 3.2]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r }, headA));
     const headB = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 127, y: 363, width: 8, height: 12 }, headB); sv("circle", { cx: 131, cy: 352, r: 11.6 }, headB);
+    sv("rect", { x: 129, y: 364, width: 8, height: 14 }, headB); sv("circle", { cx: 133, cy: 353, r: 11.2 }, headB);
+    [[126, 342.4, 3.6], [133, 341, 3.8], [140, 343, 3.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r }, headB));
     anim(headA, "animation:bfLeanA 11s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;");
     anim(headB, "animation:bfLeanB 11s ease-in-out -0.4s infinite;transform-box:fill-box;transform-origin:50% 100%;");
-    sv("polygon", { points: "14,420 112,176 214,420", fill: "url(#bf-quilt)" }, tent);
-    // folds in the drape, the hem on the floor, and the pole poking out of the top with a little pennant
-    sv("path", { d: "M112 176 Q86 280 56 420 M112 176 Q130 290 150 420 M112 176 Q168 270 192 420 M112 176 Q60 270 30 420", stroke: "#2e1d3a", "stroke-width": 0.8, fill: "none", opacity: 0.55 }, tent);
-    sv("path", { d: "M14 420 L112 176 L214 420", stroke: "#2e1d3a", "stroke-width": 2.4, fill: "none", "stroke-linejoin": "round" }, tent);
-    sv("path", { d: "M8 424 Q40 416 62 424 T112 424 T164 424 T220 424", stroke: "#2e1d3a", "stroke-width": 5, fill: "none", "stroke-linecap": "round", opacity: 0.8 }, tent);
-    sv("rect", { x: 110.2, y: 164, width: 3.6, height: 16, fill: "#6a4a30" }, tent);
-    sv("polygon", { points: "113.8,165 130,170 113.8,175.4", fill: "#ff8fb1" }, tent);
-    // fairy lights tacked up both edges
-    const edge = (x0, y0, x1, y1, tag) => {
-      sv("path", { d: `M${x0} ${y0} L${x1} ${y1}`, stroke: "#1a1218", "stroke-width": 0.7, opacity: 0.8 }, tent);
-      for (let i = 1; i < 10; i++) {
-        const t = i / 10, bx = x0 + (x1 - x0) * t, by = y0 + (y1 - y0) * t, col = BULB[(i + tag) % BULB.length];
-        sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 5, fill: col, opacity: 0.18 }, tent);
+    sv("path", { d: "M72 418 Q70 394 90 386 Q102 380 113 390 Q124 380 138 386 Q156 394 154 418", stroke: "#ffcf8a", "stroke-width": 1, fill: "none", opacity: 0.4, transform: "translate(-10 0)" }, inner);   // the blanket's edge catches the light
+    // the folded hem along both slopes of the front
+    sv("path", { d: "M14 424 Q66 288 98 160 Q128 288 176 424", stroke: "#2a1428", "stroke-width": 6, fill: "none", opacity: 0.35, "stroke-linejoin": "round" }, tent);
+    sv("path", { d: "M14 424 Q66 288 98 160 Q128 288 176 424", stroke: "#efe0c4", "stroke-width": 3, fill: "none", opacity: 0.9, "stroke-linejoin": "round" }, tent);
+    // 3. the striped blanket, pulled aside down the left like a curtain
+    sv("path", { d: "M86 158 Q46 232 28 312 Q12 372 2 424 L44 424 Q50 372 58 318 Q74 252 106 172 Z", fill: "url(#bf-stripe)" }, tent);
+    sv("path", { d: "M86 158 Q46 232 28 312 Q12 372 2 424 L44 424 Q50 372 58 318 Q74 252 106 172 Z", fill: "url(#bf-roofshade)", opacity: 0.5 }, tent);
+    sv("path", { d: "M92 164 Q58 240 40 320 Q28 372 20 424 M80 170 Q52 232 36 300", stroke: "#5a2a30", "stroke-width": 1.4, fill: "none", opacity: 0.4 }, tent);
+    sv("path", { d: "M100 176 Q70 250 52 324 Q44 372 36 424", stroke: "#fff1dc", "stroke-width": 1.3, fill: "none", opacity: 0.25 }, tent);
+    sv("path", { d: "M2 424 Q14 431 28 424 T44 424", stroke: "#3a2028", "stroke-width": 3, fill: "none", opacity: 0.6, "stroke-linecap": "round" }, tent);
+    // 4. the ridge pole poking out the front,
+    sv("path", { d: "M70 146 L100 162", stroke: "#3a2418", "stroke-width": 5.4, "stroke-linecap": "round" }, tent);
+    sv("path", { d: "M70 146 L100 162", stroke: "#8a5a38", "stroke-width": 3.4, "stroke-linecap": "round" }, tent);
+    sv("circle", { cx: 69, cy: 145.4, r: 3.4, fill: "#b07a4a", stroke: "#3a2418", "stroke-width": 0.8 }, tent);
+    // pom-pom garland along the ridge and down the front-right edge, and fairy lights swagged across and down
+    const gbez = (a, c, b, n) => Array.from({ length: n }, (_, i) => { const t = (i + 0.5) / n; return [(1 - t) * (1 - t) * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0], (1 - t) * (1 - t) * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1]]; });
+    const pomline = (a, c, b, n, off) => {
+      sv("path", { d: `M${a[0]} ${a[1]} Q${c[0]} ${c[1]} ${b[0]} ${b[1]}`, stroke: "#2a2230", "stroke-width": 0.9, fill: "none", opacity: 0.8 }, tent);
+      gbez(a, c, b, n).forEach(([px, py], i) => {
+        sv("circle", { cx: px.toFixed(1), cy: (py + 2.4).toFixed(1), r: 3.8, fill: ["#5fb0b0", "#1f1a24", "#7fd0d0"][(i + off) % 3] }, tent);
+        sv("circle", { cx: (px - 1).toFixed(1), cy: (py + 1.2).toFixed(1), r: 1, fill: "#fff", opacity: 0.28 }, tent);
+      });
+    };
+    pomline([100, 164], [168, 176], [222, 198], 12, 0);
+    pomline([98, 162], [128, 288], [176, 424], 24, 1);
+    const lights = (a, c, b, n, tag) => {
+      sv("path", { d: `M${a[0]} ${a[1]} Q${c[0]} ${c[1]} ${b[0]} ${b[1]}`, stroke: "#1a1218", "stroke-width": 0.8, fill: "none", opacity: 0.85 }, tent);
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, bx = (1 - t) * (1 - t) * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0], by = (1 - t) * (1 - t) * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1], col = BULB[(i + tag) % BULB.length];
+        sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 5, fill: col, opacity: 0.2 }, tent);
         anim(sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 1.7, fill: col }, tent), `animation:hkTwinkle ${(1.5 + rnd("ff" + tag + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("fg" + tag + i) * 3).toFixed(1)}s infinite;`);
       }
     };
-    edge(108, 184, 22, 408, 0); edge(116, 184, 206, 408, 2);
-    // cushions and pillows that didn't make it inside
-    [[30, 438, 20, 9, "#7a4658"], [200, 440, 22, 9, "#6a3a4a"], [236, 456, 18, 8, "#3f7a6a"]].forEach(([px, py, rx, ry, c]) => { sv("ellipse", { cx: px, cy: py, rx, ry, fill: c }, svg); sv("path", { d: `M${px - rx * 0.6} ${py} H${px + rx * 0.6}`, stroke: "#00000033", "stroke-width": 0.8 }, svg); });
-    // a note taped to the blanket
-    const sign = sv("g", { transform: "rotate(-6 176 322)" }, svg);
-    sv("rect", { x: 152, y: 306, width: 46, height: 30, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, sign);
-    sv("rect", { x: 170, y: 303.4, width: 10, height: 4.6, fill: "#d9c3a0", opacity: 0.85 }, sign);
-    [["FORT", 316.4, 7.2, 700], ["KNOCK FIRST", 323.4, 4.4, 700]].forEach(([tx, ty, fs, fw]) => { const t = sv("text", { x: 175, y: ty, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": fs, "font-weight": fw, fill: "#5a2a2a" }, sign); t.textContent = tx; });
-    const sub2 = sv("text", { x: 175, y: 331, "text-anchor": "middle", "font-family": "Georgia,serif", "font-style": "italic", "font-size": 3.4, fill: "#6a5a5a" }, sign); sub2.textContent = "(it is a blanket)";
-    // popcorn, leading in from the couch
-    [[250, 446], [238, 440], [230, 447], [222, 442], [210, 448], [244, 452], [226, 454]].forEach(([px, py], i) => sv("circle", { cx: px, cy: py, r: 1.8 + (i % 3) * 0.3, fill: i % 2 ? "#f6ead0" : "#efdca8" }, svg));
+    lights([62, 232], [100, 282], [140, 244], 8, 0);
+    lights([96, 168], [160, 186], [218, 204], 8, 2);
+    lights([86, 160], [30, 290], [8, 410], 9, 4);
+    // 5. on the floor in front: couch cushions, a pair of sneakers, a board game, and popcorn
+    [["M14 440 Q16 430 42 428 L76 430 Q86 432 84 442 L80 456 Q62 462 28 458 Q12 456 14 440 Z", "#7a4658", "M46 430 V459"], ["M152 446 Q162 436 186 438 L208 444 Q214 452 210 462 Q188 472 160 468 Q148 462 152 446 Z", "#6a3a4a", "M182 438 V470"]].forEach(([d, c, st]) => { sv("path", { d, fill: c }, svg); sv("path", { d: st, stroke: "#00000044", "stroke-width": 1 }, svg); sv("circle", { cx: d.startsWith("M14") ? 46 : 182, cy: d.startsWith("M14") ? 444 : 453, r: 1.6, fill: "#3a1a26" }, svg); });
+    [[104, 436], [116, 437]].forEach(([sx, sy], i) => { sv("path", { d: `M${sx} ${sy + 4} Q${sx} ${sy - 3} ${sx + 6} ${sy - 3} L${sx + 9} ${sy} Q${sx + 12} ${sy + 1} ${sx + 12} ${sy + 4} Z`, fill: i ? "#e8e0d0" : "#c9482e" }, svg); sv("path", { d: `M${sx} ${sy + 4} H${sx + 12}`, stroke: "#2a2a36", "stroke-width": 1.4 }, svg); });
+    const box = sv("g", { transform: "rotate(-5 104 480)" }, svg);
+    sv("polygon", { points: "66,466 134,462 142,484 72,490", fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, box);
+    sv("polygon", { points: "72,490 142,484 142,492 72,498", fill: "#d9cdb0" }, box);
+    sv("polygon", { points: "74,470 130,467 134,477 78,481", fill: "#a83a2a", opacity: 0.85 }, box);
+    const bt = sv("text", { x: 104, y: 476, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 6.4, "font-weight": 700, fill: "#f6ead0", transform: "rotate(-3 104 476)" }, box); bt.textContent = "GAME NIGHT";
+    [[84, 487, "#3f7fd0"], [96, 486, "#e0a032"], [108, 485, "#4a8a5a"]].forEach(([px, py, c]) => sv("circle", { cx: px, cy: py, r: 1.8, fill: c }, box));
+    [[72, 450], [84, 454], [92, 449], [124, 450], [136, 456], [146, 452], [160, 480], [172, 486], [184, 482]].forEach(([px, py], i) => sv("circle", { cx: px, cy: py, r: 1.8 + (i % 3) * 0.3, fill: i % 2 ? "#f6ead0" : "#efdca8" }, svg));
+    // a note pinned to the olive blanket
+    const sign = sv("g", { transform: "rotate(5 190 316)" }, svg);
+    sv("rect", { x: 168, y: 300, width: 44, height: 30, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, sign);
+    sv("rect", { x: 185, y: 297.4, width: 10, height: 4.6, fill: "#d9c3a0", opacity: 0.85 }, sign);
+    [["FORT", 310.4, 7.2], ["KNOCK FIRST", 317.4, 4.2]].forEach(([tx, ty, fs]) => { const t = sv("text", { x: 190, y: ty, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": fs, "font-weight": 700, fill: "#5a2a2a" }, sign); t.textContent = tx; });
+    const sub2 = sv("text", { x: 190, y: 326, "text-anchor": "middle", "font-family": "Georgia,serif", "font-style": "italic", "font-size": 3.4, fill: "#6a5a5a" }, sign); sub2.textContent = "(it is a blanket)";
 
     // ── the couch, seen from behind: every cushion is in the fort ──
     sv("rect", { x: 190, y: 436, width: 26, height: 92, rx: 10, fill: "#6a3a4a" }, svg);
@@ -6837,7 +6897,7 @@ window.__ao3WorldInit = function (core) {
     sv("path", { d: "M318 424 q-1 12 3 22 q4 4 7 -1 q-1 -10 -2 -21 Z", fill: "#e8e0d0", stroke: "#b8ad92", "stroke-width": 0.6 }, svg);   // a single sock
     sv("path", { d: "M318.4 424 H327", stroke: "#c9482e", "stroke-width": 2, opacity: 0.8 }, svg);
 
-    // ── the hearts: a few at a time, rising out of the top of the tent ──
+    // ── the hearts: a few at a time, rising out of the peak of the fort ──
     const heartsG = sv("g", { "pointer-events": "none" }, svg);
     const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z";
     const mkHeart = (x, y, col, sc, delay, dx, dur, loop) => {
@@ -6847,11 +6907,11 @@ window.__ao3WorldInit = function (core) {
       return w;
     };
     const HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
-    [[-12, 0.0, 9], [8, 1.1, -12], [-2, 2.3, 14], [14, 3.4, -8], [-16, 4.5, -14], [4, 5.6, 10]].forEach(([ox, d, dx], i) => mkHeart(112 + ox, reduce ? 168 - i * 11 : 168, HCOL[i % HCOL.length], 1 + (i % 3) * 0.14, d, dx, 6.8, true));
-    const puff = n => {                       // a handful of extra hearts, when the tent is tapped
+    [[-12, 0.0, 9], [8, 1.1, -12], [-2, 2.3, 14], [14, 3.4, -8], [-16, 4.5, -14], [4, 5.6, 10]].forEach(([ox, d, dx], i) => mkHeart(100 + ox, reduce ? 150 - i * 11 : 150, HCOL[i % HCOL.length], 1 + (i % 3) * 0.14, d, dx, 6.8, true));
+    const puff = n => {                       // a handful of extra hearts, when the fort is tapped
       if (reduce) return;
       for (let i = 0; i < n; i++) {
-        const w = mkHeart(112 + (Math.random() - 0.5) * 36, 190 + Math.random() * 30, HCOL[Math.floor(Math.random() * HCOL.length)], 1 + Math.random() * 0.4, i * 0.18, (Math.random() - 0.5) * 36, 2.2, false);
+        const w = mkHeart(100 + (Math.random() - 0.5) * 36, 190 + Math.random() * 30, HCOL[Math.floor(Math.random() * HCOL.length)], 1 + Math.random() * 0.4, i * 0.18, (Math.random() - 0.5) * 36, 2.2, false);
         later(() => w.remove(), 3000);
       }
     };
@@ -6870,14 +6930,14 @@ window.__ao3WorldInit = function (core) {
         "One shadow offers the other something small. A hand finds a hand. You look at the ceiling, politely."],
       heart: ["A heart drifts up out of the blanket and pops against the ceiling. Nobody inside seems to have noticed.",
         "Another one. They are not being subtle about not being subtle.",
-        "The hearts are definitely coming from the tent. You are a professional and will not mention it."],
+        "The hearts are definitely coming from the fort. You are a professional and will not mention it."],
       tv: ["The TV is on, but nobody is watching it. A tape is stuck on PLAY.",
         "Static. Whatever the movie was, it ended an hour ago.",
         "The remote is missing. It is almost certainly in the fort."],
       couch: ["The couch, from behind. Every cushion has been taken, and none have been returned.",
         "A single sock hangs over the back. It does not belong to anybody present.",
         "There is still a dent in the frame where somebody sat through the whole movie."],
-      trail: ["A trail of popcorn runs from the couch to the tent. Whoever carried the bowl gave up halfway.",
+      trail: ["A trail of popcorn runs from the couch to the fort. Whoever carried the bowl gave up halfway.",
         "Popcorn, popcorn, a pillow, more popcorn. It is a very clear trail."],
       drawing: ["A crayon drawing pinned to the wall: two stick figures holding hands, one very large heart. Whoever hung it up is not available for comment.",
         "In the corner there is a date, scribbled out. Twice."],
@@ -6885,21 +6945,21 @@ window.__ao3WorldInit = function (core) {
         "You consider knocking on a blanket. It seems unwise. It also seems like the correct protocol."]
     };
     const wobble = () => { if (reduce) return; try { tent.animate([{ transform: "translate(0,0)" }, { transform: "translate(-1.5px,0)" }, { transform: "translate(1.5px,0)" }, { transform: "translate(0,0)" }], { duration: 380, easing: "ease-out" }); } catch {} };
-    const peek = () => {       // stage 2 hangs its inside view here: define openFortInside() and the tent will fade in to it
+    const peek = () => {       // stage 2 hangs its inside view here: define openFortInside() and the fort will fade in to it
       if (typeof openFortInside === "function" && !leaving) { leaving = true; say("You lift the edge of the blanket…"); bfFade(sh, () => openFortInside(true)); return true; }
       return false;
     };
     const back = () => { if (leaving) return; leaving = true; say("Back to the table."); bfFade(sh, () => openBasement()); };
-    hit(14, 176, 200, 250, "The blanket fort", () => { if (peek()) return; say(SAY.tent[nTent++ % SAY.tent.length]); wobble(); puff(3); });
-    hit(150, 300, 52, 38, "The note on the fort", () => say(SAY.sign[nSign++ % SAY.sign.length]));
-    hit(86, 78, 60, 100, "The hearts", () => { say(SAY.heart[nHeart++ % SAY.heart.length]); puff(2); });
+    hit(4, 150, 230, 278, "The blanket fort", () => { if (peek()) return; say(SAY.tent[nTent++ % SAY.tent.length]); wobble(); puff(3); });
+    hit(164, 296, 52, 38, "The note on the fort", () => say(SAY.sign[nSign++ % SAY.sign.length]));
+    hit(70, 56, 64, 100, "The hearts", () => { say(SAY.heart[nHeart++ % SAY.heart.length]); puff(2); });
     hit(226, 218, 120, 156, "The TV", () => {
       say(SAY.tv[nTv++ % SAY.tv.length]);
       if (!reduce) try { tvWall.animate([{ opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 420 }); } catch {}
     });
     hit(188, 424, 188, 108, "The couch", () => say(SAY.couch[nCouch++ % SAY.couch.length]));
-    hit(204, 434, 56, 28, "The popcorn trail", () => say(SAY.trail[nTrail++ % SAY.trail.length]));
-    hit(34, 90, 58, 58, "The crayon drawing", () => say(SAY.drawing[nDraw++ % SAY.drawing.length]));
+    hit(66, 440, 126, 52, "The popcorn trail and the game", () => say(SAY.trail[nTrail++ % SAY.trail.length]));
+    hit(146, 84, 58, 58, "The crayon drawing", () => say(SAY.drawing[nDraw++ % SAY.drawing.length]));
     hit(334, 292, 26, 50, "Back to the table", back);
     const hitG = sv("g", {}, svg);
     hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
