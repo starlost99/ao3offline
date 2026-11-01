@@ -3400,10 +3400,10 @@ try {
   // dressing (Halloween pumpkins and bats, winter snow caps, autumn leaves, spring petals, summer
   // fireflies), crows on the gate, a visitors' book with your graveyard stats, a groundskeeper who
   // walks the path with a lantern, a cat who sits on graves, a drifting ghost, a koi pond with a frog,
-  // five will-o-wisps that come back every month, wishing-well streaks, grave search and a random visit.
+  // ten will-o-wisps that come back every day (2 am Prague), wishing-well streaks, grave search and a random visit.
   // Tap a grave to lay flowers (with an optional note) or light a candle; it saves exactly like the full
   // graveyard does. The extras' own little preferences (time of day, weather, wishes, this
-  // month's wisps) live in one local key, ao3-gg-prefs, and are not synced.
+  // day's wisps) live in one local key, ao3-gg-prefs; the wisps and Bram (hats, lanterns, flowers, story) are split into ao3_gg_sync_v1, which cloud sync carries between devices.
   function openGraveyardGrounds() {
     const old = document.getElementById("ao3-grounds");
     if (old) old.remove();
@@ -3490,7 +3490,12 @@ try {
     topbar.appendChild(ttl);
     const strollBtn = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;border-radius:999px;padding:5px 12px;font:600 12px/1 inherit;font-family:inherit;cursor:pointer;", "\u{1F56F}\uFE0F stroll");
     const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
-    topbar.appendChild(strollBtn); topbar.appendChild(xBtn);
+    // stroll with a small button under it that hides or shows the time / weather / Halloween pills
+    const sideCol = el("div", "flex:0 0 auto;display:flex;flex-direction:column;align-items:stretch;gap:5px;");
+    const sceneBtn = el("button", "border:1px solid rgba(190,170,255,0.25);background:rgba(255,255,255,0.04);color:rgba(230,220,245,0.85);border-radius:999px;padding:4px 10px;font:500 11px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", "");
+    sceneBtn.type = "button";
+    sideCol.appendChild(strollBtn); sideCol.appendChild(sceneBtn);
+    topbar.appendChild(sideCol); topbar.appendChild(xBtn);
     box.appendChild(topbar);
 
     const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;");
@@ -3581,16 +3586,31 @@ try {
     for (let ly = GATE + 70, i = 0; ly < H - TAIL + 40; ly += 230, i++) lamp(pathX(ly) + (i % 2 ? -32 : 32), ly, i);
 
     // ── extras: preferences, seasons and little scenes ──
-    const PKEY = "ao3-gg-prefs";
+    const PKEY = "ao3-gg-prefs", SKEY = "ao3_gg_sync_v1";
+    // wisps (found, spent, carried, cat/ghost gifts, keeper count) and everything about Bram (hats, lanterns, flowers,
+    // story) go in SKEY, which the cloud sync picks up because it starts with ao3_. Time of day, weather etc. stay on this device.
+    const SYNCED = ["wm", "wi", "wg", "wc", "wf", "keeper", "bt", "hw"];
     let prefs = {};
     try { prefs = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; } catch { prefs = {}; }
-    const savePrefs = () => { try { localStorage.setItem(PKEY, JSON.stringify(prefs)); } catch {} };
+    try { const sp = JSON.parse(localStorage.getItem(SKEY) || "null"); if (sp && typeof sp === "object") SYNCED.forEach(k => { if (k in sp) prefs[k] = sp[k]; }); } catch {}
+    const savePrefs = () => {
+      try {
+        const loc = {}, syn = {};
+        Object.keys(prefs).forEach(k => { (SYNCED.includes(k) ? syn : loc)[k] = prefs[k]; });
+        localStorage.setItem(PKEY, JSON.stringify(loc));
+        localStorage.setItem(SKEY, JSON.stringify(syn));
+      } catch {}
+    };
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     let sayAt = 0;
     const say = t => { caption.textContent = t; sayAt = Date.now(); };
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     const now = new Date(), month = now.getMonth();
-    const season = month === 9 ? "halloween" : (month === 11 || month <= 1) ? "winter" : month <= 4 ? "spring" : month <= 7 ? "summer" : "autumn";
+    // Halloween dressing is automatic in October, and the \u{1F383} button in the top bar turns it on or off any time of year.
+    // prefs.hw only holds an override (true / false); with none, October decides.
+    const autoHw = month === 9;
+    const hwOn = prefs.hw === true ? true : prefs.hw === false ? false : autoHw;
+    const season = hwOn ? "halloween" : (month === 11 || month <= 1) ? "winter" : month <= 4 ? "spring" : month <= 7 ? "summer" : "autumn";
     const SEASON_TAG = { halloween: "\u{1F383} spooky season", winter: "\u2744\uFE0F winter", spring: "\u{1F338} spring", summer: "\u2600\uFE0F summer", autumn: "\u{1F342} autumn" };
     const bcss = "cursor:pointer;font:inherit;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;";
     const sparkle = (x, y, n) => {
@@ -3896,22 +3916,51 @@ try {
       anim(m, `animation:ggMist ${(9 + i * 3)}s ease-in-out infinite;opacity:.2;`);
     }
     // ── extras, part 2: wisps, ghost, cat, groundskeeper, pond, weather, time of day, finder ──
-    const WISPS = 5;
-    const ym = `${now.getFullYear()}-${now.getMonth() + 1}`;
-    if (prefs.wm !== ym) { prefs.wm = ym; prefs.wi = []; prefs.wg = 0; savePrefs(); }
+    const WISPS = 10;                                   // wisps to collect per day
+    const WISP_KEEP = 3;                                // unspent wisps that carry over to the next day
+    const ym = `${now.getFullYear()}-${now.getMonth() + 1}`;   // (still seeds the ghost)
+    const pragueDay = at => {                           // Prague date as YYYY-MM-DD, with 00:00-01:59 still counted as the day before
+      const p = {};
+      new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+        .formatToParts(at || new Date()).forEach(x => { if (x.type !== "literal") p[x.type] = Number(x.value); });
+      let d = new Date(Date.UTC(p.year, p.month - 1, p.day));
+      if (p.hour * 60 + p.minute < 120) d = new Date(d.getTime() - 864e5);
+      return d.toISOString().slice(0, 10);
+    };
+    const dayKey = pragueDay();                         // rolls over at 2 am Prague
+    if (prefs.wm !== dayKey) {                          // new day: wisps are back, Bram is back to normal
+      const spare = Math.max(0, (Array.isArray(prefs.wi) ? prefs.wi.length : 0) + (prefs.wc || 0) - (prefs.wg || 0));
+      prefs.wm = dayKey; prefs.wi = []; prefs.wg = 0; prefs.wc = Math.min(WISP_KEEP, spare);
+      if (prefs.bt) {
+        const b = prefs.bt;
+        if (b.total == null) b.total = b.tips || 0;     // older saves: tips was the lifetime count
+        b.tips = 0; b.lan = "gold"; b.hat = "dflt";
+      }
+      savePrefs();
+    }
     const wispFound = () => (Array.isArray(prefs.wi) ? prefs.wi : []);
     const updateSub = () => {
-      const bits = [`${graves.length} grave${graves.length === 1 ? "" : "s"}`, `${live.length} plot${live.length === 1 ? "" : "s"}`, SEASON_TAG[season], `\u2726 ${wispFound().length}/${WISPS} wisps`];
+      const bits = [`${graves.length} grave${graves.length === 1 ? "" : "s"}`, `${live.length} plot${live.length === 1 ? "" : "s"}`, SEASON_TAG[season], `\u2726 ${wispFound().length}/${WISPS} wisps${prefs.wc ? ` +${prefs.wc} kept` : ""}`];
       if (prefs.keeper) bits.push(`keeper \u00D7${prefs.keeper}`);
       sub.textContent = bits.join(" \u00B7 ");
     };
 
-    // will-o-wisps: five faint lights hidden in the grounds, new places every month
+    // will-o-wisps: ten faint lights hidden in the grounds, new places every day
     // (wispLoose keeps the ones still out there, so Bram can fetch one for you)
     const wispLoose = {};
+    // today's hiding places: same all day, new tomorrow, kept apart so none sit on top of another
+    const wispPos = [];
+    for (let i = 0; i < WISPS; i++) {
+      let p = null;
+      for (let t = 0; t < 12; t++) {
+        p = { x: 26 + rnd("wx" + dayKey + i + "_" + t) * 308, y: GATE + 90 + rnd("wy" + dayKey + i + "_" + t) * Math.max(80, H - GATE - TAIL - 120) };
+        if (wispPos.every(q => Math.hypot(q.x - p.x, q.y - p.y) > 34)) break;
+      }
+      wispPos.push(p);
+    }
     for (let i = 0; i < WISPS; i++) {
       if (wispFound().includes(i)) continue;
-      const wx0 = 26 + rnd("wx" + ym + i) * 308, wy0 = GATE + 90 + rnd("wy" + ym + i) * Math.max(80, H - GATE - TAIL - 120);
+      const wx0 = wispPos[i].x, wy0 = wispPos[i].y;
       const wg = sv("g", { transform: `translate(${wx0.toFixed(1)} ${wy0.toFixed(1)})` }, svg);
       const wf = sv("g", {}, wg);
       sv("circle", { cx: 0, cy: 0, r: 11, fill: "#9fd4ff", opacity: 0.22 }, wf);
@@ -3920,7 +3969,7 @@ try {
       anim(wf, `animation:ggWisp ${(3.5 + rnd("wd" + i) * 3).toFixed(1)}s ease-in-out infinite;`);
       const hit = sv("circle", { cx: 0, cy: 0, r: 15, fill: "transparent" }, wg);
       hit.style.cursor = "pointer";
-      // bram = true when he coaxed it in himself (he says his own line); returns how many are caught this month
+      // bram = true when he coaxed it in himself (he says his own line); returns how many are caught today
       const collect = bram => {
         if (!wispLoose[i]) return 0;
         delete wispLoose[i];
@@ -3928,13 +3977,82 @@ try {
         prefs.wi = wispFound().concat(i);
         const n = prefs.wi.length;
         if (n >= WISPS) { prefs.keeper = (prefs.keeper || 0) + 1; if (!bram) { say("The last wisp slips into your lantern. The whole place hums. You are a wisp-keeper."); sparkle(wx0, wy0, 14); } }
-        else if (!bram) { say(`A wisp drifts into your lantern. ${n} of ${WISPS} this month.`); sparkle(wx0, wy0, 6); }
+        else if (!bram) { say(`A wisp drifts into your lantern. ${n} of ${WISPS} today.`); sparkle(wx0, wy0, 6); }
         savePrefs(); updateSub();
         return n;
       };
       wispLoose[i] = { i, x: wx0, y: wy0, wg, collect };
       hit.addEventListener("click", () => collect(false));
     }
+
+    // ── unspent wisps: Bram's jar, a gift for the cat or the ghost (one each per day), or up to WISP_KEEP carry over to tomorrow ──
+    const wispAvail = () => Math.max(0, wispFound().length + (prefs.wc || 0) - (prefs.wg || 0));
+    const wfToday = () => {
+      const f = (prefs.wf && typeof prefs.wf === "object") ? prefs.wf : (prefs.wf = {});
+      if (f.d !== dayKey) { f.d = dayKey; f.cat = 0; f.ghost = 0; }     // today's gifts; catAll / ghostAll keep the running count
+      return f;
+    };
+    const ctl = {};                                     // the cat and ghost fill these in so a gift can light them up
+    const CAT_LINES = [
+      "The cat laps at the glow as if it were milk, then purrs loud enough to shake the stone.",
+      "She noses the wisp, sneezes, and decides it is hers now.",
+      "A small blue light curls up beside her. She keeps one eye on it all night.",
+      "The cat head-butts your hand. Once. That is a great honour.",
+      "She sits in the wisp-light and, for a moment, looks like a lantern herself."
+    ];
+    const GHOST_TALES = [
+      "Thank you. I haven\u2019t been warm since the last chapter. It was chapter six.",
+      "I was a slow burn. Six chapters of almost. I never got my kiss.",
+      "My author wrote me at night, mostly. You can tell. Everyone in me is tired and brave.",
+      "There was a reader who left a comment on every chapter. Every one. \u2018Please update.\u2019 I think about her.",
+      "Do you know what\u2019s worse than an ending that hurts? One that never comes.",
+      "The last thing written was a line of dialogue, stopped halfway. I\u2019ve been finishing it in my head for years.",
+      "I never found out the ending. But I know how it felt to be read. That counts for something.",
+      "Keep going. Whatever you\u2019re reading. Finish it for me."
+    ];
+    const wispCard = (head, text, note, build) => {
+      if (picked) { picked.setAttribute("opacity", 0); picked = null; }
+      card.textContent = "";
+      card.appendChild(el("div", "font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(159,212,255,0.9);", head));
+      card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13.5px;line-height:1.45;margin:8px 0 2px;color:#e6dcf5;", text));
+      if (note) card.appendChild(el("div", "font-size:11.5px;line-height:1.4;margin-top:5px;color:rgba(159,212,255,0.9);", note));
+      const row = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:10px;");
+      build((label, fn) => { const b = el("button", bcss, label); b.type = "button"; b.onclick = fn; row.appendChild(b); });
+      card.appendChild(row);
+      card.style.display = "block"; card.scrollTop = 0;
+    };
+    const giveWisp = who => {
+      const f = wfToday();
+      if (wispAvail() < 1 || f[who]) return;
+      prefs.wg = (prefs.wg || 0) + 1; f[who] = 1; f[who + "All"] = (f[who + "All"] || 0) + 1;
+      const n = f[who + "All"];
+      savePrefs(); updateSub();
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch {}
+      if (who === "cat") {
+        const p = ctl.catPos ? ctl.catPos() : null;
+        if (p) sparkle(p.x, p.y - 8, 8);
+        if (ctl.catGlow) ctl.catGlow();
+        card.style.display = "none";
+        say(CAT_LINES[(n - 1) % CAT_LINES.length]);
+      } else {
+        if (ctl.ghostGlow) ctl.ghostGlow();
+        const tale = GHOST_TALES[n - 1];
+        wispCard("\u{1F47B} The ghost",
+          tale ? `\u201C${tale}\u201D` : "The ghost says nothing. It glows a little brighter, and that is enough.",
+          tale ? `(${n} of ${GHOST_TALES.length})` : "",
+          btn => btn("Close", () => { card.style.display = "none"; }));
+      }
+    };
+    const offerWisp = who => {                          // false when there is nothing to offer, so the cat and ghost act as usual
+      const f = wfToday();
+      if (wispAvail() < 1 || f[who]) return false;
+      const a = wispAvail();
+      wispCard(who === "cat" ? "\u{1F408} The cat" : "\u{1F47B} The ghost",
+        who === "cat" ? "She sniffs at your lantern, ears forward." : "It drifts closer, hollow eyes on the glow in your lantern.",
+        `${a} wisp${a === 1 ? "" : "s"} to spare \u00B7 one gift each per day`,
+        btn => { btn("Give 1 \u2726", () => giveWisp(who)); btn("Not now", () => { card.style.display = "none"; }); });
+      return true;
+    };
 
     // a ghost that drifts across the grounds
     {
@@ -3944,7 +4062,9 @@ try {
       const drift = sv("g", { transform: "translate(180 0)" }, wrap);
       const bob = sv("g", {}, drift);
       sv("circle", { cx: 0, cy: -4, r: 20, fill: "#cfe0ff", opacity: 0.12 }, bob);
-      sv("path", { d: "M-9 8 V-2 A9 9 0 0 1 9 -2 V8 L6 5 L3 8 L0 5 L-3 8 L-6 5 Z", fill: "#f1f4ff", opacity: 0.55 }, bob);
+      const gbody = sv("path", { d: "M-9 8 V-2 A9 9 0 0 1 9 -2 V8 L6 5 L3 8 L0 5 L-3 8 L-6 5 Z", fill: "#f1f4ff", opacity: 0.55 }, bob);
+      ctl.ghostGlow = () => gbody.setAttribute("opacity", wfToday().ghost ? 0.95 : 0.55);   // brighter for the rest of the day after a gift
+      ctl.ghostGlow();
       sv("circle", { cx: -3, cy: -3, r: 1.3, fill: "#1b1530" }, bob);
       sv("circle", { cx: 3, cy: -3, r: 1.3, fill: "#1b1530" }, bob);
       sv("ellipse", { cx: 0, cy: 1.5, rx: 1.5, ry: 2, fill: "#1b1530" }, bob);
@@ -3955,6 +4075,7 @@ try {
       let gone = false;
       hit.addEventListener("click", () => {
         if (gone) return;
+        if (offerWisp("ghost")) { say("The ghost drifts closer, eyeing your lantern."); return; }   // it lingers while there is a gift to give
         gone = true;
         say(pick([
           "Boo. (Affectionately.)",
@@ -3981,6 +4102,7 @@ try {
       catG.style.transition = "transform .9s ease-in-out";
       const place = () => { const p = spot(graveNodes[at]); cx = p.x; cy = p.y; catG.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; };
       place();
+      const wglow = sv("circle", { cx: 0, cy: -8, r: 17, fill: "#9fd4ff", opacity: 0 }, catG);     // lit up for the day after a wisp gift
       const tail = sv("path", { d: "M5 -2 Q13 -3 11 -11", stroke: "#0b0910", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, catG);
       anim(tail, "animation:ggSway 2.4s ease-in-out infinite;transform-origin:5px -2px;");
       sv("ellipse", { cx: 0, cy: -6, rx: 6, ry: 6, fill: "#0b0910" }, catG);
@@ -3996,9 +4118,13 @@ try {
         run: (x, y) => { cx = x; cy = y; catG.style.transition = "none"; catG.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`; },
         sit: i => { if (i != null) at = i; catG.style.transition = "transform .9s ease-in-out"; place(); }
       };
+      ctl.catPos = () => ({ x: cx, y: cy });
+      ctl.catGlow = () => wglow.setAttribute("opacity", wfToday().cat ? 0.26 : 0);
+      ctl.catGlow();
       hit.addEventListener("click", e => {
         e.stopPropagation();
         pets++;
+        offerWisp("cat");
         const h = sv("text", { x: cx, y: cy - 24, "text-anchor": "middle", "font-size": 10, fill: "#ff9fb8" }, svg);
         h.textContent = "\u2665";
         anim(h, "animation:ggHeart 1s ease-out forwards;");
@@ -4018,7 +4144,7 @@ try {
     // with a thermos; he chases the cat when she knocks something over; he walks over to any grave you
     // tap; and when it rains he goes into his cottage by the gate (lit window) until it clears.
     // You can also send him on errands (fetch a wisp, lead you to a quiet grave), give him a flower for his hat,
-    // drop this month's wisps in his tip jar for new lantern colours and hats, and slowly learn who he used to be.
+    // drop today's wisps in his tip jar for lantern colours and hats (different each day, back to normal at 2 am), and slowly learn who he used to be.
     {
       const OFF = 24, yMin = GATE + 20, benchY = wy + 34;
       const CX = 335, CB = 132, DOORY = 137;      // cottage centre, base line, and where Bram stands at its door
@@ -4146,9 +4272,10 @@ try {
         add(`${crowd.name} is the busiest plot: ${plural(crowd.graves.length, "stone")}. Hardest to sweep.`);
         add(flowers ? `${plural(flowers, "flower")} laid so far. I counted. Twice.` : "Not one flower laid yet. Go on, I\u2019ll look away.");
         add(candles ? `${plural(candles, "candle")} burning tonight. I keep an eye on them.` : "No candles lit. Awfully dark for company.");
-        if (left === WISPS) add("Five wisps loose this month. Keep your eyes soft and they\u2019ll find you.");
-        else if (left > 0) add(`${plural(left, "wisp")} still loose this month. They like the gravel.`);
-        else add("You caught every wisp this month. Show-off.");
+        if (left === WISPS) add(`${WISPS} wisps loose today. Keep your eyes soft and they\u2019ll find you.`);
+        else if (left > 0) add(`${plural(left, "wisp")} still loose today. They like the gravel.`);
+        else add("You caught every wisp today. Show-off.");
+        if (prefs.wc) add(`You\u2019re carrying ${plural(prefs.wc, "wisp")} over from yesterday. Sensible. They keep.`);
         if (prefs.wishes) add(`${plural(prefs.wishes, "wish")} down the well, and it\u2019s never once granted mine.`);
         // about the moment
         add(["The moon\u2019s good company. Better than most readers.", "Dusk. My favourite hour. The lamps just starting to matter.", "Dawn already? I never did sleep."][tI]);
@@ -4160,7 +4287,7 @@ try {
         // about Bram himself
         { const b = bt(), fl = b.fl || [];
           if (fl.length) add(`I\u2019ll wear this ${fl[fl.length - 1]} until it wilts. Then I\u2019ll wear whatever you bring next.`);
-          if (b.hat !== "dflt") add("Like the hat? Paid for in wisps. Best trade I ever made.");
+          if (b.hat !== "dflt") add("Like the hat? Paid for in wisps. Best trade I ever made. Back to the old one by morning, mind.");
           if (b.lan !== "gold") add("Never thought the lantern could be anything but gold. Look at it now.");
           if (solved()) ["Wrote a sentence last night. One. Don\u2019t clap.", "Every stone here is somebody\u2019s drawer. I just keep the dust off.", "Funny. Sweeping other people\u2019s endings is what got me writing again."].forEach(t => add(t)); }
         // old favourites
@@ -4198,21 +4325,25 @@ try {
       const isTalking = () => card.style.display !== "none" && card.firstChild && card.firstChild.dataset && card.firstChild.dataset.bram === "1";
       // ── Bram's extras: errands, gifts, the wisp tip jar, and his story ──
       // Saved in ao3-gg-prefs under prefs.bt (local, not synced):
-      //   tips = wisps given in all, lan / hat = what he has on, fl = flowers tucked in his hat (last three),
+      //   tips = wisps given today (resets at 2 am), total = wisps given in all, lan / hat = what he has on, fl = flowers tucked in his hat (last three),
       //   gifts / gdays = flowers given (and on how many different days), cl / cd = story pieces told (and the day of the last),
       //   fd / fc = wisps he has fetched today.
-      const bt = () => prefs.bt || (prefs.bt = { tips: 0, lan: "gold", hat: "dflt", fl: [], gifts: 0, gdays: 0, cl: 0, cd: "", fd: "", fc: 0 });
+      const bt = () => prefs.bt || (prefs.bt = { tips: 0, total: 0, lan: "gold", hat: "dflt", fl: [], gifts: 0, gdays: 0, cl: 0, cd: "", fd: "", fc: 0 });
       const LANTERNS = {
         gold: { n: "Gold", c: "#ffd98a" }, moss: { n: "Moss green", c: "#9fe3a0" }, violet: { n: "Violet", c: "#c9a6ff" },
         ember: { n: "Ember", c: "#ff8a5c" }, moon: { n: "Moonlight blue", c: "#a9d6ff" }
       };
       const HATS = { dflt: { n: "His old hat" }, wool: { n: "Wool bobble cap" }, straw: { n: "Straw hat" }, top: { n: "Top hat" } };
       const HAT_BAND = { dflt: -24.2, wool: -23.2, straw: -23.8, top: -23.8 };      // where a tucked flower sits, per hat
-      // [wisps given in all, "lan" | "hat", id]: each gift unlocks at that many wisps in the jar
-      const REWARDS = [[1, "lan", "moss"], [2, "hat", "wool"], [3, "lan", "violet"], [5, "hat", "straw"], [7, "lan", "ember"], [9, "hat", "top"], [12, "lan", "moon"]];
+      // [wisps given today, "lan" | "hat", id]: each gift unlocks at that many wisps in today's jar.
+      // The thresholds are fixed but which gift sits at which one is shuffled by the day, so every day unlocks in a different order.
+      const REWARD_AT = [1, 2, 3, 5, 6, 8, 10];
+      const REWARDS = [["lan", "moss"], ["lan", "violet"], ["lan", "ember"], ["lan", "moon"], ["hat", "wool"], ["hat", "straw"], ["hat", "top"]]
+        .map(p => ({ p, k: rnd("reward" + dayKey + p[1]) })).sort((a, c) => a.k - c.k)
+        .map((o, i) => [REWARD_AT[i], o.p[0], o.p[1]]);
       const have = (kind, id) => id === "gold" || id === "dflt" || REWARDS.some(r => r[1] === kind && r[2] === id && bt().tips >= r[0]);
       const needOf = (kind, id) => (REWARDS.find(r => r[1] === kind && r[2] === id) || [0])[0];
-      const trust = () => (bt().tips || 0) + (bt().gdays || 0);
+      const trust = () => (bt().total || 0) + (bt().gdays || 0);
 
       // his story: a piece comes out once a day, and the later ones need some trust (wisps in the jar + days you brought a flower)
       const STORY = [
@@ -4222,9 +4353,21 @@ try {
         { need: 4, t: "I wrote. Long things, in chapters. People waited for me to update, if you can believe it." },
         { need: 6, t: "There\u2019s one I never finished. Walked out mid-sentence and took this job. A grave you can sweep. A draft just sits there, wanting." },
         { need: 8, t: "There\u2019s a drawer in the cottage. Half a last chapter in it. I check on it every time it rains." },
-        { need: 10, t: "Ambrose Hollin, if you want the lot. Bram\u2019s what the readers called me. Someone ought to look after the ones that stopped.", n: "He glances at the cottage. You get the feeling the drawer will be opened tonight." }
+        { need: 10, t: "Ambrose Hollin, if you want the lot. Bram\u2019s what the readers called me. Someone ought to look after the ones that stopped.", n: "He glances at the cottage. You get the feeling the drawer will be opened tonight." },
+        // part two: after the name comes out
+        { need: 12, t: "I opened the drawer last night. The last line just stops. Mid-sentence, like a door somebody forgot to close." },
+        { need: 14, t: "I never told you why I stopped. Nothing dramatic. A bad week. Then a bad month. Then it had been a year, and the silence was too big to write into." },
+        { need: 16, t: "The readers kept commenting, even after. \u2018No rush!\u2019 they said. \u2018We\u2019ll wait!\u2019 I couldn\u2019t open them. It felt like owing money I didn\u2019t have." },
+        { need: 19, t: "So I took the job. A quiet place. Stones that never ask when you\u2019re updating." },
+        { need: 22, t: "Then you turned up with your lantern-light and your flowers and your candles. People still care about the ones that stopped. I\u2019d forgotten that." },
+        { need: 25, t: "The cat, by the way, came with the cottage. She knows everything. Keep that between us." },
+        { need: 28, t: "That drifting ghost, the one who wants his ending. I\u2019ve started leaving pages on the gatepost for him. He never takes them. He reads them, though. I can tell." },
+        { need: 32, t: "I wrote the next paragraph. Four sentences. Then I sat an hour and cut it down to three." },
+        { need: 36, t: "Here is what a graveyard teaches you: an unfinished story isn\u2019t a failure. It\u2019s a story still waiting to be somebody\u2019s." },
+        { need: 40, t: "The drawer\u2019s empty now. The chapter\u2019s on the desk. It isn\u2019t done. But it\u2019s moving. Some mornings that\u2019s the whole job.", n: "He turns back toward the cottage. A lamp is lit in the window, and a pen is scratching." }
       ];
-      const solved = () => (bt().cl || 0) >= STORY.length;
+      const REVEAL = 7;                          // the first seven pieces are chapter one of his story; his name comes out at the seventh
+      const solved = () => (bt().cl || 0) >= REVEAL;
       const headTxt = () => solved() ? "\u{1F3EE} Ambrose \u201CBram\u201D Hollin \u00B7 groundskeeper" : "\u{1F3EE} Bram \u00B7 groundskeeper";
 
       // lantern colours need their own glow gradient; hats are drawn on his head and hidden until worn
@@ -4312,11 +4455,11 @@ try {
         const left = Object.keys(wispLoose).map(k => wispLoose[k]);
         if (!left.length) return { msg: "Every last wisp is already in your lantern. Nothing left for me to fetch." };
         const b = bt();
-        if (b.fd === todayKey && (b.fc || 0) >= FETCH_PER_DAY) return { msg: "I\u2019ve coaxed one out already today. They get shy if you push. Tomorrow, eh?" };
+        if (b.fd === dayKey && (b.fc || 0) >= FETCH_PER_DAY) return { msg: "I\u2019ve coaxed one out already today. They get shy if you push. Tomorrow, eh?" };
         left.sort((a, c) => Math.abs(a.y - bm.y) - Math.abs(c.y - bm.y));
         return { w: left[0] };
       };
-      const noteFetched = () => { const b = bt(); b.fc = b.fd === todayKey ? (b.fc || 0) + 1 : 1; b.fd = todayKey; savePrefs(); };
+      const noteFetched = () => { const b = bt(); b.fc = b.fd === dayKey ? (b.fc || 0) + 1 : 1; b.fd = dayKey; savePrefs(); };
       let lastQuiet = null;
       const quietPick = () => {                   // one of the quietest third of the graves, not the same twice running
         const ranked = graveNodes.slice().sort((a, c) => c.g.quiet - a.g.quiet);
@@ -4361,7 +4504,7 @@ try {
         const b = bt(), full = (b.fl || []).length >= 3;
         b.fl = (b.fl || []).concat(t.e).slice(-3);
         b.gifts = (b.gifts || 0) + 1;
-        if (b.gd !== todayKey) { b.gd = todayKey; b.gdays = (b.gdays || 0) + 1; }
+        if (b.gd !== dayKey) { b.gd = dayKey; b.gdays = (b.gdays || 0) + 1; }
         savePrefs(); paintHatFlowers();
         try { if (navigator.vibrate) navigator.vibrate(10); } catch {}
         rise(t.e, bm.x, bm.y - 32);
@@ -4382,10 +4525,10 @@ try {
         });
       };
 
-      // ── tip jar: this month's wisps for lanterns and hats ──
+      // ── tip jar: today's wisps for lanterns and hats ──
       const giveWisps = n => {
         const b = bt(), before = b.tips;
-        prefs.wg = (prefs.wg || 0) + n; b.tips += n;
+        prefs.wg = (prefs.wg || 0) + n; b.tips += n; b.total = (b.total || 0) + n;
         const won = REWARDS.filter(r => r[0] > before && r[0] <= b.tips);
         won.forEach(r => { b[r[1]] = r[2]; });          // he puts the newest of each on straight away
         savePrefs(); applyLook(); updateSub();
@@ -4423,10 +4566,10 @@ try {
         return w;
       };
       const tipMenu = () => {
-        const b = bt(), avail = Math.max(0, wispFound().length - (prefs.wg || 0));
+        const b = bt(), avail = wispAvail();
         const next = REWARDS.find(r => b.tips < r[0]);
-        bramCard({ t: avail ? "Wisps for the jar? Well, I won\u2019t say no." : pick(["The jar\u2019s for wisps. Bring me what you\u2019ve caught this month.", "Nothing in your lantern to spare. Catch a few and come back."]) }, ({ btn, add }) => {
-          add(el("div", "font-size:11.5px;line-height:1.5;margin-top:8px;color:rgba(217,208,245,0.75);", `${avail} wisp${avail === 1 ? "" : "s"} to give \u00B7 ${b.tips} given in all` + (next ? ` \u00B7 next gift at ${next[0]}` : " \u00B7 he has everything now")));
+        bramCard({ t: avail ? "Wisps for the jar? Well, I won\u2019t say no." : pick(["The jar\u2019s for wisps. Bring me what you\u2019ve caught today.", "Nothing in your lantern to spare. Catch a few and come back."]) }, ({ btn, add }) => {
+          add(el("div", "font-size:11.5px;line-height:1.5;margin-top:8px;color:rgba(217,208,245,0.75);", `${avail} wisp${avail === 1 ? "" : "s"} to give \u00B7 ${b.tips} given today` + (next ? ` \u00B7 next gift at ${next[0]}` : " \u00B7 he has everything on offer today")));
           if (b.tips > 0) add(wardrobe());
           if (avail > 0) btn("Give 1 \u2726", () => giveWisps(1));
           if (avail > 1) btn(`Give all ${avail}`, () => giveWisps(avail));
@@ -4438,10 +4581,10 @@ try {
       const storyMenu = () => {
         const b = bt(), cl = b.cl || 0, nx = STORY[cl];
         let line;
-        if (!nx) line = { t: "You\u2019ve had it all out of me now. Ambrose Hollin, groundskeeper, one unfinished chapter." };
-        else if (b.cd === todayKey) line = { t: "That\u2019s all I\u2019ve got in me for one day. Come back tomorrow." };
+        if (!nx) line = { t: "You\u2019ve had it all out of me now. Ambrose Hollin, groundskeeper, one chapter in the works." };
+        else if (b.cd === dayKey) line = { t: "That\u2019s all I\u2019ve got in me for one day. Come back tomorrow." };
         else if (trust() < nx.need) line = { t: pick(["Hm. I don\u2019t know you well enough for that one yet.", "Another day. Ask me another day."]), n: "He seems fonder of people who bring flowers, and wisps for the jar." };
-        else { b.cl = cl + 1; b.cd = todayKey; savePrefs(); line = { t: nx.t, n: nx.n || `(${b.cl} of ${STORY.length})` }; }
+        else { b.cl = cl + 1; b.cd = dayKey; savePrefs(); line = { t: nx.t, n: nx.n || `(${b.cl} of ${STORY.length})` }; }
         bramCard(line, ({ btn, add }) => {
           const known = STORY.slice(0, b.cl || 0);
           const j = el("div", "text-align:left;margin-top:10px;padding-top:8px;border-top:1px solid rgba(190,170,255,0.18);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12px;line-height:1.45;color:rgba(230,220,245,0.75);");
@@ -4490,7 +4633,7 @@ try {
             const n = w.collect(true);
             noteFetched();
             sparkle(w.x, w.y, n >= WISPS ? 14 : 7);
-            say(n >= WISPS ? "Bram tips the last wisp into your lantern. The whole place hums. You are a wisp-keeper." : `Bram brings a wisp back and tips it into your lantern. ${n} of ${WISPS} this month.`);
+            say(n >= WISPS ? "Bram tips the last wisp into your lantern. The whole place hums. You are a wisp-keeper." : `Bram brings a wisp back and tips it into your lantern. ${n} of ${WISPS} today.`);
           }
         };
       } else {
@@ -4873,7 +5016,7 @@ try {
               sparkle(tx, ty, n >= WISPS ? 14 : 7);
               say(n >= WISPS
                 ? "Bram tips the last wisp into your lantern. The whole place hums. You are a wisp-keeper."
-                : pick(["Bram scoops a wisp out of the air with his lantern. \u201CThere. Got you.\u201D", "\u201CSlippery things,\u201D Bram mutters, and tips a wisp into your lantern.", "Bram whistles low and a wisp drifts in. \u201CThey won\u2019t be rushed.\u201D"]) + ` ${n} of ${WISPS} this month.`);
+                : pick(["Bram scoops a wisp out of the air with his lantern. \u201CThere. Got you.\u201D", "\u201CSlippery things,\u201D Bram mutters, and tips a wisp into your lantern.", "Bram whistles low and a wisp drifts in. \u201CThey won\u2019t be rushed.\u201D"]) + ` ${n} of ${WISPS} today.`);
             }
           }
         };
@@ -5018,6 +5161,25 @@ try {
     };
     const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; prefs.tm = tI; savePrefs(); applyTime(); say(TIMES[tI].say); });
     const wxBtn = pill(WX[wxI][1], "Change the weather", () => { wxI = (wxI + 1) % WX.length; prefs.wx = wxI; savePrefs(); wxBtn.textContent = WX[wxI][1]; paintWeather(); say(WX_SAY[WX[wxI][0]]); });
+    // Halloween on / off any time of year (October is automatic; this only stores an override)
+    const hwBtn = pill("\u{1F383} halloween", hwOn ? "Halloween is on. Tap to turn it off" : "Halloween is off. Tap to turn it on", () => {
+      const next = !hwOn;
+      if (next === autoHw) delete prefs.hw; else prefs.hw = next;      // back to automatic when it matches what the month would do anyway
+      savePrefs();
+      close(); openGraveyardGrounds();                                  // rebuild the grounds with (or without) the pumpkins and bats
+    });
+    hwBtn.setAttribute("aria-pressed", hwOn ? "true" : "false");
+    if (hwOn) { hwBtn.style.borderColor = "rgba(255,160,60,0.7)"; hwBtn.style.background = "rgba(255,140,30,0.26)"; }
+    // the button under stroll hides or shows the time, weather and Halloween pills (find / random / book stay)
+    const sceneBtns = [timeBtn, wxBtn, hwBtn];
+    const applyScene = () => {
+      const hide = prefs.sh === true;
+      sceneBtns.forEach(b => { b.style.display = hide ? "none" : ""; });
+      sceneBtn.textContent = hide ? "\u{1F319} show scene" : "\u{1F319} hide scene";
+      sceneBtn.title = hide ? "Show the time, weather and Halloween buttons" : "Hide the time, weather and Halloween buttons";
+    };
+    sceneBtn.onclick = () => { prefs.sh = !(prefs.sh === true); savePrefs(); applyScene(); };
+    applyScene();
     const goTo = n => {
       stopStroll();
       const top = Math.max(0, n.gy * (field.clientWidth / W) - field.clientHeight / 2 + 20);
