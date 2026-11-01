@@ -1,0 +1,471 @@
+--- world.orig.js	2026-11-01 14:23:20.987900003 +0000
++++ world.js	2026-11-01 14:27:57.043862209 +0000
+@@ -1,5 +1,5 @@
+ // world.js — the keepsake scenes: graveyard, graveyard grounds, Bram’s cottage, celebrations,
+-// constellation, aquarium, bookshelf, garden, Hollowbrook village, the chapel (stained glass). Web app only; AO3 never loads this.
++// constellation, aquarium, bookshelf, garden, Hollowbrook village, the chapel (stained glass), the bell tower. Web app only; AO3 never loads this.
+ // app.js fetches it the first time a keepsake is opened and calls __ao3WorldInit once, handing over the
+ // tracker helpers listed below. Nothing in here touches AO3 pages.
+ window.__ao3WorldInit = function (core) {
+@@ -1952,10 +1952,10 @@
+     const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);", graves.length ? "tap a grave to lay flowers or light a candle \u00B7 tap the well at the end of the path \u00B7 \u2715 returns to the graveyard" : "");
+     box.appendChild(caption);
+ 
+-    let strolling = false, raf = 0;
++    let strolling = false, raf = 0, stopToll = () => {};
+     const stopStroll = () => { strolling = false; cancelAnimationFrame(raf); strollBtn.textContent = "\u{1F56F}\uFE0F stroll"; };
+     const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); const ask = document.getElementById("ao3-gate-ask"); if (ask) ask.remove(); else close(); } };
+-    const close = () => { stopStroll(); back.remove(); document.removeEventListener("keydown", onKey, true); };
++    const close = () => { stopStroll(); stopToll(); back.remove(); document.removeEventListener("keydown", onKey, true); };
+     xBtn.onclick = close;
+     back.addEventListener("click", e => { if (e.target === back) close(); });
+     document.addEventListener("keydown", onKey, true);
+@@ -2075,6 +2075,14 @@
+     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+     let sayAt = 0;
+     const say = t => { caption.textContent = t; sayAt = Date.now(); };
++    // Far off, the bell tower tolls the hour (see scenes/belltower.js). Quiet and muffled here. Browsers keep sound
++    // switched off until the first tap, so the first tap anywhere in the grounds wakes the audio up.
++    back.addEventListener("pointerdown", () => { bellUnlock(); }, { passive: true });
++    stopToll = startHourToll(h24 => {
++      const n = h24 % 12 || 12;
++      for (let i = 0; i < n; i++) bellStrike(BELL_HOUR, { delay: i * 2.6, vol: 0.07, distant: true });
++      say(`Far off, the bell tower tolls ${BELL_WORDS[n]}.`);
++    });
+     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+     const now = new Date(), month = now.getMonth();
+     // Halloween dressing is automatic in October, and the \u{1F383} button in the top bar turns it on or off any time of year.
+@@ -4643,6 +4651,7 @@
+   // Hawkins (down a road with a bus stop) and the cottage and graveyard (south, back to the grounds).
+   // Same night / dusk / dawn switch as the grounds, and it shares that setting (the "tm" value in ao3-gg-prefs).
+   // Tap the chapel door (or its big window, or the chapel pill) to go inside: see scenes/chapel.js.
++  // Tap the bell tower behind the chapel (or the bell tower pill) to walk up to it: see scenes/belltower.js.
+   // Nothing in here saves anything except that one time-of-day value.
+   function openHollowbrook() {
+     const old = document.getElementById("ao3-hollowbrook");
+@@ -5064,6 +5073,11 @@
+       hit.style.cursor = "pointer"; hit.setAttribute("aria-label", "Step inside the chapel");
+       hit.addEventListener("click", () => { close(); openChapel(); });
+     });
++    {   // tap the chapel's bell tower (its roof and shaft, above the big window) to walk up to it
++      const hit = sv("rect", { x: 150, y: 30, width: 60, height: 124, fill: "transparent" }, svg);
++      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", "Walk up to the bell tower");
++      hit.addEventListener("click", () => { close(); openBellTower(); });
++    }
+     field.appendChild(svg);
+ 
+     // ── time of day (same three looks as the grounds) ──
+@@ -5086,6 +5100,7 @@
+     };
+     const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; saveTime(); applyTime(); });
+     pill("\u26EA chapel", "Step inside the chapel", () => { close(); openChapel(); });
++    pill("\u{1F514} bell tower", "Walk up to the bell tower", () => { close(); openBellTower(); });
+     pill("\u{1FAA6} grounds", "Back to the graveyard grounds", () => { close(); openGraveyardGrounds(); });
+     applyTime();
+     document.body.appendChild(back);
+@@ -5093,6 +5108,398 @@
+ 
+ 
+ 
++  // ── 🔔 THE BELL TOWER ──
++  // The chapel's own bell tower, seen up close (tap the tower behind the chapel in Hollowbrook, or the bell tower pill).
++  //  · the bell: one finished fic = one ring. Each tap rings the next fic you finished, latest first, then back
++  //    round again. The note comes from the fic (its pitch from the work, how long it hangs in the air from its
++  //    word count) and the bell swings as it rings. No two taps sound quite the same.
++  //  · the rope: tap it and the tower rings out this year's finished fics in the order you finished them,
++  //    one stroke each, so you can hear how many there are. The caption counts along.
++  //  · the hour: at the top of every hour the bell tolls the hour. The graveyard grounds hear it too, far off
++  //    and quiet (see the toll hook in openGraveyardGrounds), which is what ties the two places together.
++  // Sound is made with the Web Audio API (no sound files). Browsers only allow sound after a tap, so the
++  // grounds wake the audio up on the first tap anywhere inside them. A "sound on / off" pill in the tower
++  // keeps one tiny setting (ao3-bell-mute) that the grounds' toll obeys too. Nothing else is saved.
++
++  const BELL_MUTE_KEY = "ao3-bell-mute";
++  const BELL_WORDS = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
++  const BELL_SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];            // a pentatonic ladder, so any mix of fics sounds kind together
++  const BELL_HOUR = { freq: 130.81, len: 4.8, bright: 0.45, hue: 42 };   // the hour bell: low and slow
++  let bellAC = null, bellNoise = null;
++  const bellMuted = () => { try { return localStorage.getItem(BELL_MUTE_KEY) === "1"; } catch { return false; } };
++  const setBellMuted = m => { try { localStorage.setItem(BELL_MUTE_KEY, m ? "1" : "0"); } catch {} };
++
++  // Call from a tap. Creates the audio context the first time and wakes it up if the browser put it to sleep.
++  function bellUnlock() {
++    try {
++      const AC = window.AudioContext || window.webkitAudioContext;
++      if (!AC) return null;
++      if (!bellAC) bellAC = new AC();
++      if (bellAC.state === "suspended") bellAC.resume();
++      return bellAC;
++    } catch { return null; }
++  }
++
++  // One finished fic's bell: pitch from the work itself, how long it rings from its word count, a little brightness from the work too.
++  function bellVoice(fic) {
++    const key = String((fic && (fic.workId || fic.title)) || "?");
++    const h = Math.abs(Math.floor(gyHash(key))), h2 = Math.abs(Math.floor(gyHash("bell" + key)));
++    const words = Number(fic && fic.words) || 0;
++    return { freq: 196 * Math.pow(2, BELL_SCALE[h % BELL_SCALE.length] / 12), len: 2.4 + Math.min(3.2, Math.log10(words + 10) * 0.55), bright: 0.5 + (h2 % 100) / 100, hue: h % 360 };
++  }
++
++  // Strike once. Several sine partials at bell-like ratios, each fading at its own rate, plus a soft clapper click.
++  // opts: delay (seconds from now), vol, distant (muffled, for the grounds). Returns false if nothing could play.
++  function bellStrike(voice, opts) {
++    const o = opts || {};
++    const ac = bellUnlock();
++    if (!ac || ac.state !== "running" || bellMuted()) return false;
++    try {
++      const t0 = ac.currentTime + (o.delay || 0) + 0.01;
++      const out = ac.createGain(); out.gain.value = o.vol != null ? o.vol : 0.2;
++      if (o.distant) { const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 650; out.connect(lp); lp.connect(ac.destination); }
++      else out.connect(ac.destination);
++      const jitter = Math.pow(2, ((Math.random() - 0.5) * 14) / 1200);          // a few cents either way, so no two taps match
++      const PARTS = [[0.5, 0.55, 1.0], [1, 1, 0.85], [1.183, 0.6, 0.6], [1.506, 0.42, 0.45], [2, 0.5, 0.35], [2.514, 0.26, 0.22], [3.011, 0.18, 0.15], [4.166, 0.1, 0.09]];   // [ratio, loudness, share of the ring time]
++      const norm = PARTS.reduce((s, p) => s + p[1], 0);
++      PARTS.forEach(([ratio, amp, share], i) => {
++        const osc = ac.createOscillator(), g = ac.createGain();
++        osc.type = "sine"; osc.frequency.value = voice.freq * ratio * jitter;
++        const peak = (amp / norm) * (i >= 4 ? voice.bright * (0.75 + Math.random() * 0.5) : 1);
++        const d = Math.max(0.35, voice.len * share);
++        g.gain.setValueAtTime(0.0001, t0);
++        g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + 0.006);
++        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
++        osc.connect(g); g.connect(out);
++        osc.start(t0); osc.stop(t0 + d + 0.05);
++      });
++      if (!bellNoise) {
++        bellNoise = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.05), ac.sampleRate);
++        const d = bellNoise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
++      }
++      const ns = ac.createBufferSource(), bp = ac.createBiquadFilter(), ng = ac.createGain();
++      ns.buffer = bellNoise; bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 0.8;
++      ng.gain.setValueAtTime(0.0001, t0); ng.gain.exponentialRampToValueAtTime(0.1, t0 + 0.004); ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
++      ns.connect(bp); bp.connect(ng); ng.connect(out); ns.start(t0);
++      return true;
++    } catch { return false; }
++  }
++
++  // Calls onHour(hour24) at the top of every hour until the returned stop function is called.
++  // A tab that slept through the hour doesn't toll for it late.
++  function startHourToll(onHour) {
++    let timer = 0, alive = true;
++    const arm = () => {
++      const now = new Date(), next = new Date(now.getTime());
++      next.setHours(now.getHours() + 1, 0, 0, 0);
++      timer = setTimeout(() => {
++        if (!alive) return;
++        const late = Date.now() - next.getTime();
++        arm();
++        if (late < 60000) { try { onHour(next.getHours()); } catch {} }
++      }, next.getTime() - now.getTime());
++    };
++    arm();
++    return () => { alive = false; clearTimeout(timer); };
++  }
++
++  // Every finished fic with the day it finished (same rule as the chapel's window), oldest first.
++  function bellRings() {
++    let log = [];
++    try { const l = JSON.parse(localStorage.getItem(READ_LOG_KEY) || "[]"); if (Array.isArray(l)) log = l.filter(e => e && e.date); } catch {}
++    const lastDay = new Map();
++    log.forEach(e => { const id = String(e.key || "").split("::")[0]; if (!id) return; const d = String(e.date).slice(0, 10); if (!lastDay.has(id) || d > lastDay.get(id)) lastDay.set(id, d); });
++    return getTracked().filter(f => f.finished).map(f => ({
++      f, title: f.title || `Work ${f.workId}`, words: Number(f.words) || 0,
++      day: lastDay.get(String(f.workId)) || (f.lastUpdate && String(f.lastUpdate).slice(0, 10)) || (f.trackedAt && String(f.trackedAt).slice(0, 10)) || ""
++    })).sort((a, b) => a.day < b.day ? -1 : a.day > b.day ? 1 : 0);
++  }
++
++  function openBellTower() {
++    const old = document.getElementById("ao3-belltower");
++    if (old) old.remove();
++    if (!document.getElementById("ao3-bt-css")) {
++      const st = document.createElement("style");
++      st.id = "ao3-bt-css";
++      st.textContent = `
++        @keyframes btFlicker{0%,100%{opacity:.8}30%{opacity:1}60%{opacity:.62}}
++        @keyframes btMist{0%,100%{opacity:.08;transform:translateX(-8px)}50%{opacity:.2;transform:translateX(8px)}}
++        @media (prefers-reduced-motion: reduce){.bt-anim{animation:none !important}}
++      `;
++      (document.head || document.documentElement).appendChild(st);
++    }
++    const el = (tag, css, text) => {
++      const e = document.createElement(tag);
++      if (css) e.style.cssText = css;
++      if (text != null) e.textContent = text;
++      return e;
++    };
++    const NS = "http://www.w3.org/2000/svg";
++    const sv = (tag, attrs, parent) => {
++      const e = document.createElementNS(NS, tag);
++      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
++      if (parent) parent.appendChild(e);
++      return e;
++    };
++    const anim = (node, css) => { node.setAttribute("class", "bt-anim"); node.style.cssText += css; return node; };
++    const rnd = seed => { const x = Math.sin(gyHash(String(seed)) * 12.9898) * 43758.5453; return x - Math.floor(x); };
++    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
++    const vibrate = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch {} };
++    const timers = new Set();
++    const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); };
++    const fmtDay = d => { try { const x = new Date(d + "T12:00:00"); return isNaN(x) ? "" : x.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); } catch { return ""; } };
++
++    // time of day: shared with the village and the grounds ("tm" in ao3-gg-prefs); only that one value is touched
++    const PKEY = "ao3-gg-prefs";
++    let tI = 0;
++    try { const p = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; tI = Math.max(0, Math.min(2, p.tm | 0)); } catch {}
++    const saveTime = () => {
++      try { const p = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; p.tm = tI; localStorage.setItem(PKEY, JSON.stringify(p)); } catch {}
++    };
++
++    // the bells: every finished fic, latest first for tapping; this year's in the order they finished for the rope
++    const rings = bellRings();
++    const order = rings.slice().reverse();
++    const year = String(new Date().getFullYear());
++    const thisYear = rings.filter(r => r.day.slice(0, 4) === year);
++    let cursor = 0, pealId = 0;
++
++    // ── shell (same look as the village) ──
++    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000002;");
++    back.id = "ao3-belltower";
++    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.6);border:1px solid rgba(190,170,255,0.18);");
++    back.appendChild(box);
++    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.18);background:rgba(8,6,22,0.55);z-index:3;");
++    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
++    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;line-height:1.2;text-transform:uppercase;color:#d9d0f5;", "\u{1F514} Bell tower"));
++    const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);", "");
++    ttl.appendChild(sub);
++    const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
++    xBtn.type = "button"; xBtn.setAttribute("aria-label", "Close");
++    topbar.appendChild(ttl); topbar.appendChild(xBtn);
++    box.appendChild(topbar);
++    const tools = el("div", "flex:0 0 auto;display:flex;gap:6px;padding:7px 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid rgba(190,170,255,0.12);background:rgba(8,6,22,0.4);z-index:3;");
++    const pill = (label, title, fn) => {
++      const b = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);color:#e6dcf5;border-radius:999px;padding:5px 11px;font:500 12px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", label);
++      b.type = "button"; b.title = title; b.onclick = fn; tools.appendChild(b); return b;
++    };
++    box.appendChild(tools);
++    const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;");
++    box.appendChild(field);
++    const caption = el("div", "flex:0 0 auto;min-height:38px;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);background:rgba(8,6,22,0.45);display:flex;align-items:center;justify-content:center;");
++    box.appendChild(caption);
++
++    let raf = 0, clockTimer = 0, stopToll = () => {};
++    const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); close(); } };
++    const close = () => {
++      pealId++; timers.forEach(clearTimeout); timers.clear();
++      cancelAnimationFrame(raf); clearInterval(clockTimer); stopToll();
++      back.remove(); document.removeEventListener("keydown", onKey, true);
++    };
++    xBtn.onclick = close;
++    back.addEventListener("click", e => { if (e.target === back) close(); });
++    back.addEventListener("pointerdown", () => { bellUnlock(); }, { passive: true });
++    document.addEventListener("keydown", onKey, true);
++
++    // ── the picture: 360 x 640 ──
++    const W = 360, H = 640;
++    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
++    svg.style.cssText = "width:100%;height:auto;display:block;";
++    const defs = sv("defs", {}, svg);
++    const glow = sv("radialGradient", { id: "bt-glow" }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.75" }, glow);
++    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
++    const slot = sv("linearGradient", { id: "bt-slot", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#8a5a2e" }, slot);
++    sv("stop", { offset: "100%", "stop-color": "#2a1d2c" }, slot);
++    const fade = sv("linearGradient", { id: "bt-fade", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#0a0818", "stop-opacity": "0" }, fade);
++    sv("stop", { offset: "100%", "stop-color": "#0a0818", "stop-opacity": "0.85" }, fade);
++
++    const starG = sv("g", {}, svg);
++    for (let i = 0; i < 46; i++) sv("circle", { cx: (rnd("bsx" + i) * W).toFixed(1), cy: (rnd("bsy" + i) * 300).toFixed(1), r: (0.5 + rnd("bsr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("bso" + i) * 0.6).toFixed(2) }, starG);
++    const moonG = sv("g", {}, svg);
++    const moonDisc = sv("circle", { cx: 292, cy: 60, r: 16, fill: "#efe6bd" }, moonG);
++    sv("circle", { cx: 292, cy: 60, r: 32, fill: "url(#bt-glow)", opacity: 0.3 }, moonG);
++    sv("path", { d: "M0 410 Q60 380 130 404 T250 396 T360 406 V500 H0 Z", fill: "#2a2147" }, svg);
++    sv("path", { d: "M0 450 Q90 428 180 448 T360 438 V520 H0 Z", fill: "#241b3b" }, svg);
++    sv("rect", { x: 0, y: 480, width: W, height: H - 480, fill: "#1a1a2e" }, svg);
++    for (let i = 0; i < 70; i++) {
++      const gx = 6 + rnd("btx" + i) * (W - 12), gy = 490 + rnd("bty" + i) * (H - 510);
++      if (Math.abs(gx - 180) < 40 + (gy - 520) * 0.2) continue;
++      sv("path", { d: `M${gx.toFixed(1)} ${gy.toFixed(1)} l-2 -5 M${gx.toFixed(1)} ${gy.toFixed(1)} l0 -7 M${gx.toFixed(1)} ${gy.toFixed(1)} l2 -5`, stroke: "#3f6552", "stroke-width": 1.3, fill: "none", "stroke-linecap": "round", opacity: 0.65 }, svg);
++    }
++
++    // the path from the door down to the village
++    sv("path", { d: "M166 520 H194 L222 640 H138 Z", fill: "#2b2540" }, svg);
++    for (let i = 0; i < 9; i++) sv("path", { d: `M${166 - i * 3} ${526 + i * 13} H${194 + i * 3}`, stroke: "#3a3158", "stroke-width": 1, opacity: 0.7 }, svg);
++
++    // the tower: a stone shaft, a belfry with an open arch, a pointed roof and a weathervane
++    sv("rect", { x: 130, y: 262, width: 100, height: 258, fill: "#3a2e52" }, svg);
++    for (let yy = 276; yy < 520; yy += 22) sv("rect", { x: 128, y: yy, width: 104, height: 2.4, fill: "#4a3d66" }, svg);
++    sv("rect", { x: 118, y: 150, width: 124, height: 112, fill: "#46385f" }, svg);
++    sv("rect", { x: 114, y: 258, width: 132, height: 6, fill: "#5a4b6f" }, svg);
++    sv("polygon", { points: "110,152 250,152 180,72", fill: "#2a2040" }, svg);
++    sv("path", { d: "M110 152 L180 72 L250 152", fill: "none", stroke: "#4a3d66", "stroke-width": 1.4, "stroke-linejoin": "round" }, svg);
++    sv("path", { d: "M180 72 V50 M174 56 H186", stroke: "#8a7aa8", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round" }, svg);
++    sv("path", { d: "M152 258 V196 a28 28 0 0 1 56 0 V258 Z", fill: "#0f0a1c" }, svg);           // the open arch
++    sv("path", { d: "M148 258 V196 a32 32 0 0 1 64 0 V258", fill: "none", stroke: "#5a4b6f", "stroke-width": 4 }, svg);
++    sv("circle", { cx: 180, cy: 214, r: 44, fill: "url(#bt-glow)", opacity: 0.28 }, svg);
++    sv("rect", { x: 156, y: 174, width: 48, height: 5, rx: 1.5, fill: "#5a4030" }, svg);          // the beam the bell hangs from
++
++    // the bell, in its own group so it can swing from the beam
++    const swingG = sv("g", {}, svg);
++    const clapG = sv("g", {}, swingG);
++    sv("path", { d: "M164 238 Q170 233 171 220 Q172 198 180 186 Q188 198 189 220 Q190 233 196 238 Z", fill: "#c9a24a", stroke: "#8a6d2a", "stroke-width": 1 }, swingG);
++    sv("path", { d: "M174 214 Q175 202 180 194", fill: "none", stroke: "#f2dc9a", "stroke-width": 1.4, "stroke-linecap": "round", opacity: 0.7 }, swingG);
++    sv("rect", { x: 177, y: 178, width: 6, height: 9, rx: 1.5, fill: "#6a4a2a" }, swingG);
++    sv("line", { x1: 180, y1: 190, x2: 180, y2: 236, stroke: "#6a5a3a", "stroke-width": 1.4 }, clapG);
++    sv("circle", { cx: 180, cy: 238, r: 3.3, fill: "#8a6d2a" }, clapG);
++    const fxG = sv("g", { "pointer-events": "none" }, svg);                                          // ripples when it rings
++
++    // a clock on the shaft, showing the real time (the bell tolls when both hands point up)
++    sv("circle", { cx: 180, cy: 296, r: 17, fill: "#1a1228", stroke: "#5a4b6f", "stroke-width": 2.4 }, svg);
++    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; sv("line", { x1: (180 + Math.sin(a) * 13.5).toFixed(1), y1: (296 - Math.cos(a) * 13.5).toFixed(1), x2: (180 + Math.sin(a) * 15).toFixed(1), y2: (296 - Math.cos(a) * 15).toFixed(1), stroke: "#cbbfe0", "stroke-width": i % 3 ? 0.7 : 1.3, opacity: 0.8 }, svg); }
++    const hHand = sv("line", { x1: 180, y1: 296, x2: 180, y2: 287, stroke: "#e6dcf5", "stroke-width": 1.8, "stroke-linecap": "round" }, svg);
++    const mHand = sv("line", { x1: 180, y1: 296, x2: 180, y2: 283, stroke: "#e6dcf5", "stroke-width": 1.1, "stroke-linecap": "round" }, svg);
++    sv("circle", { cx: 180, cy: 296, r: 1.4, fill: "#ffd98a" }, svg);
++    const setClock = () => {
++      const d = new Date();
++      hHand.setAttribute("transform", `rotate(${((d.getHours() % 12) + d.getMinutes() / 60) * 30} 180 296)`);
++      mHand.setAttribute("transform", `rotate(${d.getMinutes() * 6} 180 296)`);
++    };
++    setClock(); clockTimer = setInterval(setClock, 20000);
++
++    // the rope: it comes down inside the tower and shows through a tall lit slit, with a striped grip (the sally)
++    sv("rect", { x: 171, y: 324, width: 18, height: 146, rx: 3, fill: "url(#bt-slot)" }, svg);
++    sv("rect", { x: 169, y: 322, width: 22, height: 150, rx: 4, fill: "none", stroke: "#5a4b6f", "stroke-width": 2.4 }, svg);
++    const ropeG = sv("g", {}, svg);
++    sv("path", { d: "M180 324 V452", stroke: "#e8d7b0", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, ropeG);
++    sv("rect", { x: 176.5, y: 392, width: 7, height: 34, rx: 3, fill: "#b3304a" }, ropeG);
++    [398, 406, 414, 422].forEach(yy => sv("rect", { x: 176.5, y: yy, width: 7, height: 2.6, fill: "#f3e6d0" }, ropeG));
++    sv("circle", { cx: 180, cy: 454, r: 2.6, fill: "#e8d7b0" }, ropeG);
++
++    // the door, lanterns, and yews either side
++    sv("path", { d: "M164 520 V502 a16 16 0 0 1 32 0 V520 Z", fill: "#120d22" }, svg);
++    sv("rect", { x: 158, y: 518, width: 44, height: 4, fill: "#5a4b6f" }, svg);
++    [112, 248].forEach(yx => {
++      sv("rect", { x: yx - 2, y: 506, width: 4, height: 16, fill: "#2c2028" }, svg);
++      sv("ellipse", { cx: yx, cy: 500, rx: 14, ry: 22, fill: "#1b2f2b" }, svg);
++      sv("ellipse", { cx: yx - 3, cy: 494, rx: 8, ry: 14, fill: "#223d36" }, svg);
++    });
++    // a signpost back to the village (tap it)
++    const post = sv("g", {}, svg);
++    sv("rect", { x: 289, y: 548, width: 3.4, height: 52, fill: "#4a3326" }, post);
++    sv("polygon", { points: "258,552 286,552 296,558 286,564 258,564", fill: "#6a4a30" }, post);
++    const pt = sv("text", { x: 271, y: 560.2, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 5.6, fill: "#f3e7c8" }, post); pt.textContent = "Hollowbrook";
++    [[118, 566], [244, 566]].forEach(([lx, base], i) => {
++      sv("rect", { x: lx - 1.2, y: base - 30, width: 2.4, height: 30, fill: "#2c2438" }, svg);
++      sv("rect", { x: lx - 3.5, y: base - 38, width: 7, height: 9, rx: 1.6, fill: "#ffd98a" }, svg);
++    });
++    const lit = sv("g", {}, svg);
++    [[118, 566], [244, 566]].forEach(([lx, base], i) => anim(sv("circle", { cx: lx, cy: base - 34, r: 24, fill: "url(#bt-glow)" }, lit), `animation:btFlicker ${(2.2 + rnd("bl" + i) * 1.6).toFixed(1)}s ease-in-out infinite;`));
++    [[180, 512, 16]].forEach(([gx, gy, gr]) => anim(sv("circle", { cx: gx, cy: gy, r: gr, fill: "url(#bt-glow)" }, lit), "animation:btFlicker 2.8s ease-in-out infinite;"));
++    [[110, 600], [250, 618]].forEach(([mx, my], i) => anim(sv("ellipse", { cx: mx, cy: my, rx: 70, ry: 12, fill: "#c8bee6", opacity: 0.1 }, svg), `animation:btMist ${10 + i * 3}s ease-in-out infinite;`));
++    sv("rect", { x: 0, y: 580, width: W, height: H - 580, fill: "url(#bt-fade)", "pointer-events": "none" }, svg);
++    const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
++
++    // ── the swing: a little spring, so a second ring catches the bell mid-swing instead of snapping it back ──
++    let ang = 0, vel = 0, dir = 1, last = 0;
++    const K = Math.pow(2 * Math.PI / 1.7, 2), C = 1.2;
++    const drawSwing = () => {
++      swingG.setAttribute("transform", `rotate(${ang.toFixed(2)} 180 178)`);
++      clapG.setAttribute("transform", `rotate(${(-ang * 0.9 - vel * 0.06).toFixed(2)} 180 190)`);
++    };
++    const tick = now => {
++      const dt = Math.min(0.05, (now - last) / 1000 || 0.016); last = now;
++      vel += (-K * ang - C * vel) * dt; ang += vel * dt;
++      if (Math.abs(ang) < 0.05 && Math.abs(vel) < 0.3) { ang = 0; vel = 0; drawSwing(); raf = 0; return; }
++      drawSwing(); raf = requestAnimationFrame(tick);
++    };
++    const kick = v => {
++      dir = -dir; vel += dir * v * (reduce ? 0.12 : 1);
++      if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
++    };
++    const ripple = hue => {
++      const c = sv("circle", { cx: 180, cy: 212, r: 30, fill: "none", stroke: `hsl(${hue},70%,74%)`, "stroke-width": 2, opacity: 0 }, fxG);
++      c.style.cssText = "transform-box:fill-box;transform-origin:center;";
++      if (reduce || !c.animate) { c.remove(); return; }
++      try { const a = c.animate([{ transform: "scale(.5)", opacity: 0.8 }, { transform: "scale(3.4)", opacity: 0 }], { duration: 1500, easing: "ease-out" }); a.onfinish = () => c.remove(); } catch { c.remove(); }
++    };
++    // one stroke: the sound, the swing and the ripple together
++    const stroke = (voice, vol) => { bellStrike(voice, { vol }); kick(88); ripple(voice.hue); };
++    const knock = () => { bellStrike({ freq: 110, len: 0.9, bright: 0.05, hue: 260 }, { vol: 0.1 }); kick(26); };
++    const offNote = () => bellMuted() ? " (sound is off)" : "";
++
++    // ── tap the bell: the next fic you finished rings ──
++    const ringBell = () => {
++      bellUnlock(); vibrate(12); pealId++;
++      if (!order.length) { knock(); caption.textContent = "No fic has finished yet. The bell is waiting for its first."; return; }
++      const r = order[cursor % order.length]; cursor++;
++      stroke(bellVoice(r.f), 0.2);
++      const when = fmtDay(r.day);
++      caption.textContent = `${r.title}${when ? " \u00B7 finished " + when : ""}${r.words ? " \u00B7 " + r.words.toLocaleString() + " words" : ""}${offNote()}`;
++    };
++    // ── tap the rope: this year rings out, one stroke per fic, in the order you finished them ──
++    const pullRope = () => {
++      bellUnlock(); vibrate(14);
++      try { if (ropeG.animate && !reduce) ropeG.animate([{ transform: "translateY(0)" }, { transform: "translateY(14px)" }, { transform: "translateY(0)" }], { duration: 420, easing: "ease-out" }); } catch {}
++      const id = ++pealId, n = thisYear.length;
++      if (!n) { knock(); caption.textContent = `Nothing has rung this year yet. The rope is waiting.`; return; }
++      const gap = Math.max(220, Math.min(800, 7000 / n));
++      thisYear.forEach((r, i) => later(() => {
++        if (id !== pealId) return;
++        stroke(bellVoice(r.f), 0.15);
++        caption.textContent = `${i + 1} of ${n} \u00B7 ${r.title}`;
++        if (i === n - 1) later(() => { if (id === pealId) caption.textContent = `${n} ${n === 1 ? "fic has" : "fics have"} rung this year.${offNote()}`; }, 1500);
++      }, i * gap));
++    };
++    const hotspot = (x, y, w, h, label, fn) => {
++      const hit = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, svg);
++      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", label);
++      hit.addEventListener("click", fn);
++    };
++    hotspot(150, 168, 60, 92, "Ring the bell", ringBell);
++    hotspot(158, 322, 44, 160, "Pull the rope to hear how many fics have rung this year", pullRope);
++    hotspot(256, 546, 44, 56, "Back to Hollowbrook village", () => { close(); openHollowbrook(); });
++    field.appendChild(svg);
++
++    // ── the hour: the bell tolls it here for real (the grounds hear it from far off) ──
++    stopToll = startHourToll(h24 => {
++      const n = h24 % 12 || 12; pealId++;
++      caption.textContent = `The hour: ${BELL_WORDS[n]} o\u2019clock.${offNote()}`;
++      for (let i = 0; i < n; i++) later(() => stroke(BELL_HOUR, 0.22), i * 2600);
++    });
++
++    // ── time of day (same three looks as the village) ──
++    const TIMES = [
++      { label: "\u{1F319} night", name: "night", bg: "linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%)", stars: 1, orb: "#efe6bd", dy: 0, lit: 1, tint: ["#000000", 0], say: "Night at the bell tower. The bell is only resting." },
++      { label: "\u{1F307} dusk", name: "dusk", bg: "linear-gradient(180deg,#2b1b4a 0%,#6a3566 35%,#a85a52 55%,#33203c 100%)", stars: 0.3, orb: "#ffb067", dy: 34, lit: 0.9, tint: ["#ff8a5c", 0.1], say: "Dusk. The rope sways a little in the draught." },
++      { label: "\u{1F305} dawn", name: "dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, lit: 0.6, tint: ["#ffc9c9", 0.09], say: "Dawn. The bell gets the first word." }
++    ];
++    const applyTime = announce => {
++      const t = TIMES[tI];
++      box.style.background = t.bg;
++      starG.setAttribute("opacity", t.stars);
++      moonDisc.setAttribute("fill", t.orb);
++      moonG.setAttribute("transform", `translate(0 ${t.dy})`);
++      lit.setAttribute("opacity", t.lit);
++      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
++      timeBtn.textContent = t.label;
++      sub.textContent = "by the village \u00B7 " + t.name;
++      if (announce) caption.textContent = t.say;
++    };
++    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; saveTime(); applyTime(true); });
++    const soundBtn = pill("", "Turn the bell's sound on or off", () => { setBellMuted(!bellMuted()); bellUnlock(); syncSound(); });
++    const syncSound = () => { soundBtn.textContent = bellMuted() ? "\u{1F515} sound off" : "\u{1F514} sound on"; };
++    pill("\u{1F3D8}\uFE0F village", "Back to Hollowbrook", () => { close(); openHollowbrook(); });
++    syncSound(); applyTime(false);
++    caption.textContent = "tap the bell to hear a fic \u00B7 tap the rope to hear your year";
++    document.body.appendChild(back);
++  }
++
++
++
+   // ── ⛪ THE CHAPEL (inside) ──
+   // Step in through the chapel door in Hollowbrook (or from the keepsakes menu). Three things to look at:
+   //  · the big window: one pane of coloured glass per FINISHED fic, added in the order you finished them.
+@@ -5545,5 +5952,5 @@
+   }
+ 
+ 
+-  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel };
++  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel, openBellTower };
+ };
