@@ -6320,10 +6320,11 @@ window.__ao3WorldInit = function (core) {
       const HAIR = "#3b2a20";
       [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -21.4, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
       sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
-      // one shape that sits on the skull: it meets the head at the temples, sweeps to one side, and falls over the tops of the ears
-      sv("path", { d: "M-14.8 -17 C-17.6 -25 -17.6 -38 -9.4 -43.6 C-3.4 -47.6 6 -48 12 -43.8 C17.6 -39.6 18.2 -29 15 -17 C14.6 -20.4 13.6 -24 12.6 -27 Q9.8 -30.6 5.2 -30 C0.6 -29.6 -3.6 -32.6 -7 -35.6 Q-10.6 -33 -12 -28.4 Q-13.4 -23 -14.8 -17 Z", fill: HAIR }, h);
-      sv("path", { d: "M-6.6 -36 C-1.4 -35.6 5.2 -34 11.4 -29.4 M-8.6 -41 Q-1 -45 8 -42.6 M-11.4 -33 Q-14 -29.6 -14.2 -24.6", stroke: "#5a4232", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.55 }, h);
-      sv("path", { d: "M-4 -44.4 Q2 -46.6 8.6 -44", stroke: "#6a5240", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
+      // season-5 hair: one soft, tousled mass, full on top and a bit wavy at the edge, with a loose fringe swept across the forehead; it meets the skull at the temples
+      sv("path", { d: "M-14.6 -18 C-18.6 -24 -20.6 -33 -17.6 -39.2 C-16 -44.8 -11 -49.2 -5 -50.2 C-2 -52.6 3.8 -52.8 7.2 -50.8 C12.8 -50.2 18.2 -45.8 18.8 -39.6 C20.2 -33 18.4 -25 15 -17 C14.8 -21 14 -25 12.6 -28 Q9.8 -30.4 7.4 -33.6 Q7 -30.6 4.6 -29.4 Q2.6 -31.8 0.4 -34 Q-0.6 -31.6 -3.6 -31.2 Q-5 -33 -6.8 -35.6 Q-8.8 -33.4 -10.4 -31 Q-13.4 -29 -13.6 -25 Q-14 -21 -14.6 -18 Z", transform: "translate(0.4 1.8)", fill: "#8a6a50", opacity: 0.3 }, h);                // soft shadow it casts on the forehead
+      sv("path", { d: "M-14.6 -18 C-18.6 -24 -20.6 -33 -17.6 -39.2 C-16 -44.8 -11 -49.2 -5 -50.2 C-2 -52.6 3.8 -52.8 7.2 -50.8 C12.8 -50.2 18.2 -45.8 18.8 -39.6 C20.2 -33 18.4 -25 15 -17 C14.8 -21 14 -25 12.6 -28 Q9.8 -30.4 7.4 -33.6 Q7 -30.6 4.6 -29.4 Q2.6 -31.8 0.4 -34 Q-0.6 -31.6 -3.6 -31.2 Q-5 -33 -6.8 -35.6 Q-8.8 -33.4 -10.4 -31 Q-13.4 -29 -13.6 -25 Q-14 -21 -14.6 -18 Z", fill: HAIR }, h);
+      sv("path", { d: "M-15 -38 q2.4 -4.6 6.4 -3 q2.6 1.8 0.4 4.6 M-5 -47 q3.4 -3.2 7 -0.6 q2 2.4 -0.8 4 M7 -46.6 q4.2 -1.6 6.2 1.6 q0.8 3 -2.2 3.6 M13 -38 q3.2 0.4 3.6 3.6 M-11 -29.6 q-2 -2.4 -3.6 -0.6", stroke: "#5f4836", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, h);   // a few curls
+      sv("path", { d: "M-8 -44.4 Q-1 -49 8 -46.6", stroke: "#6e5542", "stroke-width": 2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
       face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
     };
     const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
