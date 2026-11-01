@@ -1,7 +1,7 @@
 // Lets the app open with no internet. Online it always fetches the newest
 // files first; offline it falls back to the saved copies.
-const CACHE = "ao3-home-app-v6";
-const FILES = ["./", "index.html", "app.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
+const CACHE = "ao3-home-app-v7";
+const FILES = ["./", "index.html", "app.js", "world.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
