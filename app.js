@@ -3412,6 +3412,11 @@ try {
         @keyframes cotBreathe{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.07)}}
         @keyframes cotFlip{0%{transform:rotateY(90deg);opacity:0}100%{transform:rotateY(0);opacity:1}}
         @keyframes cotPop{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-26px);opacity:0}}
+        @keyframes cotTwinkle{0%,100%{opacity:.35}50%{opacity:1}}
+        @keyframes cotPulse{0%,100%{opacity:.7}50%{opacity:1}}
+        @keyframes cotSway{0%,100%{transform:rotate(-1.6deg)}50%{transform:rotate(1.6deg)}}
+        @keyframes cotSpark{0%{transform:translate(0,0);opacity:0}15%{opacity:1}100%{transform:translate(var(--dx,6px),-58px);opacity:0}}
+        @keyframes cotZ{0%{transform:translate(0,0);opacity:0}25%{opacity:.85}100%{transform:translate(5px,-9px);opacity:0}}
         @media (prefers-reduced-motion: reduce){.cot-anim{animation:none !important}}
       `;
       (document.head || document.documentElement).appendChild(cs);
@@ -3468,70 +3473,213 @@ try {
     topbar.appendChild(ttl); topbar.appendChild(xBtn);
     box.appendChild(topbar);
 
-    // ── the room (SVG) ──
-    const sceneWrap = el("div", "flex:0 0 auto;background:linear-gradient(180deg,#4a352b,#34251f 75%,#2b1e18);");
-    const svg = sv("svg", { viewBox: "0 0 360 170", preserveAspectRatio: "xMidYMid meet" });
-    svg.style.cssText = "width:100%;max-width:520px;height:auto;display:block;margin:0 auto;";
+    // ── the room (SVG) ──  (taller, cosier room: string lights, hat on a proper peg, hanging mugs, rug, candles, fire sparks)
+    const sceneWrap = el("div", "flex:0 0 auto;background:linear-gradient(180deg,#46332a 0%,#46332a 71.3%,#2b1e18 71.3%,#2b1e18 100%);");
+    const svg = sv("svg", { viewBox: "0 0 360 300", preserveAspectRatio: "xMidYMid meet" });
+    svg.style.cssText = "width:100%;max-width:560px;height:auto;max-height:50vh;display:block;margin:0 auto;";
     sceneWrap.appendChild(svg);
     box.appendChild(sceneWrap);
     const defs = sv("defs", {}, svg);
-    const fg = sv("radialGradient", { id: "cot-fire" }, defs);
-    sv("stop", { offset: "0%", "stop-color": "#ffb060", "stop-opacity": "0.55" }, fg);
-    sv("stop", { offset: "100%", "stop-color": "#ffb060", "stop-opacity": "0" }, fg);
-    const lg = sv("radialGradient", { id: "cot-lamp" }, defs);
-    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.35" }, lg);
-    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, lg);
-    sv("rect", { x: 0, y: 0, width: 360, height: 128, fill: "#46332a" }, svg);                  // wall
-    sv("rect", { x: 0, y: 128, width: 360, height: 42, fill: "#2b1e18" }, svg);                 // floor
-    [140, 152, 164].forEach(y0 => sv("line", { x1: 0, y1: y0, x2: 360, y2: y0, stroke: "#231813", "stroke-width": 1 }, svg));
-    // window
-    sv("rect", { x: 22, y: 24, width: 58, height: 50, fill: "#1c2140" }, svg);
-    for (let i = 0; i < 7; i++) sv("circle", { cx: (26 + rnd("cs" + i) * 50).toFixed(1), cy: (28 + rnd("cy" + i) * 42).toFixed(1), r: 0.7, fill: "#fff", opacity: 0.7 }, svg);
-    sv("circle", { cx: 38, cy: 40, r: 7, fill: "#efe6bd" }, svg);
-    sv("circle", { cx: 41.5, cy: 38.5, r: 6.4, fill: "#1c2140" }, svg);
-    sv("rect", { x: 22, y: 24, width: 58, height: 50, fill: "none", stroke: "#8a6a4e", "stroke-width": 3 }, svg);
-    sv("path", { d: "M51 24 V74 M22 49 H80", stroke: "#8a6a4e", "stroke-width": 2 }, svg);
-    sv("path", { d: "M18 22 Q30 40 20 78 L16 78 L16 22 Z", fill: "#7a3b4d" }, svg);
-    sv("path", { d: "M84 22 Q72 40 82 78 L86 78 L86 22 Z", fill: "#7a3b4d" }, svg);
-    // shelf with books and a plant
-    sv("rect", { x: 98, y: 46, width: 86, height: 4, fill: "#6b4f35" }, svg);
+    const grad = (tag, id, attrs, stops) => {
+      const g0 = sv(tag, Object.assign({ id }, attrs || {}), defs);
+      stops.forEach(([o, c, a]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": a }, g0));
+      return g0;
+    };
+    grad("radialGradient", "cot-fire", {}, [["0%", "#ffb060", 0.55], ["100%", "#ffb060", 0]]);
+    grad("radialGradient", "cot-lamp", {}, [["0%", "#ffd98a", 0.35], ["100%", "#ffd98a", 0]]);
+    grad("radialGradient", "cot-amb", {}, [["0%", "#ff9a4a", 0.3], ["55%", "#ff8a3a", 0.1], ["100%", "#ff8a3a", 0]]);
+    grad("linearGradient", "cot-sky", { x1: 0, y1: 0, x2: 0, y2: 1 }, [["0%", "#141a3a", 1], ["100%", "#2b3163", 1]]);
+    grad("linearGradient", "cot-moon", { x1: 0, y1: 0, x2: 0, y2: 1 }, [["0%", "#aebdff", 0.09], ["100%", "#aebdff", 0]]);
+    grad("linearGradient", "cot-shade", { x1: 0, y1: 0, x2: 0, y2: 1 }, [["0%", "#000", 0.35], ["100%", "#000", 0]]);
+    grad("radialGradient", "cot-vig", { cx: "50%", cy: "55%", r: "75%" }, [["60%", "#000", 0], ["100%", "#000", 0.5]]);
+    const pat = sv("pattern", { id: "cot-paper", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);
+    sv("rect", { width: 16, height: 16, fill: "#46332a" }, pat);
+    sv("rect", { x: 0, width: 1.6, height: 16, fill: "#4f392f" }, pat);
+    sv("circle", { cx: 8, cy: 8, r: 0.9, fill: "#563d31" }, pat);
+    const moonMask = sv("mask", { id: "cot-moonmask" }, defs);
+    sv("rect", { x: 0, y: 0, width: 360, height: 300, fill: "#fff" }, moonMask);
+    sv("circle", { cx: 39, cy: 70, r: 7.6, fill: "#000" }, moonMask);
+
+    const shadow = (cx, cy, rx) => sv("ellipse", { cx, cy, rx, ry: Math.max(3, rx * 0.12), fill: "#000", opacity: 0.28 }, svg);
+    const candleFlame = (parent, x, y, sc, delay) => {     // a little glow + a flickering flame
+      anim(sv("circle", { cx: x, cy: y, r: 13 * sc, fill: "url(#cot-lamp)" }, parent), `animation:cotPulse ${(2.2 + delay).toFixed(1)}s ease-in-out ${delay}s infinite;`);
+      anim(sv("ellipse", { cx: x, cy: y, rx: 1.8 * sc, ry: 3.2 * sc, fill: "#ffd98a" }, parent), `animation:cotFlicker ${(1.1 + delay * 0.3).toFixed(1)}s ease-in-out ${delay}s infinite;transform-box:fill-box;transform-origin:50% 100%;`);
+    };
+
+    // walls: papered upper wall, panelled lower wall, skirting, floor
+    sv("rect", { x: 0, y: 0, width: 360, height: 214, fill: "url(#cot-paper)" }, svg);
+    sv("rect", { x: 0, y: 168, width: 360, height: 40, fill: "#36261f" }, svg);
+    sv("rect", { x: 0, y: 164, width: 360, height: 5, fill: "#5a4230" }, svg);
+    for (let i = 0; i < 8; i++) sv("rect", { x: 8 + i * 45, y: 175, width: 37, height: 27, rx: 1, fill: "none", stroke: "#2b1e18", "stroke-width": 1 }, svg);
+    sv("rect", { x: 0, y: 208, width: 360, height: 8, fill: "#5a4230" }, svg);
+    sv("rect", { x: 0, y: 208, width: 360, height: 1.4, fill: "#7a5a40" }, svg);
+    sv("rect", { x: 0, y: 214, width: 360, height: 86, fill: "#2b1e18" }, svg);
+    const plankRows = [216, 232, 252, 276, 300];
+    plankRows.forEach((y0, i) => {
+      if (i > 0 && i < 4) sv("line", { x1: 0, y1: y0, x2: 360, y2: y0, stroke: "#231813", "stroke-width": 1 }, svg);
+      if (i < 4) (i % 2 ? [60, 190, 300] : [120, 250]).forEach(xx => sv("line", { x1: xx, y1: y0, x2: xx, y2: plankRows[i + 1], stroke: "#231813", "stroke-width": 1 }, svg));
+    });
+    // ceiling beam
+    sv("rect", { x: 0, y: 0, width: 360, height: 16, fill: "#2e2019" }, svg);
+    sv("rect", { x: 0, y: 16, width: 360, height: 7, fill: "url(#cot-shade)" }, svg);
+    sv("rect", { x: 0, y: 15, width: 360, height: 1.2, fill: "#4a3426" }, svg);
+
+    // window (night, moon, stars, hills, a far-off lit window), curtains, sill
+    sv("rect", { x: 18, y: 54, width: 64, height: 86, fill: "url(#cot-sky)" }, svg);
+    for (let i = 0; i < 12; i++) {
+      const star = sv("circle", { cx: (22 + rnd("cs" + i) * 56).toFixed(1), cy: (58 + rnd("cy" + i) * 40).toFixed(1), r: (0.6 + rnd("cr" + i) * 0.5).toFixed(2), fill: "#fff", opacity: 0.75 }, svg);
+      if (i % 3 === 0) anim(star, `animation:cotTwinkle ${(2 + rnd("ct" + i) * 2).toFixed(1)}s ease-in-out ${(rnd("cd" + i) * 2).toFixed(1)}s infinite;`);
+    }
+    sv("circle", { cx: 34, cy: 72, r: 15, fill: "#efe6bd", opacity: 0.1 }, svg);
+    sv("circle", { cx: 34, cy: 72, r: 8.5, fill: "#efe6bd", mask: "url(#cot-moonmask)" }, svg);
+    sv("path", { d: "M18 140 V126 Q30 116 44 124 Q58 112 70 122 Q76 118 82 124 V140 Z", fill: "#10142b" }, svg);
+    sv("path", { d: "M52 124 L57 106 L62 124 Z M60 124 L64 110 L68 124 Z M24 128 L28 114 L32 128 Z", fill: "#0a0e20" }, svg);
+    anim(sv("circle", { cx: 73, cy: 128, r: 1.2, fill: "#ffd98a" }, svg), "animation:cotTwinkle 3.2s ease-in-out infinite;");
+    sv("path", { d: "M22 58 L40 58 L22 90 Z", fill: "#fff", opacity: 0.05 }, svg);
+    sv("rect", { x: 18, y: 54, width: 64, height: 86, fill: "none", stroke: "#8a6a4e", "stroke-width": 4 }, svg);
+    sv("path", { d: "M50 54 V140 M18 97 H82", stroke: "#8a6a4e", "stroke-width": 2.4 }, svg);
+    sv("rect", { x: 10, y: 140, width: 80, height: 6, rx: 1.5, fill: "#6b4f35" }, svg);
+    sv("rect", { x: 10, y: 140, width: 80, height: 1.4, rx: 0.7, fill: "#8a6a4e" }, svg);
+    sv("rect", { x: 23, y: 134, width: 9, height: 6, fill: "#a06a50" }, svg);                         // cactus on the sill
+    sv("ellipse", { cx: 27.5, cy: 129.5, rx: 3.2, ry: 5.2, fill: "#5d8a55" }, svg);
+    sv("rect", { x: 62, y: 130, width: 10, height: 10, rx: 2, fill: "#ffd98a", "fill-opacity": 0.22, stroke: "#b98a6a", "stroke-width": 0.8 }, svg);   // candle jar on the sill
+    candleFlame(svg, 67, 133, 0.8, 0.4);
+    sv("line", { x1: 4, y1: 48, x2: 96, y2: 48, stroke: "#6b4f35", "stroke-width": 3, "stroke-linecap": "round" }, svg);
+    sv("circle", { cx: 4, cy: 48, r: 2.8, fill: "#b98a3c" }, svg);
+    sv("circle", { cx: 96, cy: 48, r: 2.8, fill: "#b98a3c" }, svg);
+    sv("path", { d: "M7 50 H22 Q25 96 19 150 H7 Z", fill: "#7a3b4d" }, svg);
+    sv("path", { d: "M93 50 H78 Q75 96 81 150 H93 Z", fill: "#7a3b4d" }, svg);
+    sv("path", { d: "M12 50 Q13 100 11 150 M17 50 Q19 100 16 150 M88 50 Q87 100 89 150 M83 50 Q81 100 84 150", stroke: "#5e2a3a", "stroke-width": 1, fill: "none" }, svg);
+    sv("path", { d: "M7 104 Q14 109 22 103 M93 104 Q86 109 78 103", stroke: "#d9b26a", "stroke-width": 2.4, fill: "none", "stroke-linecap": "round" }, svg);
+
+    // his hat, hung properly: wooden plate, a peg, a little leather loop, and a soft sway
+    sv("rect", { x: 107, y: 56, width: 10, height: 18, rx: 3, fill: "#6b4f35" }, svg);
+    sv("rect", { x: 107, y: 56, width: 3, height: 18, rx: 1.5, fill: "#8a6a4e", opacity: 0.6 }, svg);
+    sv("circle", { cx: 112, cy: 66, r: 3, fill: "#3a2a1c" }, svg);
+    sv("circle", { cx: 111.2, cy: 65.2, r: 1, fill: "#8a6a4e" }, svg);
+    const hatG = sv("g", {}, svg);
+    anim(hatG, "animation:cotSway 5.5s ease-in-out infinite;transform-origin:112px 66px;");
+    const hatSh = sv("g", { transform: "translate(2.2 2.4)", opacity: 0.28 }, hatG);
+    sv("path", { d: "M112.6 71 Q110 82 103 93 L121.5 93 Q116 82 112.6 71 Z", fill: "#000" }, hatSh);
+    sv("ellipse", { cx: 112, cy: 94, rx: 13.5, ry: 3.4, fill: "#000" }, hatSh);
+    sv("circle", { cx: 112, cy: 66, r: 4.4, fill: "none", stroke: "#c9a36a", "stroke-width": 1.2 }, hatG);
+    sv("path", { d: "M112.6 71 Q110 82 103 93 L121.5 93 Q116 82 112.6 71 Z", fill: "#1d1830" }, hatG);
+    sv("path", { d: "M111.5 74 Q108.5 83 105 91", stroke: "#3a3358", "stroke-width": 0.9, fill: "none", "stroke-linecap": "round" }, hatG);
+    sv("ellipse", { cx: 112, cy: 94, rx: 13.5, ry: 3.4, fill: "#15112a" }, hatG);
+    sv("path", { d: "M104.3 90.2 Q112 92.6 120.2 90.2 L121 93 Q112 95.4 103.5 93 Z", fill: "#7a3b4d" }, hatG);
+    sv("rect", { x: 111.4, y: 91.2, width: 2.4, height: 2.6, rx: 0.4, fill: "#d9b26a" }, hatG);
+
+    // shelf with books and a plant, mugs on hooks beneath, a picture above
+    sv("rect", { x: 134, y: 84, width: 94, height: 5, fill: "#6b4f35" }, svg);
+    sv("rect", { x: 134, y: 84, width: 94, height: 1.2, fill: "#8a6a4e" }, svg);
+    sv("path", { d: "M137 89 V96 L144 89 Z M218 89 V96 L225 89 Z", fill: "#5a4129" }, svg);
     [["#8a3b4d", 9], ["#3f6f8a", 7], ["#b99a5b", 8], ["#5d7a4e", 6], ["#7a5d8a", 9], ["#a86a4a", 7]].reduce((x0, [c, w]) => {
-      sv("rect", { x: x0, y: 46 - (14 + (w % 3) * 2), width: w, height: 14 + (w % 3) * 2, rx: 0.8, fill: c }, svg); return x0 + w + 1.5;
-    }, 102);
-    sv("rect", { x: 160, y: 38, width: 10, height: 8, rx: 1.5, fill: "#8a5a44" }, svg);
-    sv("path", { d: "M165 38 Q158 28 156 24 M165 38 Q166 26 168 22 M165 38 Q173 30 177 28", stroke: "#5d8a55", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, svg);
-    // his hat on its peg (he is not wearing it in here)
-    sv("circle", { cx: 100, cy: 80, r: 1.6, fill: "#6b4f35" }, svg);
-    sv("path", { d: "M93 84 Q100 81 107 84 L103 77 Q100 74 97 77 Z", fill: "#1d1830" }, svg);
-    // fireplace
-    sv("rect", { x: 262, y: 60, width: 76, height: 68, fill: "#5d5057" }, svg);
-    sv("rect", { x: 256, y: 52, width: 88, height: 9, rx: 1.5, fill: "#6b4f35" }, svg);
-    sv("path", { d: "M274 128 V92 Q274 78 300 78 Q326 78 326 92 V128 Z", fill: "#1a1115" }, svg);
-    const fireG = sv("g", {}, svg);
-    const fireGlow = sv("circle", { cx: 300, cy: 108, r: 52, fill: "url(#cot-fire)" }, fireG);
-    anim(fireGlow, "animation:cotFlicker 2.6s ease-in-out infinite;transform-origin:300px 108px;");
-    sv("rect", { x: 282, y: 122, width: 36, height: 5, rx: 2, fill: "#4a3022" }, svg);
-    const fl1 = sv("path", { d: "M287 124 Q281 108 289 96 Q291 108 298 102 Q298 114 308 110 Q314 118 312 124 Z", fill: "#ff9a4a" }, svg);
-    anim(fl1, "animation:cotFlicker 1.7s ease-in-out infinite;transform-origin:300px 124px;");
-    const fl2 = sv("path", { d: "M293 124 Q290 114 297 108 Q299 116 304 112 Q307 118 305 124 Z", fill: "#ffd98a" }, svg);
-    anim(fl2, "animation:cotFlicker 1.3s ease-in-out .3s infinite;transform-origin:299px 124px;");
-    // rug and lamp light
-    sv("ellipse", { cx: 190, cy: 151, rx: 86, ry: 13, fill: "#6b3a48", opacity: 0.85 }, svg);
-    sv("ellipse", { cx: 190, cy: 151, rx: 70, ry: 9, fill: "none", stroke: "#b98a6a", "stroke-width": 1, opacity: 0.6 }, svg);
-    sv("circle", { cx: 190, cy: 100, r: 70, fill: "url(#cot-lamp)" }, svg);
-    // the cat, curled up
-    const cat = sv("g", {}, svg);
-    const catBody = sv("g", {}, cat);
-    anim(catBody, "animation:cotBreathe 3.4s ease-in-out infinite;transform-origin:112px 154px;transform-box:fill-box;");
-    sv("ellipse", { cx: 112, cy: 150, rx: 15, ry: 7, fill: "#3b3340" }, catBody);
-    sv("circle", { cx: 99, cy: 147, r: 5.6, fill: "#3b3340" }, catBody);
-    sv("path", { d: "M94.6 144 L95.6 138.6 L99 142 Z M103.4 144 L102.4 138.6 L99 142 Z", fill: "#3b3340" }, catBody);
-    sv("path", { d: "M126 152 Q134 150 130 144", stroke: "#3b3340", "stroke-width": 3.2, fill: "none", "stroke-linecap": "round" }, catBody);
-    sv("path", { d: "M96.6 147.4 q1.2 1 2.4 0 M100 147.4 q1.2 1 2.4 0", stroke: "#cbbfe0", "stroke-width": 0.7, fill: "none", "stroke-linecap": "round" }, catBody);
-    // the armchair and Bram, sitting with a mug
-    sv("rect", { x: 140, y: 84, width: 44, height: 46, rx: 9, fill: "#5c3a3f" }, svg);
-    sv("rect", { x: 134, y: 106, width: 11, height: 24, rx: 4, fill: "#6e464b" }, svg);
-    const bram = sv("g", {}, svg);
+      const bw = w * 1.1, bh = (14 + (w % 3) * 2) * 1.25;
+      sv("rect", { x: x0, y: 84 - bh, width: bw, height: bh, rx: 0.9, fill: c }, svg);
+      sv("rect", { x: x0 + 1, y: 84 - bh + 4, width: bw - 2, height: 1.2, fill: "#000", opacity: 0.2 }, svg);
+      return x0 + bw + 1.6;
+    }, 139);
+    sv("rect", { x: 203, y: 76, width: 14, height: 8, rx: 1.5, fill: "#8a5a44" }, svg);
+    sv("path", { d: "M210 76 Q202 66 200 60 M210 76 Q211 64 213 58 M210 76 Q219 68 223 66", stroke: "#5d8a55", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, svg);
+    sv("path", { d: "M218 86 Q222 96 218 106", stroke: "#4f7a46", "stroke-width": 1.5, fill: "none", "stroke-linecap": "round" }, svg);
+    [[221, 94], [217, 99], [220, 104]].forEach(([lx, ly]) => sv("ellipse", { cx: lx, cy: ly, rx: 2.6, ry: 1.5, fill: "#5d8a55" }, svg));
+    [[154, "#d6a36a"], [171, "#c98a8a"], [188, "#9bb7c9"]].forEach(([mx, mc]) => {
+      sv("circle", { cx: mx, cy: 91.5, r: 1, fill: "#b98a3c" }, svg);
+      sv("path", { d: `M${mx + 4.5} 96 q3 0 3 3 q0 2.5 -3 2.5`, stroke: mc, "stroke-width": 1.4, fill: "none" }, svg);
+      sv("rect", { x: mx - 4.5, y: 93, width: 9, height: 9, rx: 2, fill: mc }, svg);
+    });
+    sv("rect", { x: 152, y: 32, width: 40, height: 32, rx: 1.5, fill: "#6b4f35" }, svg);
+    sv("rect", { x: 155, y: 35, width: 34, height: 26, fill: "#e9dcc2" }, svg);
+    sv("rect", { x: 158, y: 38, width: 28, height: 20, fill: "#3b5266" }, svg);
+    sv("circle", { cx: 180, cy: 44, r: 3, fill: "#e8b86a" }, svg);
+    sv("path", { d: "M158 58 Q166 46 174 52 Q180 44 186 50 V58 Z", fill: "#2f4a3a" }, svg);
+
+    // dried herbs hanging from the beam
+    const herbs = sv("g", {}, svg);
+    anim(herbs, "animation:cotSway 6.5s ease-in-out infinite;transform-origin:244px 16px;");
+    sv("line", { x1: 244, y1: 16, x2: 244, y2: 34, stroke: "#c9a36a", "stroke-width": 0.9 }, herbs);
+    [-3, -2, -1, 0, 1, 2, 3].forEach((k, i) => sv("path", { d: `M244 36 Q${244 + k * 3} 46 ${244 + k * 5} ${58 - Math.abs(k) * 1.5}`, stroke: i % 2 ? "#8a6aa8" : "#7a8a4e", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, herbs));
+    sv("rect", { x: 241, y: 33, width: 6, height: 3.4, rx: 1, fill: "#b04a3a" }, herbs);
+
+    // fireplace: stone breast, round picture, mantel with garland and candles, arched firebox, hearth
+    sv("rect", { x: 282, y: 16, width: 68, height: 192, fill: "#5d5057" }, svg);
+    for (let r = 0; r < 18; r++) {
+      const by = 18 + r * 10.6;
+      sv("line", { x1: 282, y1: by, x2: 350, y2: by, stroke: "#4a3f45", "stroke-width": 0.8 }, svg);
+      for (let xx = 282 + (r % 2 ? 9 : 18); xx < 350; xx += 17) sv("line", { x1: xx, y1: by, x2: xx, y2: by + 10.6, stroke: "#4a3f45", "stroke-width": 0.8 }, svg);
+    }
+    sv("ellipse", { cx: 316, cy: 44, rx: 17, ry: 20, fill: "#6b4f35" }, svg);
+    sv("ellipse", { cx: 316, cy: 44, rx: 14, ry: 17, fill: "#26364f" }, svg);
+    sv("path", { d: "M308 49 L316 41 L324 49 Z", fill: "#3b2a30" }, svg);
+    sv("rect", { x: 310, y: 49, width: 12, height: 7, fill: "#6b3a48" }, svg);
+    sv("rect", { x: 315, y: 51, width: 3, height: 3, fill: "#ffd98a" }, svg);
+    sv("rect", { x: 274, y: 70, width: 84, height: 9, rx: 2, fill: "#6b4f35" }, svg);
+    sv("rect", { x: 274, y: 70, width: 84, height: 2, rx: 1, fill: "#8a6a4e" }, svg);
+    sv("rect", { x: 278, y: 79, width: 6, height: 6, fill: "#5a4129" }, svg);
+    sv("rect", { x: 348, y: 79, width: 6, height: 6, fill: "#5a4129" }, svg);
+    for (let i = 0; i < 10; i++) {
+      const gx0 = 277 + i * 8.4;
+      sv("ellipse", { cx: gx0, cy: 80 + (i % 2) * 2, rx: 4, ry: 1.8, fill: i % 2 ? "#4f7a46" : "#5d8a55" }, svg);
+      if (i % 2) sv("circle", { cx: gx0 + 4, cy: 82, r: 1.5, fill: "#c0394a" }, svg);
+    }
+    sv("rect", { x: 286.5, y: 54, width: 3.2, height: 16, rx: 1, fill: "#f3e6d3" }, svg);
+    candleFlame(svg, 288, 51, 1, 0.1);
+    sv("rect", { x: 294, y: 60, width: 3.2, height: 10, rx: 1, fill: "#e8d6b8" }, svg);
+    candleFlame(svg, 295.6, 57, 0.9, 0.7);
+    sv("rect", { x: 335, y: 62, width: 11, height: 8, rx: 1.5, fill: "#8a5a44" }, svg);
+    sv("path", { d: "M340.5 62 Q334 54 332 50 M340.5 62 Q341 52 343 48 M340.5 62 Q347 56 350 54", stroke: "#5d8a55", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, svg);
+    sv("path", { d: "M294 208 V150 Q294 120 316 120 Q338 120 338 150 V208 Z", fill: "#120a0e" }, svg);
+    sv("path", { d: "M294 208 V150 Q294 120 316 120 Q338 120 338 150 V208", fill: "none", stroke: "#6b5a5f", "stroke-width": 4 }, svg);
+    sv("rect", { x: 276, y: 206, width: 80, height: 9, rx: 1.5, fill: "#6b5a5f" }, svg);
+    sv("rect", { x: 276, y: 206, width: 80, height: 1.6, fill: "#8a7a7f" }, svg);
+    sv("rect", { x: 300, y: 196, width: 32, height: 8, rx: 4, fill: "#4a3022" }, svg);
+    sv("rect", { x: 304, y: 189, width: 26, height: 7, rx: 3.5, fill: "#5a3a28", transform: "rotate(-10 317 192)" }, svg);
+    sv("circle", { cx: 301, cy: 200, r: 4, fill: "#6a4630" }, svg);
+    sv("circle", { cx: 301, cy: 200, r: 2, fill: "none", stroke: "#4a3022", "stroke-width": 0.8 }, svg);
+    const fireG = sv("g", {}, svg);                     // (no transform attribute here: fireBoost scales this one with CSS)
+    anim(sv("circle", { cx: 316, cy: 180, r: 60, fill: "url(#cot-fire)" }, fireG), "animation:cotFlicker 2.6s ease-in-out infinite;transform-origin:316px 180px;");
+    anim(sv("ellipse", { cx: 316, cy: 202, rx: 15, ry: 3.2, fill: "#ff7a3a" }, fireG), "animation:cotPulse 1.8s ease-in-out infinite;");
+    const flameIn = sv("g", { transform: "translate(-59 45) scale(1.25)" }, fireG);
+    anim(sv("path", { d: "M283 124 Q276 104 286 90 Q289 104 296 96 Q297 108 307 104 Q312 96 309 88 Q319 104 316 124 Z", fill: "#e0572a", opacity: 0.9 }, flameIn), "animation:cotFlicker 2.1s ease-in-out .15s infinite;transform-origin:300px 124px;");
+    anim(sv("path", { d: "M287 124 Q281 108 289 96 Q291 108 298 102 Q298 114 308 110 Q314 118 312 124 Z", fill: "#ff9a4a" }, flameIn), "animation:cotFlicker 1.7s ease-in-out infinite;transform-origin:300px 124px;");
+    anim(sv("path", { d: "M293 124 Q290 114 297 108 Q299 116 304 112 Q307 118 305 124 Z", fill: "#ffd98a" }, flameIn), "animation:cotFlicker 1.3s ease-in-out .3s infinite;transform-origin:299px 124px;");
+    [[309, 5, 3.1], [315, -6, 3.9], [320, 8, 4.6], [312, -3, 5.2], [318, 4, 3.5]].forEach(([sx, dx, dur], i) =>
+      anim(sv("circle", { cx: sx, cy: 176, r: 0.9, fill: "#ffc070" }, fireG), `animation:cotSpark ${dur}s ease-out ${(i * 0.8).toFixed(1)}s infinite;--dx:${dx}px;`));
+
+    // rug, moonlight on the floor, warm light behind the chair
+    sv("ellipse", { cx: 200, cy: 256, rx: 132, ry: 26, fill: "#6b3a48", opacity: 0.92 }, svg);
+    sv("ellipse", { cx: 200, cy: 256, rx: 114, ry: 19, fill: "none", stroke: "#b98a6a", "stroke-width": 1.2, opacity: 0.6 }, svg);
+    sv("ellipse", { cx: 200, cy: 256, rx: 100, ry: 14, fill: "none", stroke: "#d9b26a", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.35 }, svg);
+    sv("polygon", { points: "18,140 82,140 176,264 56,264", fill: "url(#cot-moon)" }, svg);
+    sv("circle", { cx: 168, cy: 170, r: 100, fill: "url(#cot-lamp)" }, svg);
+
+    // plant in the corner
+    shadow(46, 226, 18);
+    [["M45 202 Q28 186 26 160 Q42 172 45 202 Z", "#4f7a46"], ["M45 202 Q60 182 66 158 Q50 172 45 202 Z", "#5d8a55"], ["M45 202 Q40 176 44 150 Q52 176 45 202 Z", "#3f6a3c"],
+     ["M45 202 Q24 196 14 180 Q34 182 45 202 Z", "#5d8a55"], ["M45 202 Q66 196 76 182 Q56 184 45 202 Z", "#4f7a46"]].forEach(([d, c]) => sv("path", { d, fill: c }, svg));
+    sv("path", { d: "M33 226 L36 206 L56 206 L59 226 Z", fill: "#8a5a44" }, svg);
+    sv("rect", { x: 33, y: 201, width: 26, height: 6, rx: 2, fill: "#a06a50" }, svg);
+
+    // stack of books with a candle on top
+    shadow(109, 226, 16);
+    sv("rect", { x: 96, y: 217, width: 26, height: 7, rx: 1, fill: "#8a3b4d" }, svg);
+    sv("rect", { x: 99, y: 210, width: 21, height: 7, rx: 1, fill: "#3f6f8a" }, svg);
+    sv("rect", { x: 97, y: 203, width: 24, height: 7, rx: 1, fill: "#b99a5b" }, svg);
+    sv("rect", { x: 106, y: 199, width: 9, height: 4, rx: 1, fill: "#b98a3c" }, svg);
+    sv("rect", { x: 108, y: 189, width: 5, height: 10, rx: 1, fill: "#f3e6d3" }, svg);
+    candleFlame(svg, 110.5, 186, 1, 0.5);
+
+    // the armchair and Bram, sitting with a mug (drawn at the old size, then scaled up into the room)
+    shadow(168, 226, 46);
+    const chairG = sv("g", { transform: "translate(-50.7 48.5) scale(1.35)" }, svg);
+    sv("rect", { x: 138, y: 128, width: 5, height: 5, rx: 1, fill: "#3d2429" }, chairG);
+    sv("rect", { x: 183, y: 128, width: 5, height: 5, rx: 1, fill: "#3d2429" }, chairG);
+    sv("rect", { x: 140, y: 84, width: 44, height: 46, rx: 9, fill: "#5c3a3f" }, chairG);
+    sv("rect", { x: 134, y: 106, width: 11, height: 24, rx: 4, fill: "#6e464b" }, chairG);
+    [[148, 93], [176, 93]].forEach(([bx, by]) => sv("circle", { cx: bx, cy: by, r: 1, fill: "#3d2429" }, chairG));
+    sv("rect", { x: 141, y: 100, width: 12, height: 11, rx: 4, fill: "#b0764a" }, chairG);       // cushion
+    sv("path", { d: "M143 104 H152 M143 107.5 H152", stroke: "#ecd3a0", "stroke-width": 0.9 }, chairG);
+    const bram = sv("g", {}, chairG);
     sv("path", { d: "M150 118 L153 98 Q162 92 171 98 L174 118 Z", fill: "#2e2a45" }, bram);
     sv("circle", { cx: 162, cy: 90, r: 6, fill: "#d9c3a8" }, bram);
     sv("path", { d: "M156 88 Q162 80 168 88 Q162 85 156 88 Z", fill: "#3d2a1e" }, bram);
@@ -3541,41 +3689,93 @@ try {
     sv("line", { x1: 170, y1: 104, x2: 176, y2: 106, stroke: "#2e2a45", "stroke-width": 2.2, "stroke-linecap": "round" }, bram);
     sv("rect", { x: 174, y: 102, width: 6, height: 7, rx: 1.4, fill: "#d6deea" }, bram);
     [0, 1].forEach(i => anim(sv("path", { d: `M${(175.5 + i * 2).toFixed(1)} 100 q-1.4 -3 0 -5 q1.4 -2 0 -4`, stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, bram), `animation:cotSteam ${(1.9 + i * 0.5).toFixed(1)}s ease-out ${(i * 0.6).toFixed(1)}s infinite;`));
-    sv("rect", { x: 180, y: 106, width: 11, height: 24, rx: 4, fill: "#6e464b" }, svg);
-    sv("rect", { x: 134, y: 118, width: 56, height: 12, rx: 5, fill: "#6e464b" }, svg);
+    sv("rect", { x: 180, y: 106, width: 11, height: 24, rx: 4, fill: "#6e464b" }, chairG);
+    sv("path", { d: "M178.5 106 Q185 102 192 106 L192.5 124 Q185 128 178 124 Z", fill: "#c0794a" }, chairG);   // blanket over the arm
+    sv("path", { d: "M178.5 112 H192 M178.2 118 H192.3", stroke: "#ecd3a0", "stroke-width": 1.2 }, chairG);
+    sv("path", { d: "M179 124.5 v3 M182 125.6 v3 M185 126 v3 M188 125.6 v3 M191 124.5 v3", stroke: "#ecd3a0", "stroke-width": 0.8, "stroke-linecap": "round" }, chairG);
+    sv("rect", { x: 134, y: 118, width: 56, height: 12, rx: 5, fill: "#6e464b" }, chairG);
+
     // little table: teapot, and your mug once you have one
-    sv("rect", { x: 208, y: 114, width: 46, height: 4, rx: 1, fill: "#6b4f35" }, svg);
-    sv("rect", { x: 212, y: 118, width: 3, height: 12, fill: "#5a4129" }, svg);
-    sv("rect", { x: 247, y: 118, width: 3, height: 12, fill: "#5a4129" }, svg);
-    sv("ellipse", { cx: 222, cy: 109, rx: 8, ry: 6, fill: "#8a5a44" }, svg);
-    sv("rect", { x: 219, y: 102, width: 6, height: 2.4, rx: 1, fill: "#6b4f35" }, svg);
-    sv("path", { d: "M229.5 108 Q235 106 233 101", stroke: "#8a5a44", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, svg);
-    sv("path", { d: "M214.5 106 Q209 107 210 112", stroke: "#8a5a44", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round" }, svg);
-    anim(sv("path", { d: "M233 99 q-1.5 -3 0 -5 q1.5 -2 0 -4", stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.6 }, svg), "animation:cotSteam 2.2s ease-out infinite;");
-    const herMug = sv("g", {}, svg);
+    shadow(240, 226, 30);
+    const tableG = sv("g", { transform: "translate(-48 61.5) scale(1.25)" }, svg);
+    sv("rect", { x: 208, y: 114, width: 46, height: 4, rx: 1, fill: "#6b4f35" }, tableG);
+    sv("rect", { x: 212, y: 118, width: 3, height: 12, fill: "#5a4129" }, tableG);
+    sv("rect", { x: 247, y: 118, width: 3, height: 12, fill: "#5a4129" }, tableG);
+    sv("ellipse", { cx: 222, cy: 109, rx: 8, ry: 6, fill: "#8a5a44" }, tableG);
+    sv("rect", { x: 219, y: 102, width: 6, height: 2.4, rx: 1, fill: "#6b4f35" }, tableG);
+    sv("path", { d: "M229.5 108 Q235 106 233 101", stroke: "#8a5a44", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, tableG);
+    sv("path", { d: "M214.5 106 Q209 107 210 112", stroke: "#8a5a44", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round" }, tableG);
+    anim(sv("path", { d: "M233 99 q-1.5 -3 0 -5 q1.5 -2 0 -4", stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.6 }, tableG), "animation:cotSteam 2.2s ease-out infinite;");
+    const herMug = sv("g", {}, tableG);
     herMug.style.display = "none";
     const mugBody = sv("rect", { x: 240, y: 106, width: 8, height: 8, rx: 1.6, fill: "#d6a36a" }, herMug);
     sv("path", { d: "M248 108 q3 0 3 3 q0 2.5 -3 2.5", stroke: "#d6deea", "stroke-width": 1.2, fill: "none" }, herMug);
     [0, 1].forEach(i => anim(sv("path", { d: `M${(242 + i * 3).toFixed(1)} 104 q-1.4 -3 0 -5 q1.4 -2 0 -4`, stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.75 }, herMug), `animation:cotSteam ${(1.8 + i * 0.5).toFixed(1)}s ease-out ${(i * 0.5).toFixed(1)}s infinite;`));
-    const bramHit = sv("rect", { x: 132, y: 76, width: 62, height: 56, fill: "transparent" }, svg);
+
+    // slippers by the chair
+    [[152, 252, -8], [166, 255, 6]].forEach(([sx, sy, rot]) => {
+      const sl = sv("g", { transform: `rotate(${rot} ${sx} ${sy})` }, svg);
+      sv("ellipse", { cx: sx, cy: sy, rx: 7, ry: 3.4, fill: "#a8704f" }, sl);
+      sv("ellipse", { cx: sx + 3.5, cy: sy - 0.4, rx: 3.4, ry: 2.4, fill: "#e6d3b3" }, sl);
+    });
+
+    // the cat, curled up on the rug by the fire (breathing, with sleepy z's)
+    shadow(262, 270, 28);
+    const cat = sv("g", { transform: "translate(91 32.5) scale(1.5)" }, svg);
+    const catBody = sv("g", {}, cat);
+    anim(catBody, "animation:cotBreathe 3.4s ease-in-out infinite;transform-origin:50% 100%;transform-box:fill-box;");
+    sv("ellipse", { cx: 112, cy: 150, rx: 15, ry: 7, fill: "#3b3340" }, catBody);
+    sv("circle", { cx: 99, cy: 147, r: 5.6, fill: "#3b3340" }, catBody);
+    sv("path", { d: "M94.6 144 L95.6 138.6 L99 142 Z M103.4 144 L102.4 138.6 L99 142 Z", fill: "#3b3340" }, catBody);
+    sv("path", { d: "M126 152 Q134 150 130 144", stroke: "#3b3340", "stroke-width": 3.2, fill: "none", "stroke-linecap": "round" }, catBody);
+    sv("path", { d: "M96.6 147.4 q1.2 1 2.4 0 M100 147.4 q1.2 1 2.4 0", stroke: "#cbbfe0", "stroke-width": 0.7, fill: "none", "stroke-linecap": "round" }, catBody);
+    [0, 1].forEach(i => {
+      const z = sv("text", { x: 102 + i * 4, y: 138 - i * 3, "font-size": 5 + i, fill: "#e6dcf5", "font-family": "Georgia,serif", "font-style": "italic" }, cat);
+      z.textContent = "z";
+      anim(z, `animation:cotZ 3.6s ease-out ${(i * 1.4).toFixed(1)}s infinite;`);
+    });
+
+    // the glow of the fire over the room, string lights along the beam, and a soft vignette
+    const amb = sv("circle", { cx: 316, cy: 190, r: 170, fill: "url(#cot-amb)" }, svg);
+    amb.style.pointerEvents = "none";
+    anim(amb, "animation:cotPulse 3.2s ease-in-out infinite;");
+    const A = [[-4, 14], [90, 19], [180, 16], [270, 20], [364, 14]];
+    let wire = `M${A[0][0]} ${A[0][1]}`;
+    const lightCols = ["#ffd98a", "#ffb870", "#ff9ab0", "#fff0c0"];
+    const bulbs = [];
+    for (let i = 0; i < A.length - 1; i++) {
+      const p0 = A[i], p2 = A[i + 1], c = [(p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2 + 26];
+      wire += ` Q${c[0]} ${c[1]} ${p2[0]} ${p2[1]}`;
+      [0.2, 0.4, 0.6, 0.8].forEach(t => { const u = 1 - t; bulbs.push([u * u * p0[0] + 2 * u * t * c[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p2[1]]); });
+    }
+    sv("path", { d: wire, stroke: "#2a1d16", "stroke-width": 1, fill: "none" }, svg);
+    bulbs.forEach(([bx, by], i) => {
+      const col = lightCols[i % lightCols.length];
+      sv("rect", { x: bx - 1, y: by - 0.2, width: 2, height: 2.4, fill: "#3a2a1c" }, svg);
+      anim(sv("circle", { cx: bx, cy: by + 4.4, r: 6.5, fill: col, "fill-opacity": 0.22 }, svg), `animation:cotTwinkle ${(2.4 + (i % 4) * 0.5).toFixed(1)}s ease-in-out ${((i * 0.37) % 2).toFixed(2)}s infinite;`);
+      sv("circle", { cx: bx, cy: by + 4.2, r: 2, fill: col }, svg);
+    });
+    const vig = sv("rect", { x: 0, y: 0, width: 360, height: 300, fill: "url(#cot-vig)" }, svg);
+    vig.style.pointerEvents = "none";
+    const bramHit = sv("rect", { x: 127, y: 151, width: 84, height: 76, fill: "transparent" }, svg);   // tap Bram (on top of everything)
     bramHit.style.cursor = "pointer";
     const setMug = c => { if (!c) { herMug.style.display = "none"; return; } mugBody.setAttribute("fill", c); herMug.style.display = ""; };
     const fireBoost = () => {                         // the fire jumps when you toss something on it
-      fireG.style.transition = "transform .25s"; fireG.style.transformOrigin = "300px 124px";
+      fireG.style.transition = "transform .25s"; fireG.style.transformOrigin = "316px 200px";
       fireG.style.transform = "scale(1.35)";
       setTimeout(() => { fireG.style.transform = "scale(1)"; }, 1200);
     };
 
     // ── the card where he talks ──
-    const card = el("div", "flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;border-top:1px solid rgba(255,200,140,0.25);background:rgba(20,12,8,0.9);text-align:center;");
+    const card = el("div", "flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:22px 16px 30px;border-top:1px solid rgba(255,200,140,0.25);background:rgba(20,12,8,0.9);text-align:center;");
     box.appendChild(card);
-    const bcss = "cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;border-radius:8px;padding:7px 12px;border:1px solid rgba(255,200,140,0.4);background:rgba(255,255,255,0.07);color:#f6e8d6;";
+    const bcss = "cursor:pointer;font:inherit;font-size:14px;font-weight:600;border-radius:10px;padding:10px 15px;border:1px solid rgba(255,200,140,0.4);background:rgba(255,255,255,0.07);color:#f6e8d6;";
     const speak = (line, build) => {
       card.textContent = "";
-      card.appendChild(el("div", "font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,217,138,0.85);", "\u{1F3EE} Bram \u00B7 in the cottage"));
-      if (line.t) card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:14px;line-height:1.5;margin:8px 0 2px;color:#f6e8d6;", `\u201C${line.t}\u201D`));
-      if (line.n) card.appendChild(el("div", "font-size:11.5px;line-height:1.4;margin-top:5px;color:rgba(255,217,138,0.9);", line.n));
-      const row = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:11px;");
+      card.appendChild(el("div", "font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,217,138,0.85);", "\u{1F3EE} Bram \u00B7 in the cottage"));
+      if (line.t) card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:17px;line-height:1.5;margin:12px 0 4px;color:#f6e8d6;", `\u201C${line.t}\u201D`));
+      if (line.n) card.appendChild(el("div", "font-size:12.5px;line-height:1.45;margin-top:7px;color:rgba(255,217,138,0.9);", line.n));
+      const row = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-top:16px;");
       const btn = (label, fn, css) => { const b = el("button", bcss + (css || ""), label); b.type = "button"; b.onclick = fn; row.appendChild(b); return b; };
       card.appendChild(row);
       (build || (() => {}))({ btn, add: node => card.insertBefore(node, row) });
