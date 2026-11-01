@@ -6665,7 +6665,7 @@ window.__ao3WorldInit = function (core) {
   // furniture (a striped one down the side, an olive one across the top, a pom-pom garland and fairy lights), with a thin sheet over
   // the opening, lit from within so that only two shadows show on the fabric, and a few small hearts drifting up out of the top. A TV hums to itself nearby and the couch has been stripped bare.
   //  · tap the fort: the shadows lean together and a few hearts puff up (stage 2 will take you inside, see "peek" below)
-  //  · tap a heart, the TV, the couch, the popcorn trail, the crayon drawing or the sign: each says something
+  //  · tap a heart, the TV, the couch, the popcorn trail, or the crayon drawing: each says something
   //  · the ▶ arrow on the right, or the "🎲 table" pill, goes back to the table
   // Nothing in here saves anything. Hearts, flicker and shadows stand still with "reduce motion" switched on.
 
@@ -6686,7 +6686,7 @@ window.__ao3WorldInit = function (core) {
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hits = [];
-    let nTent = 0, nHeart = 0, nTv = 0, nCouch = 0, nTrail = 0, nDraw = 0, nSign = 0, leaving = false;
+    let nTent = 0, nHeart = 0, nTv = 0, nCouch = 0, nTrail = 0, nDraw = 0, leaving = false;
     sh.box.style.background = "#241a26";
     if (!document.getElementById("ao3-bf-css")) {
       const st = document.createElement("style");
@@ -6823,19 +6823,16 @@ window.__ao3WorldInit = function (core) {
     sv("ellipse", { cx: 100, cy: 356, rx: 140, ry: 140, fill: "url(#bf-gabvig)" }, inner);
     [[50, 414, 17, 10], [148, 416, 15, 9]].forEach(([cx, cy, rx, ry]) => sv("ellipse", { cx, cy, rx, ry, fill: "#f6dcb0", opacity: 0.45 }, inner));        // pillows in there
     sv("path", { d: "M80 250 Q74 340 80 424 M104 230 Q102 340 104 424 M128 250 Q134 340 126 424", stroke: "#a8683a", "stroke-width": 1, fill: "none", opacity: 0.3 }, inner);   // soft folds in the sheet
-    // two shadows, a blanket round both of their shoulders; each head sits on a neck so it can tip toward the other
-    const sil = sv("g", { transform: "translate(-10 0)", filter: "url(#bf-soft)", fill: "#1d0f1a", opacity: 0.84 }, inner);
-    sv("path", { d: "M72 418 Q70 394 90 386 Q102 380 113 390 Q124 380 138 386 Q156 394 154 418 Z" }, sil);
-    sv("path", { d: "M80 418 Q78 392 94 380 L98 372 L88 372 Z M126 418 Q124 392 134 378 L138 370 L128 370 Z" }, sil);
+    // two shadows, shoulder to shoulder; each head sits on a neck so it can tip toward the other
+    const sil = sv("g", { transform: "translate(-10 0)", filter: "url(#bf-soft)", fill: "#1d0f1a", opacity: 0.82 }, inner);
+    sv("path", { d: "M78 414 Q76 381 94 375 Q112 381 110 414 Z" }, sil);
+    sv("path", { d: "M114 414 Q112 379 131 373 Q150 379 148 414 Z" }, sil);
     const headA = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 90, y: 366, width: 8, height: 14 }, headA); sv("circle", { cx: 94, cy: 356, r: 10.6 }, headA);
-    [[88, 346.4, 3.4], [94, 345, 3.6], [100, 346.6, 3.2]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r }, headA));
+    sv("rect", { x: 90, y: 365, width: 8, height: 12 }, headA); sv("circle", { cx: 94, cy: 355, r: 11 }, headA);
     const headB = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 129, y: 364, width: 8, height: 14 }, headB); sv("circle", { cx: 133, cy: 353, r: 11.2 }, headB);
-    [[126, 342.4, 3.6], [133, 341, 3.8], [140, 343, 3.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r }, headB));
+    sv("rect", { x: 127, y: 363, width: 8, height: 12 }, headB); sv("circle", { cx: 131, cy: 352, r: 11.6 }, headB);
     anim(headA, "animation:bfLeanA 11s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;");
     anim(headB, "animation:bfLeanB 11s ease-in-out -0.4s infinite;transform-box:fill-box;transform-origin:50% 100%;");
-    sv("path", { d: "M72 418 Q70 394 90 386 Q102 380 113 390 Q124 380 138 386 Q156 394 154 418", stroke: "#ffcf8a", "stroke-width": 1, fill: "none", opacity: 0.4, transform: "translate(-10 0)" }, inner);   // the blanket's edge catches the light
     // the folded hem along both slopes of the front
     sv("path", { d: "M14 424 Q66 288 98 160 Q128 288 176 424", stroke: "#2a1428", "stroke-width": 6, fill: "none", opacity: 0.35, "stroke-linejoin": "round" }, tent);
     sv("path", { d: "M14 424 Q66 288 98 160 Q128 288 176 424", stroke: "#efe0c4", "stroke-width": 3, fill: "none", opacity: 0.9, "stroke-linejoin": "round" }, tent);
@@ -6881,12 +6878,6 @@ window.__ao3WorldInit = function (core) {
     const bt = sv("text", { x: 104, y: 476, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 6.4, "font-weight": 700, fill: "#f6ead0", transform: "rotate(-3 104 476)" }, box); bt.textContent = "GAME NIGHT";
     [[84, 487, "#3f7fd0"], [96, 486, "#e0a032"], [108, 485, "#4a8a5a"]].forEach(([px, py, c]) => sv("circle", { cx: px, cy: py, r: 1.8, fill: c }, box));
     [[72, 450], [84, 454], [92, 449], [124, 450], [136, 456], [146, 452], [160, 480], [172, 486], [184, 482]].forEach(([px, py], i) => sv("circle", { cx: px, cy: py, r: 1.8 + (i % 3) * 0.3, fill: i % 2 ? "#f6ead0" : "#efdca8" }, svg));
-    // a note pinned to the olive blanket
-    const sign = sv("g", { transform: "rotate(5 190 316)" }, svg);
-    sv("rect", { x: 168, y: 300, width: 44, height: 30, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, sign);
-    sv("rect", { x: 185, y: 297.4, width: 10, height: 4.6, fill: "#d9c3a0", opacity: 0.85 }, sign);
-    [["FORT", 310.4, 7.2], ["KNOCK FIRST", 317.4, 4.2]].forEach(([tx, ty, fs]) => { const t = sv("text", { x: 190, y: ty, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": fs, "font-weight": 700, fill: "#5a2a2a" }, sign); t.textContent = tx; });
-    const sub2 = sv("text", { x: 190, y: 326, "text-anchor": "middle", "font-family": "Georgia,serif", "font-style": "italic", "font-size": 3.4, fill: "#6a5a5a" }, sign); sub2.textContent = "(it is a blanket)";
 
     // ── the couch, seen from behind: every cushion is in the fort ──
     sv("rect", { x: 190, y: 436, width: 26, height: 92, rx: 10, fill: "#6a3a4a" }, svg);
@@ -6940,9 +6931,7 @@ window.__ao3WorldInit = function (core) {
       trail: ["A trail of popcorn runs from the couch to the fort. Whoever carried the bowl gave up halfway.",
         "Popcorn, popcorn, a pillow, more popcorn. It is a very clear trail."],
       drawing: ["A crayon drawing pinned to the wall: two stick figures holding hands, one very large heart. Whoever hung it up is not available for comment.",
-        "In the corner there is a date, scribbled out. Twice."],
-      sign: ["A note taped to the blanket: FORT — KNOCK FIRST. Underneath, in different handwriting: “(it is a blanket)”.",
-        "You consider knocking on a blanket. It seems unwise. It also seems like the correct protocol."]
+        "In the corner there is a date, scribbled out. Twice."]
     };
     const wobble = () => { if (reduce) return; try { tent.animate([{ transform: "translate(0,0)" }, { transform: "translate(-1.5px,0)" }, { transform: "translate(1.5px,0)" }, { transform: "translate(0,0)" }], { duration: 380, easing: "ease-out" }); } catch {} };
     const peek = () => {       // stage 2 hangs its inside view here: define openFortInside() and the fort will fade in to it
@@ -6951,7 +6940,6 @@ window.__ao3WorldInit = function (core) {
     };
     const back = () => { if (leaving) return; leaving = true; say("Back to the table."); bfFade(sh, () => openBasement()); };
     hit(4, 150, 230, 278, "The blanket fort", () => { if (peek()) return; say(SAY.tent[nTent++ % SAY.tent.length]); wobble(); puff(3); });
-    hit(164, 296, 52, 38, "The note on the fort", () => say(SAY.sign[nSign++ % SAY.sign.length]));
     hit(70, 56, 64, 100, "The hearts", () => { say(SAY.heart[nHeart++ % SAY.heart.length]); puff(2); });
     hit(226, 218, 120, 156, "The TV", () => {
       say(SAY.tv[nTv++ % SAY.tv.length]);
@@ -6977,7 +6965,6 @@ window.__ao3WorldInit = function (core) {
       later(() => v.remove(), 900);
     }
   }
-
 
 
   // ── ⛪ THE CHAPEL (inside) ──
