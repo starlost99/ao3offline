@@ -7068,6 +7068,10 @@ window.__ao3WorldInit = function (core) {
   // The last moment is remembered under "ao3-fi-moment" (the only thing saved here) so it is never the same one twice running.
   // Hearts, bubbles' pop and the twinkle stand still with "reduce motion" switched on.
   const FI_KEY = "ao3-fi-moment";
+  // The radio in the fort plays a YouTube video or playlist. Put a link between the quotes to set the station for good,
+  // or leave it empty and use the "📻 station" button in the fort (that link is remembered under "ao3-fi-radio").
+  const FI_RADIO_DEFAULT = "";
+  const FI_RADIO_KEY = "ao3-fi-radio";
   function openFortInside(arrive) {
     const sh = hkShell("ao3-fort-inside", "\u{1F3D5}️ Inside the fort");
     const { sv, rnd, anim, el } = sh.kit;
@@ -7187,6 +7191,21 @@ window.__ao3WorldInit = function (core) {
     for (let i = 0; i < 16; i++) { const a = rnd("pc" + i), b = rnd("pd" + i), cx = 44 + a * 36, cy = 462 + b * 7 - Math.abs(a - 0.5) * 8; sv("circle", { cx: cx.toFixed(1), cy: cy.toFixed(1), r: (3 + rnd("pe" + i) * 1.3).toFixed(1), fill: i % 2 ? "#f6ead0" : "#efdca8" }, bowl); }
     for (let i = 0; i < 6; i++) sv("circle", { cx: (50 + rnd("pq" + i) * 24).toFixed(1), cy: (459 + rnd("pr" + i) * 5).toFixed(1), r: 1.2, fill: "#d9a85c", opacity: 0.7 }, bowl);
     [[116, 508], [128, 512], [102, 514]].forEach(([x, y]) => sv("circle", { cx: x, cy: y, r: 2.2, fill: "#f6ead0" }, fore));
+    // the radio: a little red boombox with a handle, an aerial, a speaker, a dial and a light that comes on when it plays
+    const rad = sv("g", {}, fore);
+    sv("ellipse", { cx: 143, cy: 508, rx: 34, ry: 4, fill: "#000", opacity: 0.35 }, rad);
+    sv("path", { d: "M122 476 V467 Q143 458 164 467 V476", stroke: "#2a2a36", "stroke-width": 3, fill: "none", "stroke-linecap": "round" }, rad);
+    sv("path", { d: "M167 476 L182 446", stroke: "#cfd4de", "stroke-width": 1.3, "stroke-linecap": "round" }, rad); sv("circle", { cx: 182.4, cy: 445.4, r: 1.9, fill: "#cfd4de" }, rad);
+    sv("rect", { x: 112, y: 475, width: 62, height: 32, rx: 5, fill: "#c9482e", stroke: "#6a2418", "stroke-width": 1 }, rad);
+    sv("rect", { x: 114, y: 477, width: 58, height: 5, rx: 2.5, fill: "#fff", opacity: 0.16 }, rad);
+    const spk = sv("g", {}, rad);
+    sv("circle", { cx: 128, cy: 491.5, r: 10.5, fill: "#2a2a36", stroke: "#14141c", "stroke-width": 0.8 }, spk);
+    [7.4, 4.4].forEach(r => sv("circle", { cx: 128, cy: 491.5, r, fill: "none", stroke: "#4a4a5a", "stroke-width": 0.9 }, spk)); sv("circle", { cx: 128, cy: 491.5, r: 1.8, fill: "#4a4a5a" }, spk);
+    sv("rect", { x: 144, y: 480, width: 24, height: 10, rx: 2, fill: "#efe3c6", stroke: "#6a2418", "stroke-width": 0.6 }, rad);
+    sv("path", { d: "M147 487 V489 M150 487.6 V489 M153 487 V489 M156 487.6 V489 M159 487 V489 M162 487.6 V489 M165 487 V489", stroke: "#6a5a40", "stroke-width": 0.6 }, rad);
+    sv("path", { d: "M156 481 V489", stroke: "#c9482e", "stroke-width": 1 }, rad);
+    [[150, 499], [162, 499]].forEach(([x, y]) => { sv("circle", { cx: x, cy: y, r: 2.8, fill: "#2a2a36" }, rad); sv("path", { d: `M${x} ${y - 2.4} V${y}`, stroke: "#9a9aaa", "stroke-width": 0.7 }, rad); });
+    const led = sv("circle", { cx: 169, cy: 479, r: 1.5, fill: "#5a2a2a" }, rad);
     const comics = sv("g", {}, fore);
     [["#3f7fd0", 262, 496, -4], ["#c9482e", 268, 488, 3], ["#e0a032", 264, 481, -2]].forEach(([c, x, y, r]) => { const b = sv("g", { transform: `rotate(${r} ${x + 26} ${y})` }, comics); sv("rect", { x, y, width: 54, height: 9, rx: 1, fill: c }, b); sv("rect", { x: x + 2, y: y + 1.5, width: 50, height: 6, fill: "#f6ead0", opacity: 0.85 }, b); sv("path", { d: `M${x + 6} ${y + 4.5} h20 M${x + 30} ${y + 4.5} h10`, stroke: c, "stroke-width": 1.2 }, b); });
     const torch = sv("g", { transform: "rotate(-24 300 452)" }, fore);
@@ -7261,6 +7280,71 @@ window.__ao3WorldInit = function (core) {
       comic: ["Comics, in a leaning stack. One has two names inked inside the cover, very small, and a doodled heart between them.", "The top issue is open at a page nobody has turned in an hour."],
       draw: ["A crayon heart, pinned up very crooked. M + W. Nobody has ever been asked about it."]
     };
+    // ── the radio: the YouTube player lives off-screen; the tap is a real user gesture, so it may start playing (needs internet) ──
+    let radioUrl = FI_RADIO_DEFAULT; try { radioUrl = localStorage.getItem(FI_RADIO_KEY) || FI_RADIO_DEFAULT; } catch {}
+    const ytParse = u => {
+      try {
+        const x = new URL(String(u).trim()), list = x.searchParams.get("list"); let id = null;
+        if (x.hostname.indexOf("youtu.be") >= 0) id = x.pathname.slice(1).split("/")[0];
+        else if (x.pathname.indexOf("/watch") === 0) id = x.searchParams.get("v");
+        else { const m = x.pathname.match(/^\/(shorts|embed|live|v)\/([\w-]{6,})/); if (m) id = m[2]; }
+        if (id || list) return { id, list };
+      } catch {}
+      return null;
+    };
+    const radioHost = el("div", "position:fixed;left:-400px;top:0;width:200px;height:200px;opacity:0;pointer-events:none;overflow:hidden;");
+    document.body.appendChild(radioHost);
+    let ytp = null, ytReady = false, radioOn = false, wantPlay = false, notesT = null;
+    const setRadio = on => {
+      radioOn = on; led.setAttribute("fill", on ? "#7aff9a" : "#5a2a2a");
+      clearInterval(notesT); notesT = null;
+      if (on && !reduce) {
+        spk.style.cssText = "transform-box:fill-box;transform-origin:center;animation:hkBreathe 0.7s ease-in-out infinite;";
+        const note = () => { const w = sv("g", { transform: `translate(${(132 + Math.random() * 34).toFixed(1)} 458)` }, heartsG); const t = sv("text", { "font-size": 15, fill: ["#ffd98a", "#ff9fc0", "#9fe0ff"][Math.floor(Math.random() * 3)], "text-anchor": "middle" }, w); t.textContent = Math.random() > 0.5 ? "\u266A" : "\u266B"; anim(t, `--dx:${((Math.random() - 0.5) * 36).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); };
+        note(); notesT = setInterval(note, 1100);
+      } else spk.style.cssText = "";
+    };
+    const radioKill = () => { clearInterval(notesT); try { if (ytp) ytp.destroy(); } catch {} ytp = null; ytReady = false; radioHost.remove(); };
+    const loadYT = cb => {
+      if (window.YT && window.YT.Player) return cb();
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { try { if (prev) prev(); } catch {} cb(); };
+      if (!document.getElementById("ao3-yt-api")) { const sc = document.createElement("script"); sc.id = "ao3-yt-api"; sc.src = "https://www.youtube.com/iframe_api"; sc.onerror = () => say("The radio only gets static. It needs an internet connection to find the station."); document.head.appendChild(sc); }
+    };
+    const setupPlayer = () => {
+      try { if (ytp) ytp.destroy(); } catch {} ytp = null; ytReady = false; setRadio(false);
+      const p = ytParse(radioUrl); if (!p) return;
+      while (radioHost.firstChild) radioHost.removeChild(radioHost.firstChild);
+      const mount = document.createElement("div"); radioHost.appendChild(mount);
+      loadYT(() => {
+        if (!radioHost.isConnected) return;
+        const vars = { playsinline: 1, controls: 0, rel: 0, loop: 1 };
+        const cfg = { width: "200", height: "200", playerVars: vars, events: {
+          onReady: () => { ytReady = true; if (wantPlay) { wantPlay = false; try { ytp.playVideo(); } catch {} } },
+          onStateChange: e => { if (e.data === 1) setRadio(true); else if (e.data === 2 || e.data === 0) setRadio(false); },
+          onError: () => { setRadio(false); say("Just static. That video can\u2019t be played in the radio (some can\u2019t be embedded). Try a different link."); }
+        } };
+        if (p.id) { cfg.videoId = p.id; if (p.list) vars.list = p.list; else vars.playlist = p.id; } else { vars.listType = "playlist"; vars.list = p.list; }
+        try { ytp = new window.YT.Player(mount, cfg); } catch { say("The radio only gets static."); }
+      });
+    };
+    const station = () => {
+      const v = window.prompt("Paste a YouTube link (a song, a video or a playlist) for the radio:", radioUrl || "");
+      if (v === null) return;
+      if (!v.trim()) { radioUrl = ""; try { localStorage.removeItem(FI_RADIO_KEY); } catch {} setupPlayer(); say("The dial is back to empty."); return; }
+      if (!ytParse(v)) { say("That doesn\u2019t look like a YouTube link. The dial doesn\u2019t move."); return; }
+      radioUrl = v.trim(); try { localStorage.setItem(FI_RADIO_KEY, radioUrl); } catch {}
+      wantPlay = true; setupPlayer(); say("The dial turns\u2026 tap the radio when the light comes on.");
+    };
+    const radioTap = () => {
+      if (!ytParse(radioUrl)) { station(); return; }
+      if (!ytp || !ytReady) { wantPlay = true; say("The radio crackles, finding the station\u2026"); if (!ytp) setupPlayer(); return; }
+      if (radioOn) { try { ytp.pauseVideo(); } catch {} setRadio(false); say("Click. The radio goes quiet."); }
+      else { try { ytp.playVideo(); } catch {} say("\u266A The radio hums to life. Somebody turns it up a notch."); puff(2); }
+    };
+    const prevClose = sh.onClose; sh.onClose = () => { if (prevClose) prevClose(); radioKill(); };
+    setupPlayer();
+    hit(108, 444, 78, 64, "The radio", radioTap);
     hit(96, 250, 100, 140, "Will", next); hit(196, 244, 100, 146, "Mike", next);
     hit(150, 366, 60, 36, "Their hands", () => { say(SAY.hand[nHand++ % SAY.hand.length]); puff(3); });
     hit(296, 466, 40, 50, "The walkie-talkie", () => {
@@ -7279,6 +7363,7 @@ window.__ao3WorldInit = function (core) {
     const out = () => { if (leaving) return; leaving = true; say("You back out on your hands and knees."); bfFade(sh, () => openBasementFort(true)); };
     pill("\u{1F4AC} next", "Hear the next line sooner", next);
     pill("\u{1F501} another", "A different moment", another);
+    pill("\u{1F4FB} station", "Change the radio station (paste a YouTube link)", station);
     pill("◀ outside", "Back out of the fort", out);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { sh.close(); openHawkins(false); });
     document.body.appendChild(sh.back);
