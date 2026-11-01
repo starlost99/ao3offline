@@ -6842,14 +6842,18 @@ window.__ao3WorldInit = function (core) {
     sv("path", { d: "M80 250 Q74 340 80 424 M104 230 Q102 340 104 424 M128 250 Q134 340 126 424", stroke: "#a8683a", "stroke-width": 1, fill: "none", opacity: 0.3 }, inner);   // soft folds in the sheet
     // two shadows, shoulder to shoulder; each head sits on a neck so it can tip toward the other
     const sil = sv("g", { transform: "translate(-10 0)", filter: "url(#bf-soft)", fill: "#1d0f1a", opacity: 0.82 }, inner);
-    sv("path", { d: "M78 414 Q76 381 94 375 Q112 381 110 414 Z" }, sil);
-    sv("path", { d: "M114 414 Q112 379 131 373 Q150 379 148 414 Z" }, sil);
+    sv("path", { d: "M68 436 Q68 398 78 386 Q86 377 94 376 Q104 377 112 386 Q120 398 120 436 Z" }, sil);
+    sv("path", { d: "M106 436 Q106 396 116 384 Q124 375 131 374 Q142 375 150 384 Q160 396 160 436 Z" }, sil);
     const headA = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 90, y: 365, width: 8, height: 12 }, headA); sv("circle", { cx: 94, cy: 355, r: 11 }, headA);
+    sv("rect", { x: 89, y: 364, width: 10, height: 16 }, headA); sv("circle", { cx: 94, cy: 357, r: 11 }, headA);
     const headB = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 127, y: 363, width: 8, height: 12 }, headB); sv("circle", { cx: 131, cy: 352, r: 11.6 }, headB);
+    sv("rect", { x: 126, y: 362, width: 10, height: 16 }, headB); sv("circle", { cx: 131, cy: 354, r: 11.6 }, headB);
     anim(headA, "animation:bfLeanA 11s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;");
     anim(headB, "animation:bfLeanB 11s ease-in-out -0.4s infinite;transform-box:fill-box;transform-origin:50% 100%;");
+    // where the sheet meets the rug it falls into shadow, so the two sit down in it instead of floating
+    const flf = sv("linearGradient", { id: "bf-floorfade", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#1a0a1e", "stop-opacity": "0" }, flf); sv("stop", { offset: "100%", "stop-color": "#1a0a1e", "stop-opacity": "0.7" }, flf);
+    sv("rect", { x: 0, y: 392, width: 240, height: 34, fill: "url(#bf-floorfade)" }, inner);
     // the folded hem along both slopes of the front
     sv("path", { d: "M14 424 Q66 288 98 160 Q128 288 176 424", stroke: "#2a1428", "stroke-width": 6, fill: "none", opacity: 0.35, "stroke-linejoin": "round" }, tent);
     sv("path", { d: "M14 424 Q66 288 98 160 Q128 288 176 424", stroke: "#efe0c4", "stroke-width": 3, fill: "none", opacity: 0.9, "stroke-linejoin": "round" }, tent);
