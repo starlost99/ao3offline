@@ -6255,7 +6255,7 @@ window.__ao3WorldInit = function (core) {
       const [E, Hd] = solveArm(S, T, F.u, F.f, left);
       const w = isA ? 10.6 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
       seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
-      seg(S, E, isA ? "url(#bs-plaid)" : TEAL, w); seg(E, Hd, isA ? THERMAL : TEAL, w - 1.6);
+      seg(S, E, isA ? "url(#bs-plaid)" : TEAL, w); seg(E, Hd, isA ? "url(#bs-plaid)" : TEAL, w - 1.6);
       if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], GREY, w - 0.6, "butt"); }
       if (isA && left) { const k = 0.78, wx = E[0] + (Hd[0] - E[0]) * k, wy = E[1] + (Hd[1] - E[1]) * k, ang = Math.atan2(Hd[1] - E[1], Hd[0] - E[0]) * 180 / Math.PI; const wg = sv("g", { transform: `translate(${wx.toFixed(1)} ${wy.toFixed(1)}) rotate(${ang.toFixed(1)})` }, g); sv("rect", { x: -1.9, y: -3.9, width: 3.8, height: 7.8, rx: 0.8, fill: "#2a2a36" }, wg); sv("rect", { x: -0.9, y: -1.6, width: 1.8, height: 3.2, fill: "#9ac6e0", opacity: 0.9 }, wg); }
       sv("circle", { cx: Hd[0].toFixed(1), cy: Hd[1].toFixed(1), r: 4.4, fill: isA ? SKIN_A : SKIN_B, stroke: "#b98f72", "stroke-width": 0.6 }, g);
@@ -6268,30 +6268,28 @@ window.__ao3WorldInit = function (core) {
         const x = sd * o.ex + lk, y = o.ey + lky;
         if (ek === "closed") sv("path", { d: `M${x - 2.2} ${y} Q${x} ${y + 1.7} ${x + 2.2} ${y}`, stroke: "#2a1d1a", "stroke-width": 1, fill: "none", "stroke-linecap": "round" }, eyes);
         else if (ek === "happy") sv("path", { d: `M${x - 2.2} ${y + 0.9} Q${x} ${y - 2} ${x + 2.2} ${y + 0.9}`, stroke: "#2a1d1a", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round" }, eyes);
-        else { sv("ellipse", { cx: x, cy: y, rx: 1.35, ry: 1.7, fill: "#2a1d1a" }, eyes); sv("circle", { cx: x + 0.5, cy: y - 0.6, r: 0.45, fill: "#fff", opacity: 0.85 }, eyes); }
+        else { const er = o.er || 1; sv("ellipse", { cx: x, cy: y, rx: 1.35 * er, ry: 1.7 * er, fill: o.eye || "#2a1d1a" }, eyes); sv("circle", { cx: x + 0.5 * er, cy: y - 0.6 * er, r: 0.45 * er, fill: "#fff", opacity: 0.9 }, eyes); }
       });
       if (ek === "open") anim(eyes, `transform-box:fill-box;transform-origin:center;animation:hkBlink ${(4.6 + Math.random() * 2.4).toFixed(1)}s ease-in-out -${(Math.random() * 4).toFixed(1)}s infinite;`);
       const up = { o: [-1.8, -1.8], smirk: [-0.2, -1.8], grin: [-0.8, -0.8], cheer: [-1.4, -1.4], smile: [-0.3, -0.3] }[mood] || [0, 0];
-      [-1, 1].forEach((sd, i) => { const x = sd * o.ex + lk * 0.5, y = o.by + up[i]; sv("path", { d: `M${x - 3} ${y + 0.4} Q${x} ${y - 0.9} ${x + 3} ${y + (sd > 0 ? 0.4 : 0.4)}`, stroke: o.brow, "stroke-width": 1.15, fill: "none", "stroke-linecap": "round" }, g); });
+      [-1, 1].forEach((sd, i) => { const x = sd * o.ex + lk * 0.5, y = o.by + up[i]; sv("path", { d: `M${x - 3} ${y + 0.4} Q${x} ${y - 0.9} ${x + 3} ${y + (sd > 0 ? 0.4 : 0.4)}`, stroke: o.brow, "stroke-width": o.bw || 1.15, fill: "none", "stroke-linecap": "round" }, g); });
       const m = o.my, mc = "#7a2f2f", MS = { stroke: "#7a3a30", "stroke-width": 1, fill: "none", "stroke-linecap": "round" };
       if (mood === "o") sv("ellipse", { cx: 0, cy: m + 0.6, rx: 1.9, ry: 2.4, fill: mc }, g);
       else if (mood === "grin") { sv("path", { d: `M-4.4 ${m - 0.6} Q0 ${m + 5.4} 4.4 ${m - 0.6} Z`, fill: mc }, g); sv("path", { d: `M-3.4 ${m - 0.4} Q0 ${m + 1.2} 3.4 ${m - 0.4}`, stroke: "#f6ead0", "stroke-width": 1.1, fill: "none" }, g); }
       else if (mood === "cheer") { sv("path", { d: `M-5 ${m - 1.2} Q0 ${m + 7.4} 5 ${m - 1.2} Z`, fill: mc }, g); sv("path", { d: `M-4 ${m - 0.8} Q0 ${m + 0.8} 4 ${m - 0.8}`, stroke: "#f6ead0", "stroke-width": 1.2, fill: "none" }, g); }
+      else if (mood === "smile" && o.open) { sv("path", { d: `M-4.6 ${m - 0.4} Q0.8 ${m - 2.2} 4.8 ${m - 1.6} Q2.4 ${m + 5.2} -4.6 ${m - 0.4} Z`, fill: mc }, g); sv("path", { d: `M-4.1 ${m - 0.5} Q0.8 ${m - 2} 4.4 ${m - 1.4} L4 ${m - 0.2} Q0.2 ${m - 1} -3.7 ${m + 0.2} Z`, fill: "#f6ead0" }, g); }
       else if (mood === "smile") sv("path", Object.assign({ d: `M-3.4 ${m - 0.6} Q0 ${m + 3} 3.4 ${m - 0.6}` }, MS), g);
       else if (mood === "smirk") sv("path", Object.assign({ d: `M-3 ${m + 0.2} Q1 ${m + 1.4} 4 ${m - 1.6}` }, MS), g);
       else if (mood === "calm") sv("path", Object.assign({ d: `M-2.4 ${m} Q0 ${m + 1.4} 2.4 ${m}` }, MS), g);
       else sv("path", Object.assign({ d: `M-2.8 ${m + 0.4} Q0 ${m + 0.9} 2.8 ${m + 0.4}` }, MS), g);
-      if (p.blush || mood === "smile" || mood === "grin" || mood === "cheer") [-1, 1].forEach(sd => sv("ellipse", { cx: sd * (o.ex + 2.6), cy: m - 2.4, rx: p.blush ? 3 : 2.4, ry: p.blush ? 1.8 : 1.4, fill: p.blush ? "#e86a7a" : "#e8908a", opacity: p.blush ? 0.55 : 0.3 }, g));
+      if (p.blush || o.cheek || mood === "smile" || mood === "grin" || mood === "cheer") [-1, 1].forEach(sd => sv("ellipse", { cx: sd * (o.ex + 2.6), cy: m - 2.4, rx: p.blush ? 3.2 : o.cheek ? 3.1 : 2.4, ry: p.blush ? 2 : o.cheek ? 2 : 1.4, fill: p.blush ? "#e86a7a" : o.cheek ? "#ea8f8f" : "#e8908a", opacity: p.blush ? 0.6 : o.cheek ? 0.62 : 0.3 }, g));
     };
-    const torsoA = g => {                                   // the flannel, open over a grey thermal
-      sv("path", { d: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", fill: "url(#bs-plaid)", stroke: "#4a3a2c", "stroke-width": 0.8 }, g).setAttribute("stroke-opacity", 0.5);
-      sv("rect", { x: -4.6, y: -12, width: 9.2, height: 8, fill: "#d9b090" }, g);
-      sv("path", { d: "M-8.4 -5 Q0 2.4 8.4 -5 L7.6 -9 Q0 -3 -7.6 -9 Z", fill: THERMAL }, g);
-      sv("path", { d: "M0 4 V58", stroke: "#6b5a40", "stroke-width": 0.9, opacity: 0.8 }, g);
-      sv("polygon", { points: "-9.4,-6 -1.2,-2 -9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
-      sv("polygon", { points: "9.4,-6 1.2,-2 9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
-      [10, 22, 34].forEach(y => sv("circle", { cx: 0, cy: y, r: 0.95, fill: "#efe3c6" }, g));
-      sv("path", { d: "M-19 12 H-8 V23 H-19 Z", stroke: "#4a3a2c", "stroke-width": 0.7, fill: "none", opacity: 0.6 }, g);
+    const torsoA = g => {                                   // the striped sweater: cream with navy and maroon bands, a navy ribbed crew neck
+      sv("path", { d: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", fill: "url(#bs-plaid)", stroke: "#5a2e3c", "stroke-width": 0.8 }, g).setAttribute("stroke-opacity", 0.55);
+      sv("rect", { x: -4.6, y: -12, width: 9.2, height: 8, fill: "#d9ae8e" }, g);
+      sv("path", { d: "M-10.4 -5.4 Q0 4.6 10.4 -5.4 L9 -10.4 Q0 -3.8 -9 -10.4 Z", fill: "#2b3862" }, g);
+      sv("path", { d: "M-9 -9 Q0 -2.6 9 -9", stroke: "#4a5a8a", "stroke-width": 0.5, fill: "none", opacity: 0.6 }, g);
+      sv("path", { d: "M-17 12 Q-19.4 34 -17.6 58 M17 12 Q19.4 34 17.6 58", stroke: "#7a6a5e", "stroke-width": 0.7, fill: "none", opacity: 0.5 }, g);
     };
     const torsoB = g => {                                   // the teal pullover: grey shoulder panels, a snap collar, a pocket with a grey triangle
       sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.8 }, g);
@@ -6314,18 +6312,21 @@ window.__ao3WorldInit = function (core) {
       const l = top(-hw), r = top(hw);
       sv("polygon", { points: `${-hw},${baseY} ${hw},${baseY} ${r[0]},${r[1]} ${l[0]},${l[1]}`, fill: "#d9b090" }, g);
     };
-    const headA = (g, p) => {                               // soft, fluffy, side-swept fringe: full on top, not long
+    const headA = (g, p) => {                               // a soft bowl cut: blunt, slightly ragged bangs, hair down past the ears, dark brown
       neckTo(g, p, -9, -16, 4.6);
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      const HAIR = "#3b2a20";
-      [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -21.4, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
-      sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
-      // season-5 hair: one soft, tousled mass, full on top and a bit wavy at the edge, with a loose fringe swept across the forehead; it meets the skull at the temples
-      sv("path", { d: "M-14.6 -18 C-18.6 -24 -20.6 -33 -17.6 -39.2 C-16 -44.8 -11 -49.2 -5 -50.2 C-2 -52.6 3.8 -52.8 7.2 -50.8 C12.8 -50.2 18.2 -45.8 18.8 -39.6 C20.2 -33 18.4 -25 15 -17 C14.8 -21 14 -25 12.6 -28 Q9.8 -30.4 7.4 -33.6 Q7 -30.6 4.6 -29.4 Q2.6 -31.8 0.4 -34 Q-0.6 -31.6 -3.6 -31.2 Q-5 -33 -6.8 -35.6 Q-8.8 -33.4 -10.4 -31 Q-13.4 -29 -13.6 -25 Q-14 -21 -14.6 -18 Z", transform: "translate(0.4 1.8)", fill: "#8a6a50", opacity: 0.3 }, h);                // soft shadow it casts on the forehead
-      sv("path", { d: "M-14.6 -18 C-18.6 -24 -20.6 -33 -17.6 -39.2 C-16 -44.8 -11 -49.2 -5 -50.2 C-2 -52.6 3.8 -52.8 7.2 -50.8 C12.8 -50.2 18.2 -45.8 18.8 -39.6 C20.2 -33 18.4 -25 15 -17 C14.8 -21 14 -25 12.6 -28 Q9.8 -30.4 7.4 -33.6 Q7 -30.6 4.6 -29.4 Q2.6 -31.8 0.4 -34 Q-0.6 -31.6 -3.6 -31.2 Q-5 -33 -6.8 -35.6 Q-8.8 -33.4 -10.4 -31 Q-13.4 -29 -13.6 -25 Q-14 -21 -14.6 -18 Z", fill: HAIR }, h);
-      sv("path", { d: "M-15 -38 q2.4 -4.6 6.4 -3 q2.6 1.8 0.4 4.6 M-5 -47 q3.4 -3.2 7 -0.6 q2 2.4 -0.8 4 M7 -46.6 q4.2 -1.6 6.2 1.6 q0.8 3 -2.2 3.6 M13 -38 q3.2 0.4 3.6 3.6 M-11 -29.6 q-2 -2.4 -3.6 -0.6", stroke: "#5f4836", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, h);   // a few curls
-      sv("path", { d: "M-8 -44.4 Q-1 -49 8 -46.6", stroke: "#6e5542", "stroke-width": 2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
-      face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
+      const HAIR = "#4a2e22", HAIR_D = "#2f1d15";
+      // 1. the back of the hair: a round dome that comes down on both sides to the jaw
+      sv("path", { d: "M-14.6 -12 C-21.4 -18 -23 -32 -17.6 -39.4 C-12 -46.4 -4 -48 2 -47.6 C10 -47.4 17.4 -44.2 20 -37 C23.2 -30 22 -19 13.6 -12 Q0 -8 -14.6 -12 Z", fill: HAIR }, h);
+      // 2. ears, then the face
+      [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 15.4, cy: -20, rx: 2.5, ry: 3.1, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
+      sv("ellipse", { cx: 0, cy: -24, rx: 14.8, ry: 15.5, fill: SKIN_A }, h);
+      // 3. the front: straight bangs with a few pointed strands, and the side hair falling over the temples
+      sv("path", { d: "M-14.4 -21 C-15.8 -31 -15.4 -40 -4 -44.4 C4 -46.4 13 -44 15.6 -35 C16.4 -30 15.4 -25 14.4 -21 L13 -25.6 L11.6 -29.6 L10 -30.2 L8.4 -28 L6.8 -30.2 L4.2 -30.4 L2.6 -28.2 L0.8 -30.4 L-1.6 -30.2 L-3 -28 L-4.8 -30.2 L-7.4 -30.4 L-9 -28.4 L-10.6 -30.2 L-12.4 -27 Z", fill: HAIR }, h);
+      sv("path", { d: "M1 -46 Q-3 -40 -2 -31 M-5 -44 Q-9 -38 -8.4 -31 M7 -45.4 Q10.4 -39 8.6 -31.6 M-12 -41 Q-16 -34 -14 -27 M13.4 -40 Q16.6 -34 14 -27 M-19 -32 Q-20.4 -24 -15.6 -15 M19.4 -32 Q20.6 -24 14 -14", stroke: HAIR_D, "stroke-width": 0.9, fill: "none", "stroke-linecap": "round", opacity: 0.5 }, h);
+      sv("path", { d: "M-8 -43.8 Q-1 -46.6 7 -44.6", stroke: "#6e4a38", "stroke-width": 1.6, fill: "none", "stroke-linecap": "round", opacity: 0.45 }, h);
+      face(h, p, { ex: 5.9, ey: -22.4, by: -26.8, my: -13.4, brow: "#2f1d15", er: 1.32, bw: 1.6, eye: "#3a2018", cheek: true, open: true });
+      sv("circle", { cx: 9.4, cy: -18, r: 0.65, fill: "#5a3226" }, h);      // his mole
     };
     const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
       neckTo(g, p, -9, -18, 5);
@@ -6405,12 +6406,8 @@ window.__ao3WorldInit = function (core) {
     sv("stop", { offset: "55%", "stop-color": "#0a060e", "stop-opacity": "0" }, vig);
     sv("stop", { offset: "100%", "stop-color": "#0a060e", "stop-opacity": "0.6" }, vig);
     // the flannel: tan with blue bands and thin orange lines
-    const plaid = sv("pattern", { id: "bs-plaid", width: 12, height: 12, patternUnits: "userSpaceOnUse" }, defs);
-    sv("rect", { width: 12, height: 12, fill: "#b9a27c" }, plaid);
-    sv("rect", { x: 0, y: 0, width: 12, height: 4.2, fill: "#5d82b4", opacity: 0.8 }, plaid);
-    sv("rect", { x: 0, y: 0, width: 4.2, height: 12, fill: "#5d82b4", opacity: 0.8 }, plaid);
-    sv("rect", { x: 7.4, y: 0, width: 1.4, height: 12, fill: "#d9803a", opacity: 0.95 }, plaid);
-    sv("rect", { x: 0, y: 7.4, width: 12, height: 1.4, fill: "#d9803a", opacity: 0.95 }, plaid);
+    const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);   // Will's striped sweater (bsKit asks for this id)
+    sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
     const mapClip = sv("clipPath", { id: "bs-mapclip" }, defs);
     sv("polygon", { points: "112,331 248,331 270,366 90,366" }, mapClip);
 
@@ -6644,7 +6641,7 @@ window.__ao3WorldInit = function (core) {
     // tappable things
     const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
     hit(262, 60, 90, 270, "The stairs up", () => say("The stairs up to the house. Something warm is cooking up there."));
-    hit(116, 232, 60, 92, "The one in the flannel", shift);
+    hit(116, 232, 60, 92, "The one in the striped sweater", shift);
     hit(176, 218, 70, 106, "The one with the curly hair", shift);
     hit(90, 328, 180, 40, "The campaign map", () => say(["The campaign map, hand-drawn and much folded. Somebody has marked an X in red pencil.", "The route runs from the little town, through the forest, straight at the mountains. Nobody is happy about that.", "In the corner, in tiny letters: HERE BE DRAGONS. Underlined twice."][nMap++ % 3]));
     hit(100, 347, 38, 22, "The character sheet", () => say("A character sheet. Strength is crossed out and rewritten, twice."));
@@ -7094,9 +7091,8 @@ window.__ao3WorldInit = function (core) {
     [["#e8917a", 0, 6], ["#f6dcb8", 6, 3], ["#d95a6a", 9, 6], ["#f6dcb8", 15, 2], ["#f0a860", 17, 5]].forEach(([c, x, w]) => sv("rect", { x, y: 0, width: w, height: 20, fill: c }, stripe));
     const olive = sv("pattern", { id: "fi-olive", width: 10, height: 10, patternUnits: "userSpaceOnUse" }, defs);
     sv("rect", { width: 10, height: 10, fill: "#8a8260" }, olive); sv("path", { d: "M5 1 L9 5 L5 9 L1 5 Z", fill: "#c9a86a", opacity: 0.5 }, olive); sv("circle", { cx: 5, cy: 5, r: 0.9, fill: "#5a4a38", opacity: 0.8 }, olive);
-    const plaid = sv("pattern", { id: "bs-plaid", width: 12, height: 12, patternUnits: "userSpaceOnUse" }, defs);   // Will's flannel (bsKit asks for this id)
-    sv("rect", { width: 12, height: 12, fill: "#b9a27c" }, plaid); sv("rect", { width: 12, height: 4.2, fill: "#5d82b4", opacity: 0.8 }, plaid); sv("rect", { width: 4.2, height: 12, fill: "#5d82b4", opacity: 0.8 }, plaid);
-    sv("rect", { x: 7.4, width: 1.4, height: 12, fill: "#d9803a", opacity: 0.95 }, plaid); sv("rect", { y: 7.4, width: 12, height: 1.4, fill: "#d9803a", opacity: 0.95 }, plaid);
+    const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);   // Will's striped sweater (bsKit asks for this id)
+    sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
     const quilt = sv("pattern", { id: "fi-quilt", width: 36, height: 36, patternUnits: "userSpaceOnUse" }, defs);
     [["#b9566a", 0, 0], ["#e8c8a0", 18, 0], ["#e8c8a0", 0, 18], ["#5f8a8a", 18, 18]].forEach(([c, x, y]) => { sv("rect", { x, y, width: 18, height: 18, fill: c }, quilt); sv("path", { d: `M${x + 2} ${y + 2} H${x + 16} V${y + 16} H${x + 2} Z`, stroke: "#fff4e0", "stroke-width": 0.6, "stroke-dasharray": "2 2", fill: "none", opacity: 0.6 }, quilt); });
     const soft = sv("filter", { id: "fi-soft", x: "-20%", y: "-20%", width: "140%", height: "140%" }, defs); sv("feGaussianBlur", { stdDeviation: 3 }, soft);
