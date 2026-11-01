@@ -5597,6 +5597,10 @@ window.__ao3WorldInit = function (core) {
     const kit = hkKit(), el = kit.el;
     const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000002;");
     back.id = id;
+    // Browsers keep sound switched off until a tap. Wake the audio up as the scene opens, and again on the first tap anywhere in it,
+    // so the knock, the walkie-talkie and the radio all work even when you come straight in (e.g. from the main page button).
+    bellUnlock();
+    back.addEventListener("pointerdown", () => { bellUnlock(); }, { passive: true });
     const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.6);border:1px solid rgba(190,170,255,0.18);");
     back.appendChild(box);
     const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.18);background:rgba(8,6,22,0.55);z-index:3;");
