@@ -6233,6 +6233,101 @@ window.__ao3WorldInit = function (core) {
     later(() => { if (entering) return; if (caption.textContent === openLine) say("Somebody waves from Mike\u2019s window, then points down at the basement."); wave(); }, 1100);   // somebody has seen you coming
   }
 
+  // ── the two figures: Will (left, bowl cut + flannel) and Mike (right, curls + teal pullover) ──
+  // Drawn from scratch, shared by the basement table and the fort's inside. FIG gives each one's size and shoulder points;
+  // the plaid pattern "bs-plaid" must exist in the calling scene's <defs>. A pose's blush:true deepens the cheeks.
+  function bsKit(sv, anim, FIG) {
+    const SKIN_A = "#ecc6a6", SKIN_B = "#e7c0a1", TEAL = "#2c8aa6", TEAL_D = "#1f6a82", GREY = "#5e6770", THERMAL = "#aab0bb";
+    // two-bone arm: the shoulder S and the hand target T (local units), the elbow bends out and down
+    const solveArm = (S, T, u, f, left) => {
+      let dx = T[0] - S[0], dy = T[1] - S[1], d = Math.hypot(dx, dy);
+      const maxD = u + f - 0.6;
+      if (d > maxD) { dx *= maxD / d; dy *= maxD / d; d = maxD; }
+      if (d < 4) { d = 4; if (!dx && !dy) dy = 4; }
+      const a = (u * u - f * f + d * d) / (2 * d), h = Math.sqrt(Math.max(0, u * u - a * a));
+      const mx = S[0] + dx / d * a, my = S[1] + dy / d * a;
+      const c1 = [mx - dy / d * h, my + dx / d * h], c2 = [mx + dy / d * h, my - dx / d * h];
+      const score = c => 0.6 * c[1] + 0.8 * (left ? -c[0] : c[0]);
+      return [score(c1) >= score(c2) ? c1 : c2, [S[0] + dx, S[1] + dy]];
+    };
+    const drawArm = (g, who, left, T, sx, dy, bendProp) => {
+      const F = FIG[who], isA = who === "a", S = left ? F.sl : F.sr;
+      const [E, Hd] = solveArm(S, T, F.u, F.f, left);
+      const w = isA ? 10.6 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
+      seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
+      seg(S, E, isA ? "url(#bs-plaid)" : TEAL, w); seg(E, Hd, isA ? THERMAL : TEAL, w - 1.6);
+      if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], GREY, w - 0.6, "butt"); }
+      if (isA && left) { const k = 0.78, wx = E[0] + (Hd[0] - E[0]) * k, wy = E[1] + (Hd[1] - E[1]) * k, ang = Math.atan2(Hd[1] - E[1], Hd[0] - E[0]) * 180 / Math.PI; const wg = sv("g", { transform: `translate(${wx.toFixed(1)} ${wy.toFixed(1)}) rotate(${ang.toFixed(1)})` }, g); sv("rect", { x: -1.9, y: -3.9, width: 3.8, height: 7.8, rx: 0.8, fill: "#2a2a36" }, wg); sv("rect", { x: -0.9, y: -1.6, width: 1.8, height: 3.2, fill: "#9ac6e0", opacity: 0.9 }, wg); }
+      sv("circle", { cx: Hd[0].toFixed(1), cy: Hd[1].toFixed(1), r: 4.4, fill: isA ? SKIN_A : SKIN_B, stroke: "#b98f72", "stroke-width": 0.6 }, g);
+      return Hd;
+    };
+    const face = (g, p, o) => {
+      const lk = Math.max(-1.6, Math.min(1.6, p.look || 0)) * 0.9, lky = Math.max(-1, Math.min(2, p.lookY || 0)) * 0.7, mood = p.mood || "neutral", ek = p.eyes || "open";
+      const eyes = sv("g", {}, g);
+      [-1, 1].forEach(sd => {
+        const x = sd * o.ex + lk, y = o.ey + lky;
+        if (ek === "closed") sv("path", { d: `M${x - 2.2} ${y} Q${x} ${y + 1.7} ${x + 2.2} ${y}`, stroke: "#2a1d1a", "stroke-width": 1, fill: "none", "stroke-linecap": "round" }, eyes);
+        else if (ek === "happy") sv("path", { d: `M${x - 2.2} ${y + 0.9} Q${x} ${y - 2} ${x + 2.2} ${y + 0.9}`, stroke: "#2a1d1a", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round" }, eyes);
+        else { sv("ellipse", { cx: x, cy: y, rx: 1.35, ry: 1.7, fill: "#2a1d1a" }, eyes); sv("circle", { cx: x + 0.5, cy: y - 0.6, r: 0.45, fill: "#fff", opacity: 0.85 }, eyes); }
+      });
+      if (ek === "open") anim(eyes, `transform-box:fill-box;transform-origin:center;animation:hkBlink ${(4.6 + Math.random() * 2.4).toFixed(1)}s ease-in-out -${(Math.random() * 4).toFixed(1)}s infinite;`);
+      const up = { o: [-1.8, -1.8], smirk: [-0.2, -1.8], grin: [-0.8, -0.8], cheer: [-1.4, -1.4], smile: [-0.3, -0.3] }[mood] || [0, 0];
+      [-1, 1].forEach((sd, i) => { const x = sd * o.ex + lk * 0.5, y = o.by + up[i]; sv("path", { d: `M${x - 3} ${y + 0.4} Q${x} ${y - 0.9} ${x + 3} ${y + (sd > 0 ? 0.4 : 0.4)}`, stroke: o.brow, "stroke-width": 1.15, fill: "none", "stroke-linecap": "round" }, g); });
+      const m = o.my, mc = "#7a2f2f", MS = { stroke: "#7a3a30", "stroke-width": 1, fill: "none", "stroke-linecap": "round" };
+      if (mood === "o") sv("ellipse", { cx: 0, cy: m + 0.6, rx: 1.9, ry: 2.4, fill: mc }, g);
+      else if (mood === "grin") { sv("path", { d: `M-4.4 ${m - 0.6} Q0 ${m + 5.4} 4.4 ${m - 0.6} Z`, fill: mc }, g); sv("path", { d: `M-3.4 ${m - 0.4} Q0 ${m + 1.2} 3.4 ${m - 0.4}`, stroke: "#f6ead0", "stroke-width": 1.1, fill: "none" }, g); }
+      else if (mood === "cheer") { sv("path", { d: `M-5 ${m - 1.2} Q0 ${m + 7.4} 5 ${m - 1.2} Z`, fill: mc }, g); sv("path", { d: `M-4 ${m - 0.8} Q0 ${m + 0.8} 4 ${m - 0.8}`, stroke: "#f6ead0", "stroke-width": 1.2, fill: "none" }, g); }
+      else if (mood === "smile") sv("path", Object.assign({ d: `M-3.4 ${m - 0.6} Q0 ${m + 3} 3.4 ${m - 0.6}` }, MS), g);
+      else if (mood === "smirk") sv("path", Object.assign({ d: `M-3 ${m + 0.2} Q1 ${m + 1.4} 4 ${m - 1.6}` }, MS), g);
+      else if (mood === "calm") sv("path", Object.assign({ d: `M-2.4 ${m} Q0 ${m + 1.4} 2.4 ${m}` }, MS), g);
+      else sv("path", Object.assign({ d: `M-2.8 ${m + 0.4} Q0 ${m + 0.9} 2.8 ${m + 0.4}` }, MS), g);
+      if (p.blush || mood === "smile" || mood === "grin" || mood === "cheer") [-1, 1].forEach(sd => sv("ellipse", { cx: sd * (o.ex + 2.6), cy: m - 2.4, rx: p.blush ? 3 : 2.4, ry: p.blush ? 1.8 : 1.4, fill: p.blush ? "#e86a7a" : "#e8908a", opacity: p.blush ? 0.55 : 0.3 }, g));
+    };
+    const torsoA = g => {                                   // the flannel, open over a grey thermal
+      sv("path", { d: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", fill: "url(#bs-plaid)", stroke: "#4a3a2c", "stroke-width": 0.8 }, g).setAttribute("stroke-opacity", 0.5);
+      sv("rect", { x: -4.6, y: -12, width: 9.2, height: 8, fill: "#d9b090" }, g);
+      sv("path", { d: "M-8.4 -5 Q0 2.4 8.4 -5 L7.6 -9 Q0 -3 -7.6 -9 Z", fill: THERMAL }, g);
+      sv("path", { d: "M0 4 V58", stroke: "#6b5a40", "stroke-width": 0.9, opacity: 0.8 }, g);
+      sv("polygon", { points: "-9.4,-6 -1.2,-2 -9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
+      sv("polygon", { points: "9.4,-6 1.2,-2 9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
+      [10, 22, 34].forEach(y => sv("circle", { cx: 0, cy: y, r: 0.95, fill: "#efe3c6" }, g));
+      sv("path", { d: "M-19 12 H-8 V23 H-19 Z", stroke: "#4a3a2c", "stroke-width": 0.7, fill: "none", opacity: 0.6 }, g);
+    };
+    const torsoB = g => {                                   // the teal pullover: grey shoulder panels, a snap collar, a pocket with a grey triangle
+      sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.8 }, g);
+      sv("path", { d: "M-27 11 Q-27 -3 -14 -6 L-3 -6 L-9 6 Q-18 9 -27 15 Z", fill: GREY }, g);
+      sv("path", { d: "M27 11 Q27 -3 14 -6 L3 -6 L9 6 Q18 9 27 15 Z", fill: GREY }, g);
+      sv("rect", { x: -5, y: -13, width: 10, height: 9, fill: "#d9b090" }, g);
+      sv("path", { d: "M-8.6 -6 Q0 3.6 8.6 -6 L7.8 -9.4 Q0 -4 -7.8 -9.4 Z", fill: "#f1efe9" }, g);
+      sv("polygon", { points: "-10.4,-7.4 -1.6,-3 -11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
+      sv("polygon", { points: "10.4,-7.4 1.6,-3 11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
+      sv("path", { d: "M0 -1 V15", stroke: TEAL_D, "stroke-width": 0.9 }, g);
+      [3, 10].forEach(y => sv("circle", { cx: 0, cy: y, r: 1, fill: "#cfd4de" }, g));
+      sv("rect", { x: 8, y: 15.5, width: 12.5, height: 11, rx: 1, fill: "none", stroke: TEAL_D, "stroke-width": 0.9 }, g);
+      sv("polygon", { points: "9,16.4 19.7,16.4 19.7,25.4", fill: "#6a737a" }, g);
+      sv("rect", { x: -28, y: 54, width: 56, height: 8, fill: GREY, opacity: 0.9 }, g);
+    };
+    const headA = (g, p) => {                               // soft, fluffy, side-swept fringe: full on top, not long
+      const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
+      const HAIR = "#3b2a20";
+      [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -21.4, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
+      [[-9.5, -43.6, 7.6], [0, -46.4, 8.2], [9.5, -43.6, 7.6], [-14.6, -35.6, 6.4], [14.6, -35.6, 6.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
+      sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
+      sv("path", { d: "M-16.4 -24 C-20.4 -37 -15 -50 0 -50 C15 -50 20.4 -37 16.4 -24 C15.6 -27.6 14.4 -30.4 12.2 -32.2 Q9.4 -29.4 6.2 -32.2 Q3 -29 -0.6 -32 Q-4.2 -28.8 -7.4 -32.2 Q-10.8 -29.4 -13.2 -31.6 Q-15.4 -28.6 -16.4 -24 Z", fill: HAIR }, h);
+      sv("path", { d: "M-10 -44 Q-3 -48.6 5 -46", stroke: "#5a4232", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
+      face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
+    };
+    const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
+      const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
+      const HAIR = "#231a1c";
+      [[-13, -38, 8.6], [13, -38, 8.6], [-16, -29, 6.4], [16, -29, 6.4], [-7, -45, 8.6], [7, -45, 8.6], [0, -47, 8.6]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
+      sv("ellipse", { cx: 0, cy: -28, rx: 14.4, ry: 17.4, fill: SKIN_B }, h);
+      sv("path", { d: "M-15.8 -27 C-19.4 -40 -9 -49.5 0 -49.5 C9 -49.5 19.4 -40 15.8 -27 C14.6 -30 13 -32 10.6 -33.4 Q8.4 -36.6 5.8 -33 Q3.6 -38 0.4 -34.4 Q-2.6 -38.4 -5.6 -33.6 Q-8.6 -37.4 -10.8 -32.6 Q-13.6 -30.6 -15.8 -27 Z", fill: HAIR }, h);
+      face(h, p, { ex: 5.8, ey: -26.2, by: -30.6, my: -17.4, brow: "#1a1214" });
+    };
+    return { solveArm, drawArm, face, torsoA, torsoB, headA, headB };
+  }
+
   // ── the Wheelers' basement (reached through the window well) ──
   // A D&D table under a hanging lamp: a hand-drawn campaign map, dice, little painted minis, snacks and a walkie-talkie,
   // with two small figures sitting shoulder to shoulder behind it. The one on the left has a straight-fringed bowl cut and a
@@ -6366,7 +6461,6 @@ window.__ao3WorldInit = function (core) {
     sv("circle", { cx: 180, cy: 199, r: 3, fill: "#fff6d8" }, svg);
 
     // ── the two at the table ──
-    const SKIN_A = "#ecc6a6", SKIN_B = "#e7c0a1", TEAL = "#2c8aa6", TEAL_D = "#1f6a82", GREY = "#5e6770", THERMAL = "#aab0bb";
     const FIG = {
       a: { cx: 146, sy: 292, s: 1.25, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] },
       b: { cx: 210, sy: 286, s: 1.25, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] }
@@ -6476,18 +6570,6 @@ window.__ao3WorldInit = function (core) {
     };
     mkFig("a"); mkFig("b");
 
-    // two-bone arm: the shoulder S and the hand target T (local units), the elbow bends out and down
-    const solveArm = (S, T, u, f, left) => {
-      let dx = T[0] - S[0], dy = T[1] - S[1], d = Math.hypot(dx, dy);
-      const maxD = u + f - 0.6;
-      if (d > maxD) { dx *= maxD / d; dy *= maxD / d; d = maxD; }
-      if (d < 4) { d = 4; if (!dx && !dy) dy = 4; }
-      const a = (u * u - f * f + d * d) / (2 * d), h = Math.sqrt(Math.max(0, u * u - a * a));
-      const mx = S[0] + dx / d * a, my = S[1] + dy / d * a;
-      const c1 = [mx - dy / d * h, my + dx / d * h], c2 = [mx + dy / d * h, my - dx / d * h];
-      const score = c => 0.6 * c[1] + 0.8 * (left ? -c[0] : c[0]);
-      return [score(c1) >= score(c2) ? c1 : c2, [S[0] + dx, S[1] + dy]];
-    };
     const prop = (g, kind, x, y) => {
       if (kind === "die") d20(g, x, y - 4, 0.95, "20");
       else if (kind === "pencil") { sv("path", { d: `M${x - 7} ${y + 7} L${x + 4} ${y - 6}`, stroke: "#e0b032", "stroke-width": 2.2, "stroke-linecap": "round" }, g); sv("path", { d: `M${x - 7} ${y + 7} L${x - 8.4} ${y + 9}`, stroke: "#3a3a46", "stroke-width": 1.4, "stroke-linecap": "round" }, g); sv("circle", { cx: x + 4.4, cy: y - 6.6, r: 1.3, fill: "#e8a0a0" }, g); }
@@ -6495,81 +6577,7 @@ window.__ao3WorldInit = function (core) {
       else if (kind === "can") { sv("rect", { x: x - 3.6, y: y - 10, width: 7.2, height: 11.5, rx: 1.6, fill: "#c9482e" }, g); sv("rect", { x: x - 3.6, y: y - 10, width: 7.2, height: 2, rx: 1, fill: "#cfd4de" }, g); }
       else if (kind === "walkie") { sv("rect", { x: x - 3.6, y: y - 12, width: 7.2, height: 15, rx: 1.4, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.6 }, g); sv("path", { d: `M${x - 1.4} ${y - 12} V${y - 21}`, stroke: "#4a4a5a", "stroke-width": 1.2 }, g); sv("rect", { x: x - 2.2, y: y - 9, width: 4.4, height: 3, fill: "#7a8a6a" }, g); }
     };
-    const drawArm = (g, who, left, T, sx, dy, bendProp) => {
-      const F = FIG[who], isA = who === "a", S = left ? F.sl : F.sr;
-      const [E, Hd] = solveArm(S, T, F.u, F.f, left);
-      const w = isA ? 10.6 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
-      seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
-      seg(S, E, isA ? "url(#bs-plaid)" : TEAL, w); seg(E, Hd, isA ? THERMAL : TEAL, w - 1.6);
-      if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], GREY, w - 0.6, "butt"); }
-      if (isA && left) { const k = 0.78, wx = E[0] + (Hd[0] - E[0]) * k, wy = E[1] + (Hd[1] - E[1]) * k, ang = Math.atan2(Hd[1] - E[1], Hd[0] - E[0]) * 180 / Math.PI; const wg = sv("g", { transform: `translate(${wx.toFixed(1)} ${wy.toFixed(1)}) rotate(${ang.toFixed(1)})` }, g); sv("rect", { x: -1.9, y: -3.9, width: 3.8, height: 7.8, rx: 0.8, fill: "#2a2a36" }, wg); sv("rect", { x: -0.9, y: -1.6, width: 1.8, height: 3.2, fill: "#9ac6e0", opacity: 0.9 }, wg); }
-      sv("circle", { cx: Hd[0].toFixed(1), cy: Hd[1].toFixed(1), r: 4.4, fill: isA ? SKIN_A : SKIN_B, stroke: "#b98f72", "stroke-width": 0.6 }, g);
-      return Hd;
-    };
-    const face = (g, p, o) => {
-      const lk = Math.max(-1.6, Math.min(1.6, p.look || 0)) * 0.9, lky = Math.max(-1, Math.min(2, p.lookY || 0)) * 0.7, mood = p.mood || "neutral", ek = p.eyes || "open";
-      const eyes = sv("g", {}, g);
-      [-1, 1].forEach(sd => {
-        const x = sd * o.ex + lk, y = o.ey + lky;
-        if (ek === "closed") sv("path", { d: `M${x - 2.2} ${y} Q${x} ${y + 1.7} ${x + 2.2} ${y}`, stroke: "#2a1d1a", "stroke-width": 1, fill: "none", "stroke-linecap": "round" }, eyes);
-        else if (ek === "happy") sv("path", { d: `M${x - 2.2} ${y + 0.9} Q${x} ${y - 2} ${x + 2.2} ${y + 0.9}`, stroke: "#2a1d1a", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round" }, eyes);
-        else { sv("ellipse", { cx: x, cy: y, rx: 1.35, ry: 1.7, fill: "#2a1d1a" }, eyes); sv("circle", { cx: x + 0.5, cy: y - 0.6, r: 0.45, fill: "#fff", opacity: 0.85 }, eyes); }
-      });
-      if (ek === "open") anim(eyes, `transform-box:fill-box;transform-origin:center;animation:hkBlink ${(4.6 + Math.random() * 2.4).toFixed(1)}s ease-in-out -${(Math.random() * 4).toFixed(1)}s infinite;`);
-      const up = { o: [-1.8, -1.8], smirk: [-0.2, -1.8], grin: [-0.8, -0.8], cheer: [-1.4, -1.4], smile: [-0.3, -0.3] }[mood] || [0, 0];
-      [-1, 1].forEach((sd, i) => { const x = sd * o.ex + lk * 0.5, y = o.by + up[i]; sv("path", { d: `M${x - 3} ${y + 0.4} Q${x} ${y - 0.9} ${x + 3} ${y + (sd > 0 ? 0.4 : 0.4)}`, stroke: o.brow, "stroke-width": 1.15, fill: "none", "stroke-linecap": "round" }, g); });
-      const m = o.my, mc = "#7a2f2f", MS = { stroke: "#7a3a30", "stroke-width": 1, fill: "none", "stroke-linecap": "round" };
-      if (mood === "o") sv("ellipse", { cx: 0, cy: m + 0.6, rx: 1.9, ry: 2.4, fill: mc }, g);
-      else if (mood === "grin") { sv("path", { d: `M-4.4 ${m - 0.6} Q0 ${m + 5.4} 4.4 ${m - 0.6} Z`, fill: mc }, g); sv("path", { d: `M-3.4 ${m - 0.4} Q0 ${m + 1.2} 3.4 ${m - 0.4}`, stroke: "#f6ead0", "stroke-width": 1.1, fill: "none" }, g); }
-      else if (mood === "cheer") { sv("path", { d: `M-5 ${m - 1.2} Q0 ${m + 7.4} 5 ${m - 1.2} Z`, fill: mc }, g); sv("path", { d: `M-4 ${m - 0.8} Q0 ${m + 0.8} 4 ${m - 0.8}`, stroke: "#f6ead0", "stroke-width": 1.2, fill: "none" }, g); }
-      else if (mood === "smile") sv("path", Object.assign({ d: `M-3.4 ${m - 0.6} Q0 ${m + 3} 3.4 ${m - 0.6}` }, MS), g);
-      else if (mood === "smirk") sv("path", Object.assign({ d: `M-3 ${m + 0.2} Q1 ${m + 1.4} 4 ${m - 1.6}` }, MS), g);
-      else if (mood === "calm") sv("path", Object.assign({ d: `M-2.4 ${m} Q0 ${m + 1.4} 2.4 ${m}` }, MS), g);
-      else sv("path", Object.assign({ d: `M-2.8 ${m + 0.4} Q0 ${m + 0.9} 2.8 ${m + 0.4}` }, MS), g);
-      if (mood === "smile" || mood === "grin" || mood === "cheer") [-1, 1].forEach(sd => sv("ellipse", { cx: sd * (o.ex + 2.6), cy: m - 2.4, rx: 2.4, ry: 1.4, fill: "#e8908a", opacity: 0.3 }, g));
-    };
-    const torsoA = g => {                                   // the flannel, open over a grey thermal
-      sv("path", { d: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", fill: "url(#bs-plaid)", stroke: "#4a3a2c", "stroke-width": 0.8 }, g).setAttribute("stroke-opacity", 0.5);
-      sv("rect", { x: -4.6, y: -12, width: 9.2, height: 8, fill: "#d9b090" }, g);
-      sv("path", { d: "M-8.4 -5 Q0 2.4 8.4 -5 L7.6 -9 Q0 -3 -7.6 -9 Z", fill: THERMAL }, g);
-      sv("path", { d: "M0 4 V58", stroke: "#6b5a40", "stroke-width": 0.9, opacity: 0.8 }, g);
-      sv("polygon", { points: "-9.4,-6 -1.2,-2 -9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
-      sv("polygon", { points: "9.4,-6 1.2,-2 9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
-      [10, 22, 34].forEach(y => sv("circle", { cx: 0, cy: y, r: 0.95, fill: "#efe3c6" }, g));
-      sv("path", { d: "M-19 12 H-8 V23 H-19 Z", stroke: "#4a3a2c", "stroke-width": 0.7, fill: "none", opacity: 0.6 }, g);
-    };
-    const torsoB = g => {                                   // the teal pullover: grey shoulder panels, a snap collar, a pocket with a grey triangle
-      sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.8 }, g);
-      sv("path", { d: "M-27 11 Q-27 -3 -14 -6 L-3 -6 L-9 6 Q-18 9 -27 15 Z", fill: GREY }, g);
-      sv("path", { d: "M27 11 Q27 -3 14 -6 L3 -6 L9 6 Q18 9 27 15 Z", fill: GREY }, g);
-      sv("rect", { x: -5, y: -13, width: 10, height: 9, fill: "#d9b090" }, g);
-      sv("path", { d: "M-8.6 -6 Q0 3.6 8.6 -6 L7.8 -9.4 Q0 -4 -7.8 -9.4 Z", fill: "#f1efe9" }, g);
-      sv("polygon", { points: "-10.4,-7.4 -1.6,-3 -11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
-      sv("polygon", { points: "10.4,-7.4 1.6,-3 11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
-      sv("path", { d: "M0 -1 V15", stroke: TEAL_D, "stroke-width": 0.9 }, g);
-      [3, 10].forEach(y => sv("circle", { cx: 0, cy: y, r: 1, fill: "#cfd4de" }, g));
-      sv("rect", { x: 8, y: 15.5, width: 12.5, height: 11, rx: 1, fill: "none", stroke: TEAL_D, "stroke-width": 0.9 }, g);
-      sv("polygon", { points: "9,16.4 19.7,16.4 19.7,25.4", fill: "#6a737a" }, g);
-      sv("rect", { x: -28, y: 54, width: 56, height: 8, fill: GREY, opacity: 0.9 }, g);
-    };
-    const headA = (g, p) => {                               // soft, fluffy, side-swept fringe: full on top, not long
-      const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      const HAIR = "#3b2a20";
-      [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -21.4, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
-      [[-9.5, -43.6, 7.6], [0, -46.4, 8.2], [9.5, -43.6, 7.6], [-14.6, -35.6, 6.4], [14.6, -35.6, 6.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
-      sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
-      sv("path", { d: "M-16.4 -24 C-20.4 -37 -15 -50 0 -50 C15 -50 20.4 -37 16.4 -24 C15.6 -27.6 14.4 -30.4 12.2 -32.2 Q9.4 -29.4 6.2 -32.2 Q3 -29 -0.6 -32 Q-4.2 -28.8 -7.4 -32.2 Q-10.8 -29.4 -13.2 -31.6 Q-15.4 -28.6 -16.4 -24 Z", fill: HAIR }, h);
-      sv("path", { d: "M-10 -44 Q-3 -48.6 5 -46", stroke: "#5a4232", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
-      face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
-    };
-    const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
-      const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      const HAIR = "#231a1c";
-      [[-13, -38, 8.6], [13, -38, 8.6], [-16, -29, 6.4], [16, -29, 6.4], [-7, -45, 8.6], [7, -45, 8.6], [0, -47, 8.6]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
-      sv("ellipse", { cx: 0, cy: -28, rx: 14.4, ry: 17.4, fill: SKIN_B }, h);
-      sv("path", { d: "M-15.8 -27 C-19.4 -40 -9 -49.5 0 -49.5 C9 -49.5 19.4 -40 15.8 -27 C14.6 -30 13 -32 10.6 -33.4 Q8.4 -36.6 5.8 -33 Q3.6 -38 0.4 -34.4 Q-2.6 -38.4 -5.6 -33.6 Q-8.6 -37.4 -10.8 -32.6 Q-13.6 -30.6 -15.8 -27 Z", fill: HAIR }, h);
-      face(h, p, { ex: 5.8, ey: -26.2, by: -30.6, my: -17.4, brow: "#1a1214" });
-    };
+    const { solveArm, drawArm, face, torsoA, torsoB, headA, headB } = bsKit(sv, anim, FIG);   // the figure drawing lives in bsKit
     const drawFig = (key, p) => {
       const F = FIG[key], isA = key === "a";
       clear(F.b1); clear(F.b2);
@@ -6664,7 +6672,7 @@ window.__ao3WorldInit = function (core) {
   // through black, like the window well. This is the fort seen from OUTSIDE (stage 1): blankets and sheets thrown over the
   // furniture (a striped one down the side, an olive one across the top, a pom-pom garland and fairy lights), with a thin sheet over
   // the opening, lit from within so that only two shadows show on the fabric, and a few small hearts drifting up out of the top. A TV hums to itself nearby and the couch has been stripped bare.
-  //  · tap the fort: the shadows lean together and a few hearts puff up (stage 2 will take you inside, see "peek" below)
+  //  · tap the fort: you lift the blanket and go inside, where Will and Mike are (openFortInside). The old shadow lines and hearts below only show if that scene is missing (or lifts the blanket: it fades to the inside, see openFortInside)
   //  · tap a heart, the TV, the couch, the popcorn trail, or the crayon drawing: each says something
   //  · the ▶ arrow on the right, or the "🎲 table" pill, goes back to the table
   // Nothing in here saves anything. Hearts, flicker and shadows stand still with "reduce motion" switched on.
@@ -6934,7 +6942,7 @@ window.__ao3WorldInit = function (core) {
         "In the corner there is a date, scribbled out. Twice."]
     };
     const wobble = () => { if (reduce) return; try { tent.animate([{ transform: "translate(0,0)" }, { transform: "translate(-1.5px,0)" }, { transform: "translate(1.5px,0)" }, { transform: "translate(0,0)" }], { duration: 380, easing: "ease-out" }); } catch {} };
-    const peek = () => {       // stage 2 hangs its inside view here: define openFortInside() and the fort will fade in to it
+    const peek = () => {       // tapping the fort fades in to openFortInside() (defined below)
       if (typeof openFortInside === "function" && !leaving) { leaving = true; say("You lift the edge of the blanket…"); bfFade(sh, () => openFortInside(true)); return true; }
       return false;
     };
@@ -6958,6 +6966,295 @@ window.__ao3WorldInit = function (core) {
     if (typeof openFortInside === "function") pill("\u{1F3D5}️ peek inside", "Lift the edge of the blanket", peek);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { sh.close(); openHawkins(false); });
     document.body.appendChild(sh.back);
+    if (arrive) {
+      const v = el("div", `position:absolute;inset:0;background:#000;opacity:1;pointer-events:none;z-index:30;transition:opacity ${reduce ? 0 : 0.6}s;`);
+      sh.box.appendChild(v);
+      requestAnimationFrame(() => requestAnimationFrame(() => { v.style.opacity = 0; }));
+      later(() => v.remove(), 900);
+    }
+  }
+
+
+  // The conversations in the fort. Each moment: a start pose, then beats [who, text, patch?]. who: "w" Will, "m" Mike, "n" the caption only.
+  // A patch changes the pose from that beat on: { a: Will's, b: Mike's } (mood, eyes, head [dx, dy, tilt], sx, blush, L / R hands), plus
+  // hearts: n (a puff of hearts), jig: true (a happy wiggle), front: "a" | "b" (who is in front). Everything is gentle and innocent.
+  const FI_CL = [[177, 383], [186, 382]];              // where their two hands meet, on top of the blanket
+  const FI_BASE = { a: { sx: 4, head: [2, 1, 5], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: -2, head: [-2, 2, -5], mood: "smile", look: -1, L: "lap", R: "lap" } };
+  const FI_HOLD = { a: { R: FI_CL[0] }, b: { L: FI_CL[1] } };
+  const FI_MOMENTS = [
+    { name: "the lights", beats: [
+      ["n", "The fairy lights are twinkling. Mike has stopped mid-sentence. Will has noticed.", { a: { mood: "o", look: 1 }, b: { mood: "calm", look: -1 } }],
+      ["w", "What? You’re staring at me.", {}],
+      ["m", "The lights are doing something to your face. I’m just… observing the effect.", { b: { mood: "smirk" } }],
+      ["w", "You are so bad at lying.", { a: { mood: "grin", blush: true }, jig: true }],
+      ["m", "I’m excellent at lying. I’m just not trying right now.", { b: { mood: "grin", blush: true } }],
+      ["w", "…Okay. That one was kind of good.", { a: { eyes: "happy", mood: "smile" } }],
+      ["m", "I’ve been saving it.", { hearts: 2 }],
+      ["n", "Under the blanket, two hands have found each other. Neither of them mentions it.", Object.assign({ hearts: 3 }, FI_HOLD)]] },
+    { name: "the blanket", beats: [
+      ["m", "Are you cold? You’re cold. Come here.", { b: { mood: "o" } }],
+      ["w", "I’m fine, I’m— okay. I’m a little cold.", { a: { mood: "smirk", blush: true } }],
+      ["m", "Then why are you sitting over there like we’re in a library?", { b: { mood: "grin" } }],
+      ["w", "Because you take up the entire blanket.", { a: { mood: "grin" }, jig: true }],
+      ["m", "I’ll share it. I’ll always share it. Even the good popcorn.", { b: { mood: "smile", blush: true } }],
+      ["w", "Even the good popcorn? Mike. That’s practically a vow.", { a: { eyes: "happy", mood: "smile" } }],
+      ["m", "It’s a vow.", { hearts: 2 }],
+      ["n", "Will lets his head rest on Mike’s shoulder. Mike stops breathing for a second, then very carefully doesn’t move.", Object.assign({ front: "a", hearts: 3, a: { sx: 14, head: [11, 5, 17], mood: "calm", eyes: "happy", blush: true, R: FI_CL[0] }, b: { head: [-1, 3, -4], mood: "calm", blush: true, L: FI_CL[1] } })]] },
+    { name: "the best part", beats: [
+      ["w", "Can I tell you something dumb?", { a: { mood: "calm", look: 0.5, lookY: 1 } }],
+      ["m", "Nothing you say is dumb. Rule of the fort.", { b: { mood: "smile" } }],
+      ["w", "This is my favourite place. The fort, I mean. Well. Mostly the part where you’re in it.", { a: { blush: true, lookY: 1.5 } }],
+      ["m", "…Will.", { b: { mood: "o", blush: true } }],
+      ["w", "It’s out now. I can’t take it back.", { a: { mood: "smirk", eyes: "happy" } }],
+      ["m", "Good. Don’t you dare. I’m keeping it.", { b: { mood: "grin" }, jig: true }],
+      ["m", "It’s my favourite place too. Same reason. Obviously. Same reason.", { b: { mood: "smile", blush: true } }],
+      ["w", "“Obviously.”", { a: { mood: "grin", eyes: "happy" }, hearts: 3 }],
+      ["n", "Their hands meet on the blanket and stay there.", FI_HOLD]] },
+    { name: "sleepy", beats: [
+      ["n", "The movie ended an hour ago. Will’s eyes keep closing.", { a: { mood: "calm", look: 0 } }],
+      ["w", "I’m awake. I’m just resting my eyes. Very… actively.", { a: { eyes: "closed" } }],
+      ["m", "Sure. Very actively.", { b: { mood: "smirk" } }],
+      ["w", "Mm. You’re warm.", { a: { sx: 11, head: [9, 4, 14], mood: "smile" }, front: "a", hearts: 1 }],
+      ["m", "I’m basically a heater. You’re welcome.", { b: { mood: "smile", blush: true, head: [-1, 3, -4] } }],
+      ["w", "Stay like this a bit?", { a: { blush: true } }],
+      ["m", "As long as you want. I’ll tell Dustin the fort is closed for renovations.", { b: { mood: "grin" } }],
+      ["n", "Will is asleep. Mike does not move for a very long time, and is extremely happy about it.", Object.assign({ hearts: 4, a: { eyes: "closed", mood: "calm" }, b: { mood: "calm", eyes: "happy", L: FI_CL[1] } })]] },
+    { name: "the sketch", beats: [
+      ["n", "Will has a sketchbook on his knee. Mike keeps leaning over to look. Will keeps tilting it away.", { a: { L: [112, 392, "pad"], mood: "smirk", look: -1 }, b: { mood: "grin", look: 1, head: [-4, 2, -10] } }],
+      ["m", "Let me see.", {}],
+      ["w", "It’s not finished.", { a: { blush: true } }],
+      ["m", "Let me see the unfinished one.", { b: { mood: "smile" } }],
+      ["w", "…Fine. Don’t laugh.", { a: { mood: "o" } }],
+      ["m", "Will. It’s us. We’re in the fort, and you gave me the better hair.", { b: { mood: "o", blush: true } }],
+      ["w", "I didn’t change anything. That’s just how you look when you’re laughing.", { a: { mood: "smile", eyes: "happy" }, hearts: 2 }],
+      ["m", "I’m going to frame it. Right next to the heart on the wall.", { b: { mood: "grin" }, jig: true }],
+      ["n", "Mike takes Will’s free hand, very gently, as if it were part of the drawing.", Object.assign({ hearts: 3 }, { b: { L: FI_CL[1] }, a: { R: FI_CL[0] } })]] },
+    { name: "happily ever after", beats: [
+      ["m", "If our characters got a happily-ever-after, what would it look like?", { b: { mood: "smile", look: -1 } }],
+      ["w", "A cottage. A garden. A very suspicious dragon who turns out to be friendly.", { a: { mood: "grin", eyes: "happy" } }],
+      ["m", "And us?", { b: { mood: "calm", blush: true } }],
+      ["w", "…Next door. Obviously.", { a: { blush: true, mood: "smirk" } }],
+      ["m", "Next door is too far. Same door.", { b: { mood: "grin" }, jig: true }],
+      ["w", "Mike!", { a: { mood: "cheer", blush: true, R: "mouth" } }],
+      ["m", "In the game! The characters! They’d share a door. For efficiency.", { b: { mood: "smirk", blush: true } }],
+      ["w", "Sure. Efficiency.", { a: { mood: "smile", eyes: "happy", R: FI_CL[0] }, hearts: 3 }],
+      ["n", "Neither of them lets go.", FI_HOLD]] }
+  ];
+
+  // ── 🏕️ INSIDE THE FORT (stage 2) ──
+  // Reached by tapping the fort (or the "peek inside" pill) in openBasementFort: the screen fades to black, then you are in.
+  // An A-frame of blankets lit by fairy lights and a flashlight, a patchwork quilt, cushions, popcorn, comics, a walkie-talkie.
+  // Will (left) and Mike (right) are the very same figures as at the basement table (see bsKit), sitting close under one blanket.
+  // They talk: each "moment" below is a short, sweet, wholly innocent conversation played line by line in speech bubbles, with
+  // the stage directions in the caption, and the two of them change expression and lean as it goes.
+  //  · it plays by itself; tap either of them (or the 💬 pill) to hear the next line sooner, 🔁 for a different moment
+  //  · when a moment ends they stay put; tap them again for the next one
+  //  · tap the hands, the walkie-talkie (somebody interrupts), the fairy lights, the flashlight, the popcorn, the comics, the drawing
+  // The last moment is remembered under "ao3-fi-moment" (the only thing saved here) so it is never the same one twice running.
+  // Hearts, bubbles' pop and the twinkle stand still with "reduce motion" switched on.
+  const FI_KEY = "ao3-fi-moment";
+  function openFortInside(arrive) {
+    const sh = hkShell("ao3-fort-inside", "\u{1F3D5}️ Inside the fort");
+    const { sv, rnd, anim, el } = sh.kit;
+    const { sub, field, caption, pill, later } = sh;
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const say = t => { caption.textContent = t; };
+    const W = 360, H = 540, hits = [];
+    let leaving = false, tid = 0, nHand = 0, nWalkie = 0, nLights = 0, nTorch = 0, nCorn = 0, nComic = 0, nDraw = 0;
+    sh.box.style.background = "#20141c";
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const radial = (id, stops, o) => { const g = sv("radialGradient", Object.assign({ id }, o || {}), defs); stops.forEach(([off, c, op]) => sv("stop", { offset: off, "stop-color": c, "stop-opacity": op }, g)); };
+    radial("fi-glow", [["0%", "#ffd98a", 0.85], ["100%", "#ffd98a", 0]]);
+    radial("fi-wall", [["0%", "#fff0c8", 1], ["60%", "#e9c890", 1], ["100%", "#a8784e", 1]], { cx: "50%", cy: "62%", r: "70%" });
+    radial("fi-vig", [["50%", "#0a060e", 0], ["100%", "#0a060e", 0.7]], { cx: "50%", cy: "55%", r: "75%" });
+    const beam = sv("linearGradient", { id: "fi-beam", x1: 0, y1: 1, x2: 0, y2: 0 }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#fff3c8", "stop-opacity": 0.55 }, beam); sv("stop", { offset: "100%", "stop-color": "#fff3c8", "stop-opacity": 0 }, beam);
+    const stripe = sv("pattern", { id: "fi-stripe", width: 22, height: 20, patternUnits: "userSpaceOnUse" }, defs);
+    [["#e8917a", 0, 6], ["#f6dcb8", 6, 3], ["#d95a6a", 9, 6], ["#f6dcb8", 15, 2], ["#f0a860", 17, 5]].forEach(([c, x, w]) => sv("rect", { x, y: 0, width: w, height: 20, fill: c }, stripe));
+    const olive = sv("pattern", { id: "fi-olive", width: 10, height: 10, patternUnits: "userSpaceOnUse" }, defs);
+    sv("rect", { width: 10, height: 10, fill: "#8a8260" }, olive); sv("path", { d: "M5 1 L9 5 L5 9 L1 5 Z", fill: "#c9a86a", opacity: 0.5 }, olive); sv("circle", { cx: 5, cy: 5, r: 0.9, fill: "#5a4a38", opacity: 0.8 }, olive);
+    const plaid = sv("pattern", { id: "bs-plaid", width: 12, height: 12, patternUnits: "userSpaceOnUse" }, defs);   // Will's flannel (bsKit asks for this id)
+    sv("rect", { width: 12, height: 12, fill: "#b9a27c" }, plaid); sv("rect", { width: 12, height: 4.2, fill: "#5d82b4", opacity: 0.8 }, plaid); sv("rect", { width: 4.2, height: 12, fill: "#5d82b4", opacity: 0.8 }, plaid);
+    sv("rect", { x: 7.4, width: 1.4, height: 12, fill: "#d9803a", opacity: 0.95 }, plaid); sv("rect", { y: 7.4, width: 12, height: 1.4, fill: "#d9803a", opacity: 0.95 }, plaid);
+    const quilt = sv("pattern", { id: "fi-quilt", width: 36, height: 36, patternUnits: "userSpaceOnUse" }, defs);
+    [["#b9566a", 0, 0], ["#e8c8a0", 18, 0], ["#e8c8a0", 0, 18], ["#5f8a8a", 18, 18]].forEach(([c, x, y]) => { sv("rect", { x, y, width: 18, height: 18, fill: c }, quilt); sv("path", { d: `M${x + 2} ${y + 2} H${x + 16} V${y + 16} H${x + 2} Z`, stroke: "#fff4e0", "stroke-width": 0.6, "stroke-dasharray": "2 2", fill: "none", opacity: 0.6 }, quilt); });
+    const soft = sv("filter", { id: "fi-soft", x: "-20%", y: "-20%", width: "140%", height: "140%" }, defs); sv("feGaussianBlur", { stdDeviation: 3 }, soft);
+    const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
+
+    // ── the A-frame, seen from inside, in one-point perspective: slopes, back wall, floor ──
+    sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#20141c" }, svg);
+    sv("polygon", { points: "180,-20 180,100 30,320 -120,420 -120,-20", fill: "url(#fi-stripe)" }, svg);        // left slope: the striped blanket
+    sv("polygon", { points: "180,-20 180,100 330,320 480,420 480,-20", fill: "url(#fi-olive)" }, svg);           // right slope: the olive one
+    sv("polygon", { points: "180,-20 180,100 30,320 -120,420 -120,-20", fill: "#2a1020", opacity: 0.38 }, svg);
+    sv("polygon", { points: "180,-20 180,100 330,320 480,420 480,-20", fill: "#1a1008", opacity: 0.42 }, svg);
+    [[-40, 40], [20, 120], [60, 200]].forEach(([x, y]) => { sv("path", { d: `M180 ${y - 20} Q${x + 90} ${y + 40} ${x} ${y + 150}`, stroke: "#1a0c14", "stroke-width": 1.4, fill: "none", opacity: 0.35 }, svg); sv("path", { d: `M180 ${y - 20} Q${360 - x - 90} ${y + 40} ${360 - x} ${y + 150}`, stroke: "#14100a", "stroke-width": 1.4, fill: "none", opacity: 0.35 }, svg); });
+    sv("polygon", { points: "180,100 330,320 30,320", fill: "url(#fi-wall)" }, svg);                              // the back wall: a cream sheet, lit
+    sv("path", { d: "M180 100 L330 320 M180 100 L30 320", stroke: "#efe0c4", "stroke-width": 3, fill: "none", opacity: 0.9, "stroke-linejoin": "round" }, svg);   // its hem
+    sv("path", { d: "M150 150 Q146 240 150 320 M205 140 Q210 240 206 320 M252 200 Q256 260 254 320", stroke: "#a8683a", "stroke-width": 1, fill: "none", opacity: 0.25 }, svg);
+    sv("path", { d: "M180 -20 V100", stroke: "#3a2418", "stroke-width": 7, opacity: 0.9 }, svg); sv("path", { d: "M180 -20 V100", stroke: "#8a5a38", "stroke-width": 3.6 }, svg);   // the ridge pole
+    sv("rect", { x: 0, y: 320, width: W, height: 220, fill: "#2a1822" }, svg);                                      // floor
+    sv("rect", { x: 0, y: 320, width: W, height: 220, fill: "url(#fi-quilt)", opacity: 0.9 }, svg);
+    sv("rect", { x: 0, y: 320, width: W, height: 220, fill: "#1a0c16", opacity: 0.45 }, svg);
+    sv("rect", { x: 0, y: 320, width: W, height: 36, fill: "#14080e", opacity: 0.4 }, svg);
+    // pinned to the back wall: the crayon heart (M + W), a ticket stub, a paper-heart chain
+    const heartD = (x, y, s) => `M${x} ${y + 6 * s} C${x - 14 * s} ${y - 4 * s} ${x - 7 * s} ${y - 14 * s} ${x} ${y - 6 * s} C${x + 7 * s} ${y - 14 * s} ${x + 14 * s} ${y - 4 * s} ${x} ${y + 6 * s} Z`;
+    const note = sv("g", { transform: "rotate(-6 90 262)" }, svg);
+    sv("polygon", { points: "62,236 118,234 120,288 64,290", fill: "#efe8d6" }, note); sv("circle", { cx: 90, cy: 237, r: 1.8, fill: "#c9482e" }, note);
+    sv("path", { d: heartD(91, 262, 2.1), fill: "none", stroke: "#e0405a", "stroke-width": 2, "stroke-linejoin": "round" }, note);
+    const mw = sv("text", { x: 91, y: 264, "text-anchor": "middle", "font-family": "Georgia,serif", "font-weight": 700, "font-size": 9, fill: "#4a3a5a" }, note); mw.textContent = "M+W";
+    const stub = sv("g", { transform: "rotate(7 268 270)" }, svg);
+    sv("rect", { x: 250, y: 256, width: 36, height: 18, rx: 1.5, fill: "#e8b84a" }, stub); sv("path", { d: "M262 256 V274", stroke: "#a8782a", "stroke-width": 0.8, "stroke-dasharray": "1.5 1.5" }, stub);
+    const st = sv("text", { x: 256, y: 268, "font-family": "monospace", "font-size": 4.6, "font-weight": 700, fill: "#6a3a1a" }, stub); st.textContent = "ADMIT 2";
+    // the quilt's cushions, stacked behind them as a backrest
+    sv("rect", { x: 80, y: 300, width: 100, height: 96, rx: 22, fill: "#7a4658" }, svg); sv("rect", { x: 176, y: 292, width: 112, height: 100, rx: 22, fill: "#6a3a4a" }, svg);
+    sv("path", { d: "M142 308 Q146 350 140 392 M224 300 Q228 345 222 388", stroke: "#4a2634", "stroke-width": 1.2, fill: "none" }, svg);
+    // the figures: bodies behind the blanket, arms in front
+    const FIG = { a: { cx: 136, sy: 322, s: 1.5, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 226, sy: 316, s: 1.5, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
+    const bodyL = sv("g", {}, svg);
+    const throwG = sv("g", {}, svg);
+    // the shared throw over their laps, with a wavy top edge and a few folds
+    sv("path", { d: "M70 386 Q110 372 150 380 T230 378 T300 388 L318 470 Q180 500 42 470 Z", fill: "#d29a4a" }, throwG);
+    sv("path", { d: "M70 386 Q110 372 150 380 T230 378 T300 388", stroke: "#f0c47a", "stroke-width": 2.4, fill: "none", "stroke-linecap": "round" }, throwG);
+    [90, 130, 170, 210, 250].forEach((x, i) => sv("path", { d: `M${x} ${392 + (i % 2) * 3} Q${x + 6} 430 ${x - 4} ${472}`, stroke: "#9a6a2a", "stroke-width": 1.3, fill: "none", opacity: 0.5 }, throwG));
+    sv("path", { d: "M54 440 H306 M50 454 H310", stroke: "#f0c47a", "stroke-width": 1, "stroke-dasharray": "5 4", opacity: 0.45 }, throwG);
+    const armL = sv("g", {}, svg);
+    const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
+    const { drawArm, torsoA, torsoB, headA, headB } = bsKit(sv, anim, FIG);
+    ["a", "b"].forEach(key => {
+      const F = FIG[key], br = key === "a" ? 4.2 : 4.8;
+      F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL); F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
+      F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`);
+    });
+    const prop = (g, kind, x, y) => {
+      if (kind === "pad") { const P = sv("g", { transform: `translate(${x} ${y}) rotate(-10)` }, g); sv("rect", { x: -13, y: -20, width: 26, height: 20, rx: 1.4, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.7 }, P); sv("path", { d: "M-8 -14 Q-3 -17 0 -12 T8 -13 M-8 -7 H6", stroke: "#6a6a7a", "stroke-width": 0.8, fill: "none" }, P); sv("circle", { cx: 0, cy: 0, r: 4.4, fill: "#e7c0a1", stroke: "#b98f72", "stroke-width": 0.6 }, P); }
+      else if (kind === "pencil") { sv("path", { d: `M${x - 6} ${y + 6} L${x + 4} ${y - 7}`, stroke: "#e0b032", "stroke-width": 2.2, "stroke-linecap": "round" }, g); sv("circle", { cx: x + 4.4, cy: y - 7.4, r: 1.3, fill: "#e8a0a0" }, g); }
+      else if (kind === "walkie") { sv("rect", { x: x - 3.6, y: y - 12, width: 7.2, height: 15, rx: 1.4, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.6 }, g); sv("path", { d: `M${x - 1.4} ${y - 12} V${y - 21}`, stroke: "#4a4a5a", "stroke-width": 1.2 }, g); }
+      else if (kind === "corn") { [[-2, -4], [2, -6], [0, -9]].forEach(([dx, dy]) => sv("circle", { cx: x + dx, cy: y + dy, r: 2.2, fill: "#f6ead0" }, g)); }
+    };
+    const drawFig = (key, p) => {
+      const F = FIG[key], isA = key === "a";
+      clear(F.b1); clear(F.b2);
+      const tr = `translate(${(F.cx + (p.sx || 0)).toFixed(1)} ${(F.sy + (p.dy || 0)).toFixed(1)}) scale(${F.s})`;
+      F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr);
+      (isA ? torsoA : torsoB)(F.b1);
+      const cx = F.cx + (p.sx || 0), cy = F.sy + (p.dy || 0), toLocal = t => [(t[0] - cx) / F.s, (t[1] - cy) / F.s];
+      const mouth = () => [cx + (p.head[0] + (isA ? 0 : 0)) * F.s, cy + ((isA ? -13.6 : -17.4) + p.head[1] + 3) * F.s];
+      const hand = (left, t) => {
+        if (t === "lap") { drawArm(F.b1, key, left, [left ? -17 : 17, 50]); return; }
+        if (t === "mouth") t = mouth();
+        const Hd = drawArm(F.b2, key, left, toLocal(t));
+        if (t[2]) prop(F.b2, t[2], Hd[0], Hd[1]);
+      };
+      hand(false, p.R || "lap"); hand(true, p.L || "lap");
+      (isA ? headA : headB)(F.b1, p);
+    };
+    // ── foreground: popcorn, comics, flashlight with its beam, walkie-talkie; fairy lights and pom-poms along the edges ──
+    const beamG = sv("g", {}, svg);
+    sv("polygon", { points: "292,452 330,452 250,150 190,150", fill: "url(#fi-beam)", opacity: 0.5 }, beamG);
+    const fore = sv("g", {}, svg);
+    const bowl = sv("g", {}, fore);
+    sv("ellipse", { cx: 62, cy: 492, rx: 26, ry: 8, fill: "#d8d0c0", stroke: "#8a8070", "stroke-width": 0.8 }, bowl);
+    sv("path", { d: "M40 486 L43 497 M52 483 L53 499 M72 483 L71 499 M84 486 L81 497", stroke: "#c9482e", "stroke-width": 2.4, opacity: 0.8 }, bowl);
+    for (let i = 0; i < 14; i++) sv("circle", { cx: (44 + rnd("pc" + i) * 36).toFixed(1), cy: (480 + rnd("pd" + i) * 8).toFixed(1), r: (2.6 + rnd("pe" + i) * 1.2).toFixed(1), fill: i % 2 ? "#f6ead0" : "#efdca8" }, bowl);
+    [[116, 508], [128, 512], [102, 514]].forEach(([x, y]) => sv("circle", { cx: x, cy: y, r: 2.2, fill: "#f6ead0" }, fore));
+    const comics = sv("g", {}, fore);
+    [["#3f7fd0", 262, 496, -4], ["#c9482e", 268, 488, 3], ["#e0a032", 264, 481, -2]].forEach(([c, x, y, r]) => { const b = sv("g", { transform: `rotate(${r} ${x + 26} ${y})` }, comics); sv("rect", { x, y, width: 54, height: 9, rx: 1, fill: c }, b); sv("rect", { x: x + 2, y: y + 1.5, width: 50, height: 6, fill: "#f6ead0", opacity: 0.85 }, b); sv("path", { d: `M${x + 6} ${y + 4.5} h20 M${x + 30} ${y + 4.5} h10`, stroke: c, "stroke-width": 1.2 }, b); });
+    const torch = sv("g", { transform: "rotate(-24 300 452)" }, fore);
+    sv("rect", { x: 292, y: 446, width: 34, height: 12, rx: 3, fill: "#3a4a66" }, torch); sv("rect", { x: 322, y: 443, width: 10, height: 18, rx: 2, fill: "#cfd4de" }, torch); sv("rect", { x: 331, y: 445, width: 2, height: 14, fill: "#fff3c8" }, torch);
+    const walk = sv("g", {}, fore);
+    sv("rect", { x: 306, y: 476, width: 16, height: 26, rx: 2.4, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.8 }, walk); sv("path", { d: "M311 476 V460", stroke: "#4a4a5a", "stroke-width": 1.6 }, walk); sv("rect", { x: 309, y: 482, width: 10, height: 7, fill: "#7a8a6a" }, walk);
+    anim(sv("circle", { cx: 311, cy: 459, r: 1.6, fill: "#ff7a7a" }, walk), "animation:hkTwinkle 2.4s ease-in-out infinite;");
+    const lights = (a, c, b, n, tag) => {
+      sv("path", { d: `M${a[0]} ${a[1]} Q${c[0]} ${c[1]} ${b[0]} ${b[1]}`, stroke: "#1a1218", "stroke-width": 0.9, fill: "none", opacity: 0.85 }, svg);
+      for (let i = 0; i <= n; i++) { const t = i / n, bx = (1 - t) * (1 - t) * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0], by = (1 - t) * (1 - t) * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1], col = BULB[(i + tag) % BULB.length];
+        sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 7, fill: col, opacity: 0.22 }, svg);
+        anim(sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 2.1, fill: col }, svg), `animation:hkTwinkle ${(1.5 + rnd("fl" + tag + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("fm" + tag + i) * 3).toFixed(1)}s infinite;`); }
+    };
+    lights([-10, 52], [90, 110], [176, 106], 9, 0); lights([190, 106], [270, 110], [370, 52], 9, 2);
+    const pom = (a, c, b, n) => { for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, x = (1 - t) * (1 - t) * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0], y = (1 - t) * (1 - t) * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1]; sv("circle", { cx: x.toFixed(1), cy: (y + 3).toFixed(1), r: 4, fill: ["#5fb0b0", "#1f1a24", "#7fd0d0"][i % 3] }, svg); } };
+    pom([180, 100], [105, 210], [30, 320], 12); pom([180, 100], [255, 210], [330, 320], 12);
+    // hearts rising from between them
+    const heartsG = sv("g", { "pointer-events": "none" }, svg);
+    const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z", HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
+    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(176 + (Math.random() - 0.5) * 50).toFixed(1)} ${(250 + Math.random() * 20).toFixed(1)}) scale(${(1.2 + Math.random() * 0.7).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
+    if (!document.getElementById("ao3-bf-css")) { const s = document.createElement("style"); s.id = "ao3-bf-css"; s.textContent = "@keyframes bfHeart{0%{opacity:0;transform:translate(0,0) scale(.4)}15%{opacity:.95}70%{opacity:.8}100%{opacity:0;transform:translate(var(--dx,0px),-92px) scale(1.15)}}@keyframes bfPop{0%{opacity:0;transform:translate(-50%,-100%) scale(.85)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}"; (document.head || document.documentElement).appendChild(s); }
+    const vgn = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "url(#fi-vig)" }, svg); vgn.setAttribute("pointer-events", "none");
+    const wrap = el("div", "position:relative;");
+    const ov = el("div", "position:absolute;inset:0;pointer-events:none;overflow:hidden;");
+    wrap.appendChild(svg); wrap.appendChild(ov); field.appendChild(wrap);
+    // ── the speech bubble: one at a time, above whoever is speaking ──
+    const HEADX = { w: 150, m: 222 };
+    let bub = null;
+    const hideBubble = () => { if (bub) { bub.remove(); bub = null; } };
+    const speak = (who, text) => {
+      hideBubble();
+      const anchor = who === "w" ? 33 : 67, headPct = HEADX[who] / W * 100, cw = wrap.clientWidth || 360;
+      bub = el("div", `position:absolute;left:${anchor}%;top:${(232 / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.45);${reduce ? "" : "animation:bfPop .22s ease-out both;"}`, text);
+      const tail = el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((headPct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`);
+      bub.appendChild(tail); ov.appendChild(bub);
+    };
+    // ── the director ──
+    const P = { a: null, b: null };
+    const setPose = patch => {
+      ["a", "b"].forEach(k => { if (patch[k]) P[k] = Object.assign({}, P[k], patch[k]); });
+      if (patch.front) { const k = patch.front; bodyL.appendChild(FIG[k].g1); armL.appendChild(FIG[k].g2); }
+      ["a", "b"].forEach(k => { if (patch[k]) drawFig(k, P[k]); });
+      if (patch.jig && !reduce) ["a", "b"].forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-4px)" }, { transform: "translateY(0)" }, { transform: "translateY(-2px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
+      if (patch.hearts) puff(patch.hearts);
+    };
+    const start = patch => { P.a = Object.assign({}, FI_BASE.a); P.b = Object.assign({}, FI_BASE.b); bodyL.appendChild(FIG.b.g1); armL.appendChild(FIG.b.g2); drawFig("a", P.a); drawFig("b", P.b); if (patch) setPose(patch); };
+    let mi = 0, bi = 0, playing = false;
+    const readTime = t => 2600 + t.length * 48;
+    const step = () => {
+      clearTimeout(tid);
+      const M = FI_MOMENTS[mi];
+      if (bi >= M.beats.length) { playing = false; hideBubble(); say("The moment settles. Tap either of them for another."); return; }
+      const [who, text, patch] = M.beats[bi++];
+      setPose(patch || {});
+      if (who === "n") { hideBubble(); say(text); } else speak(who, text);
+      tid = setTimeout(step, readTime(text));
+    };
+    const play = i => { clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(FI_KEY, String(mi)); } catch {} say("Inside: fairy lights, popcorn, and two people sitting very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const another = () => { let n = Math.floor(Math.random() * (FI_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
+    const next = () => { if (playing) step(); else another(); };
+    sh.onClose = () => { clearTimeout(tid); hideBubble(); };
+    let first = Math.floor(Math.random() * FI_MOMENTS.length);
+    try { const last = parseInt(localStorage.getItem(FI_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < FI_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (FI_MOMENTS.length - 1))) % FI_MOMENTS.length; } catch {}
+
+    // ── what you can tap ──
+    const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
+    const SAY = {
+      hand: ["Two hands, one blanket. Nobody is looking at them. Everybody is looking at them.", "A thumb moves, very slightly, back and forth. It is a small, serious gesture."],
+      lights: ["The fairy lights twinkle faster. Somebody up there is very pleased with themselves.", "Red, gold, blue, green, pink. Mike strung them up; Will rearranged them when he wasn’t looking."],
+      torch: ["The flashlight is pointed at the ceiling, painting a long pale stripe across the blankets.", "Somebody’s been reading comics by it. The batteries are almost certainly borrowed."],
+      corn: ["The popcorn bowl is mostly kernels now. A single piece sits on its own, saved for somebody.", "Half the popcorn is on the quilt. The other half is also on the quilt."],
+      comic: ["Comics, in a leaning stack. One has two names inked inside the cover, very small, and a doodled heart between them.", "The top issue is open at a page nobody has turned in an hour."],
+      draw: ["A crayon heart, pinned up very crooked. M + W. Nobody has ever been asked about it."]
+    };
+    hit(96, 250, 100, 140, "Will", next); hit(196, 244, 100, 146, "Mike", next);
+    hit(150, 366, 60, 36, "Their hands", () => { say(SAY.hand[nHand++ % SAY.hand.length]); puff(3); });
+    hit(296, 466, 40, 50, "The walkie-talkie", () => {
+      hkCrackle(); clearTimeout(tid); playing = false; hideBubble(); say("The walkie-talkie hisses. “…Mike? Will? It got very quiet. Dustin to the fort. Over.”");
+      setPose({ a: { mood: "o", blush: true, R: "lap" }, b: { mood: "o", blush: true, L: "lap" } });
+      tid = setTimeout(() => { speak("m", "Nothing! We’re fine! Over!"); setPose({ jig: true }); tid = setTimeout(() => { speak("w", "That was extremely believable."); setPose({ a: { mood: "grin", eyes: "happy", R: FI_CL[0] }, b: { mood: "grin", L: FI_CL[1] }, hearts: 2 }); tid = setTimeout(() => { hideBubble(); say("They’re laughing too hard to say anything else. Tap them for another moment."); }, 3400); }, 2600); }, 2600);
+    });
+    hit(20, 60, 320, 70, "The fairy lights", () => { say(SAY.lights[nLights++ % SAY.lights.length]); puff(2); });
+    hit(286, 430, 60, 30, "The flashlight", () => say(SAY.torch[nTorch++ % SAY.torch.length]));
+    hit(30, 466, 70, 40, "The popcorn", () => say(SAY.corn[nCorn++ % SAY.corn.length]));
+    hit(256, 474, 60, 36, "The comics", () => say(SAY.comic[nComic++ % SAY.comic.length]));
+    hit(56, 228, 70, 66, "The crayon heart", () => say(SAY.draw[nDraw++ % SAY.draw.length]));
+    const hitG = sv("g", {}, svg);
+    hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
+    sub.textContent = "hawkins · the basement · inside the fort";
+    const out = () => { if (leaving) return; leaving = true; say("You back out on your hands and knees."); bfFade(sh, () => openBasementFort(true)); };
+    pill("\u{1F4AC} next", "Hear the next line sooner", next);
+    pill("\u{1F501} another", "A different moment", another);
+    pill("◀ outside", "Back out of the fort", out);
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { sh.close(); openHawkins(false); });
+    document.body.appendChild(sh.back);
+    play(first);
     if (arrive) {
       const v = el("div", `position:absolute;inset:0;background:#000;opacity:1;pointer-events:none;z-index:30;transition:opacity ${reduce ? 0 : 0.6}s;`);
       sh.box.appendChild(v);
@@ -7419,5 +7716,5 @@ window.__ao3WorldInit = function (core) {
   }
 
 
-  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel, openBellTower, openHawkins, openWheelers, openBasement, openBasementFort };
+  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel, openBellTower, openHawkins, openWheelers, openBasement, openBasementFort, openFortInside };
 };
