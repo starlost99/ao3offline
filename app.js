@@ -3490,7 +3490,7 @@ try {
     topbar.appendChild(ttl);
     const strollBtn = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e6dcf5;border-radius:999px;padding:5px 12px;font:600 12px/1 inherit;font-family:inherit;cursor:pointer;", "\u{1F56F}\uFE0F stroll");
     const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
-    // stroll with a small button under it that hides or shows the time / weather / Halloween pills
+    // stroll with a small button under it that hides or shows the whole buttons bar
     const sideCol = el("div", "flex:0 0 auto;display:flex;flex-direction:column;align-items:stretch;gap:5px;");
     const sceneBtn = el("button", "border:1px solid rgba(190,170,255,0.25);background:rgba(255,255,255,0.04);color:rgba(230,220,245,0.85);border-radius:999px;padding:4px 10px;font:500 11px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", "");
     sceneBtn.type = "button";
@@ -5170,15 +5170,14 @@ try {
     });
     hwBtn.setAttribute("aria-pressed", hwOn ? "true" : "false");
     if (hwOn) { hwBtn.style.borderColor = "rgba(255,160,60,0.7)"; hwBtn.style.background = "rgba(255,140,30,0.26)"; }
-    // the button under stroll hides or shows the time, weather and Halloween pills (find / random / book stay)
-    const sceneBtns = [timeBtn, wxBtn, hwBtn];
+    // the button under stroll hides or shows this whole bar (time, weather, Halloween, find, random, book) so more of the grounds fits on screen
     const applyScene = () => {
       const hide = prefs.sh === true;
-      sceneBtns.forEach(b => { b.style.display = hide ? "none" : ""; });
+      tools.style.display = hide ? "none" : "flex";
       sceneBtn.textContent = hide ? "\u{1F319} show scene" : "\u{1F319} hide scene";
-      sceneBtn.title = hide ? "Show the time, weather and Halloween buttons" : "Hide the time, weather and Halloween buttons";
+      sceneBtn.title = hide ? "Show the buttons bar" : "Hide the buttons bar for a bigger view";
     };
-    sceneBtn.onclick = () => { prefs.sh = !(prefs.sh === true); savePrefs(); applyScene(); };
+    sceneBtn.onclick = () => { prefs.sh = !(prefs.sh === true); savePrefs(); applyScene(); if (prefs.sh === true) finder.style.display = "none"; };
     applyScene();
     const goTo = n => {
       stopStroll();
@@ -9239,7 +9238,7 @@ try {
     });
   }, 1000);
   // Web app only: hand the four keepsake views to the web app's "Keepsakes" button.
-  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass };
+  if (window.__ao3WebApp) window.__ao3Extras = { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass };
 })();
 } catch (e) { console.error("[AO3 bundle] Fic Tracker failed to load:", e); }
 
@@ -28946,6 +28945,16 @@ try {
     };
     keepLi.appendChild(keepBtn);
     (periodNavLi.nextElementSibling || periodNavLi).after(keepLi); // after the Daily Brief button
+
+    // and a separate "Grounds" button right after Keepsakes: straight into the graveyard grounds
+    const groundsLi = document.createElement("li");
+    const groundsNavBtn = document.createElement("a");
+    groundsNavBtn.textContent = "Grounds";
+    groundsNavBtn.href = "javascript:void(0)";
+    groundsNavBtn.style.cursor = "pointer";
+    groundsNavBtn.onclick = () => { try { window.__ao3Extras && window.__ao3Extras.openGraveyardGrounds(); } catch (e) { console.error(e); } };
+    groundsLi.appendChild(groundsNavBtn);
+    keepLi.after(groundsLi);
   }
   periodCloseBtn.onclick  = closePeriodTracker;
   periodOverlay.addEventListener("click", e => { if (e.target === periodOverlay) closePeriodTracker(); });
