@@ -6557,14 +6557,12 @@ window.__ao3WorldInit = function (core) {
       sv("path", { d: "M-9 -31 v1.6 M-3 -31 v1.6 M3 -31 v1.6 M9 -31 v1.6", stroke: "#2a1c15", "stroke-width": 0.8, opacity: 0.8 }, h);
       face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
     };
-    const headB = (g, p) => {                               // short, soft, tousled dark curls with a wavy fringe
+    const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      [[-14, -40, 8], [14, -40, 8], [-17, -29, 7], [17, -29, 7], [-16.5, -19, 6], [16.5, -19, 6], [-8, -46, 8], [8, -46, 8], [0, -48, 8.4], [-5, -50.4, 4.6], [7, -50, 4.8], [-15.6, -12, 4.4], [15.6, -12, 4.4]].forEach(([cx, cy, r], i) => sv("circle", { cx, cy, r, fill: i % 2 ? "#2d2124" : "#231a1c" }, h));
+      const HAIR = "#231a1c";
+      [[-13, -38, 8.6], [13, -38, 8.6], [-16, -29, 6.4], [16, -29, 6.4], [-7, -45, 8.6], [7, -45, 8.6], [0, -47, 8.6]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
       sv("ellipse", { cx: 0, cy: -28, rx: 14.4, ry: 17.4, fill: SKIN_B }, h);
-      sv("path", { d: "M-16.5 -21 C-19.5 -40 -9 -49.5 0 -49.5 C9 -49.5 19.5 -40 16.5 -21 C15 -27 13.4 -30.5 10.6 -33.4 Q8.4 -36.6 5.8 -33 Q3.6 -38 0.4 -34.4 Q-2.6 -38.4 -5.6 -33.6 Q-8.6 -37.4 -10.8 -32.6 Q-14 -30 -16.5 -21 Z", fill: "#231a1c" }, h);
-      sv("path", { d: "M2 -49 C9 -48 17 -43 16.2 -26 C14.6 -33 10 -38 4 -40 Z", fill: "#2d2124" }, h);
-      [[-15.4, -21.4, 3.3], [15.4, -21.4, 3.3], [-16.2, -14.4, 2.9], [16.2, -14.4, 2.9], [-11, -33.6, 2.4], [8.6, -34.2, 2.2]].forEach(([cx, cy, r], i) => sv("circle", { cx, cy, r, fill: i % 2 ? "#2d2124" : "#231a1c" }, h));
-      sv("path", { d: "M-9 -44 q2.4 -3.4 5 -0.4 M3 -46 q3 -3 5.4 0 M-14 -36 q-1.2 4 0.6 8 M13.4 -37 q1.6 4 -0.4 8 M-3 -40.6 q2 2.6 4.6 0.4", stroke: "#4a3a40", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.85 }, h);
+      sv("path", { d: "M-15.8 -27 C-19.4 -40 -9 -49.5 0 -49.5 C9 -49.5 19.4 -40 15.8 -27 C14.6 -30 13 -32 10.6 -33.4 Q8.4 -36.6 5.8 -33 Q3.6 -38 0.4 -34.4 Q-2.6 -38.4 -5.6 -33.6 Q-8.6 -37.4 -10.8 -32.6 Q-13.6 -30.6 -15.8 -27 Z", fill: HAIR }, h);
       face(h, p, { ex: 5.8, ey: -26.2, by: -30.6, my: -17.4, brow: "#1a1214" });
     };
     const drawFig = (key, p) => {
