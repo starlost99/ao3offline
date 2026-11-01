@@ -1,0 +1,902 @@
+--- world.orig.js	2026-11-01 14:23:20.987900003 +0000
++++ world.js	2026-11-01 14:43:09.034596148 +0000
+@@ -1,5 +1,5 @@
+ // world.js — the keepsake scenes: graveyard, graveyard grounds, Bram’s cottage, celebrations,
+-// constellation, aquarium, bookshelf, garden, Hollowbrook village, the chapel (stained glass). Web app only; AO3 never loads this.
++// constellation, aquarium, bookshelf, garden, Hollowbrook village, the chapel (stained glass), the bell tower, Hawkins. Web app only; AO3 never loads this.
+ // app.js fetches it the first time a keepsake is opened and calls __ao3WorldInit once, handing over the
+ // tracker helpers listed below. Nothing in here touches AO3 pages.
+ window.__ao3WorldInit = function (core) {
+@@ -1952,10 +1952,10 @@
+     const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);", graves.length ? "tap a grave to lay flowers or light a candle \u00B7 tap the well at the end of the path \u00B7 \u2715 returns to the graveyard" : "");
+     box.appendChild(caption);
+ 
+-    let strolling = false, raf = 0;
++    let strolling = false, raf = 0, stopToll = () => {};
+     const stopStroll = () => { strolling = false; cancelAnimationFrame(raf); strollBtn.textContent = "\u{1F56F}\uFE0F stroll"; };
+     const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); const ask = document.getElementById("ao3-gate-ask"); if (ask) ask.remove(); else close(); } };
+-    const close = () => { stopStroll(); back.remove(); document.removeEventListener("keydown", onKey, true); };
++    const close = () => { stopStroll(); stopToll(); back.remove(); document.removeEventListener("keydown", onKey, true); };
+     xBtn.onclick = close;
+     back.addEventListener("click", e => { if (e.target === back) close(); });
+     document.addEventListener("keydown", onKey, true);
+@@ -2075,6 +2075,14 @@
+     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+     let sayAt = 0;
+     const say = t => { caption.textContent = t; sayAt = Date.now(); };
++    // Far off, the bell tower tolls the hour (see scenes/belltower.js). Quiet and muffled here. Browsers keep sound
++    // switched off until the first tap, so the first tap anywhere in the grounds wakes the audio up.
++    back.addEventListener("pointerdown", () => { bellUnlock(); }, { passive: true });
++    stopToll = startHourToll(h24 => {
++      const n = h24 % 12 || 12;
++      for (let i = 0; i < n; i++) bellStrike(BELL_HOUR, { delay: i * 2.6, vol: 0.07, distant: true });
++      say(`Far off, the bell tower tolls ${BELL_WORDS[n]}.`);
++    });
+     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+     const now = new Date(), month = now.getMonth();
+     // Halloween dressing is automatic in October, and the \u{1F383} button in the top bar turns it on or off any time of year.
+@@ -4643,6 +4651,8 @@
+   // Hawkins (down a road with a bus stop) and the cottage and graveyard (south, back to the grounds).
+   // Same night / dusk / dawn switch as the grounds, and it shares that setting (the "tm" value in ao3-gg-prefs).
+   // Tap the chapel door (or its big window, or the chapel pill) to go inside: see scenes/chapel.js.
++  // Tap the bell tower behind the chapel (or the bell tower pill) to walk up to it: see scenes/belltower.js.
++  // Tap the bus stop shelter (or the bus pill) and board to ride to Hawkins, Indiana: see scenes/hawkins.js.
+   // Nothing in here saves anything except that one time-of-day value.
+   function openHollowbrook() {
+     const old = document.getElementById("ao3-hollowbrook");
+@@ -5064,6 +5074,36 @@
+       hit.style.cursor = "pointer"; hit.setAttribute("aria-label", "Step inside the chapel");
+       hit.addEventListener("click", () => { close(); openChapel(); });
+     });
++    {   // tap the chapel's bell tower (its roof and shaft, above the big window) to walk up to it
++      const hit = sv("rect", { x: 150, y: 30, width: 60, height: 124, fill: "transparent" }, svg);
++      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", "Walk up to the bell tower");
++      hit.addEventListener("click", () => { close(); openBellTower(); });
++    }
++    // the bus stop (the little shelter at the end of the Hawkins road): "catch the bus?" takes you to Hawkins (scenes/hawkins.js)
++    const askBus = () => {
++      if (document.getElementById("ao3-bus-ask")) return;
++      const ask = el("div", "position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(6,4,16,0.62);");
++      ask.id = "ao3-bus-ask";
++      ask.addEventListener("click", ev => { if (ev.target === ask) ask.remove(); });
++      const dlg = el("div", "width:100%;max-width:300px;box-sizing:border-box;border-radius:18px;padding:20px 18px 16px;background:rgba(24,17,44,0.98);border:1px solid rgba(190,170,255,0.35);box-shadow:0 12px 36px rgba(0,0,0,0.6);color:#e6dcf5;text-align:center;");
++      dlg.appendChild(el("div", "font-size:26px;", "\u{1F68C}"));
++      dlg.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:16px;margin-top:6px;", "Catch the bus?"));
++      dlg.appendChild(el("div", "font-size:12.5px;line-height:1.45;opacity:0.75;margin:6px 0 14px;", "It goes to Hawkins, Indiana."));
++      const row = el("div", "display:flex;gap:8px;justify-content:center;");
++      const stay = el("button", "flex:1 1 0;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.06);color:#e6dcf5;border-radius:999px;padding:9px 12px;font:600 13px/1 inherit;font-family:inherit;cursor:pointer;", "Stay");
++      const go = el("button", "flex:1 1 0;border:1px solid rgba(255,217,138,0.6);background:rgba(255,217,138,0.18);color:#ffe9b0;border-radius:999px;padding:9px 12px;font:600 13px/1 inherit;font-family:inherit;cursor:pointer;", "Board");
++      stay.type = "button"; go.type = "button";
++      stay.onclick = () => ask.remove();
++      go.onclick = () => { ask.remove(); close(); openHawkins(true); };
++      row.appendChild(stay); row.appendChild(go); dlg.appendChild(row);
++      ask.appendChild(dlg); box.appendChild(ask);
++      go.focus();
++    };
++    {
++      const hit = sv("rect", { x: 272, y: 420, width: 82, height: 60, fill: "transparent" }, svg);
++      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", "Catch the bus to Hawkins");
++      hit.addEventListener("click", askBus);
++    }
+     field.appendChild(svg);
+ 
+     // ── time of day (same three looks as the grounds) ──
+@@ -5086,6 +5126,8 @@
+     };
+     const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; saveTime(); applyTime(); });
+     pill("\u26EA chapel", "Step inside the chapel", () => { close(); openChapel(); });
++    pill("\u{1F514} bell tower", "Walk up to the bell tower", () => { close(); openBellTower(); });
++    pill("\u{1F68C} bus", "Catch the bus to Hawkins", askBus);
+     pill("\u{1FAA6} grounds", "Back to the graveyard grounds", () => { close(); openGraveyardGrounds(); });
+     applyTime();
+     document.body.appendChild(back);
+@@ -5093,6 +5135,802 @@
+ 
+ 
+ 
++  // ── 🔔 THE BELL TOWER ──
++  // The chapel's own bell tower, seen up close (tap the tower behind the chapel in Hollowbrook, or the bell tower pill).
++  //  · the bell: one finished fic = one ring. Each tap rings the next fic you finished, latest first, then back
++  //    round again. The note comes from the fic (its pitch from the work, how long it hangs in the air from its
++  //    word count) and the bell swings as it rings. No two taps sound quite the same.
++  //  · the rope: tap it and the tower rings out this year's finished fics in the order you finished them,
++  //    one stroke each, so you can hear how many there are. The caption counts along.
++  //  · the hour: at the top of every hour the bell tolls the hour. The graveyard grounds hear it too, far off
++  //    and quiet (see the toll hook in openGraveyardGrounds), which is what ties the two places together.
++  // Sound is made with the Web Audio API (no sound files). Browsers only allow sound after a tap, so the
++  // grounds wake the audio up on the first tap anywhere inside them. A "sound on / off" pill in the tower
++  // keeps one tiny setting (ao3-bell-mute) that the grounds' toll obeys too. Nothing else is saved.
++
++  const BELL_MUTE_KEY = "ao3-bell-mute";
++  const BELL_WORDS = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
++  const BELL_SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];            // a pentatonic ladder, so any mix of fics sounds kind together
++  const BELL_HOUR = { freq: 130.81, len: 4.8, bright: 0.45, hue: 42 };   // the hour bell: low and slow
++  let bellAC = null, bellNoise = null;
++  const bellMuted = () => { try { return localStorage.getItem(BELL_MUTE_KEY) === "1"; } catch { return false; } };
++  const setBellMuted = m => { try { localStorage.setItem(BELL_MUTE_KEY, m ? "1" : "0"); } catch {} };
++
++  // Call from a tap. Creates the audio context the first time and wakes it up if the browser put it to sleep.
++  function bellUnlock() {
++    try {
++      const AC = window.AudioContext || window.webkitAudioContext;
++      if (!AC) return null;
++      if (!bellAC) bellAC = new AC();
++      if (bellAC.state === "suspended") bellAC.resume();
++      return bellAC;
++    } catch { return null; }
++  }
++
++  // One finished fic's bell: pitch from the work itself, how long it rings from its word count, a little brightness from the work too.
++  function bellVoice(fic) {
++    const key = String((fic && (fic.workId || fic.title)) || "?");
++    const h = Math.abs(Math.floor(gyHash(key))), h2 = Math.abs(Math.floor(gyHash("bell" + key)));
++    const words = Number(fic && fic.words) || 0;
++    return { freq: 196 * Math.pow(2, BELL_SCALE[h % BELL_SCALE.length] / 12), len: 2.4 + Math.min(3.2, Math.log10(words + 10) * 0.55), bright: 0.5 + (h2 % 100) / 100, hue: h % 360 };
++  }
++
++  // Strike once. Several sine partials at bell-like ratios, each fading at its own rate, plus a soft clapper click.
++  // opts: delay (seconds from now), vol, distant (muffled, for the grounds). Returns false if nothing could play.
++  function bellStrike(voice, opts) {
++    const o = opts || {};
++    const ac = bellUnlock();
++    if (!ac || ac.state !== "running" || bellMuted()) return false;
++    try {
++      const t0 = ac.currentTime + (o.delay || 0) + 0.01;
++      const out = ac.createGain(); out.gain.value = o.vol != null ? o.vol : 0.2;
++      if (o.distant) { const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 650; out.connect(lp); lp.connect(ac.destination); }
++      else out.connect(ac.destination);
++      const jitter = Math.pow(2, ((Math.random() - 0.5) * 14) / 1200);          // a few cents either way, so no two taps match
++      const PARTS = [[0.5, 0.55, 1.0], [1, 1, 0.85], [1.183, 0.6, 0.6], [1.506, 0.42, 0.45], [2, 0.5, 0.35], [2.514, 0.26, 0.22], [3.011, 0.18, 0.15], [4.166, 0.1, 0.09]];   // [ratio, loudness, share of the ring time]
++      const norm = PARTS.reduce((s, p) => s + p[1], 0);
++      PARTS.forEach(([ratio, amp, share], i) => {
++        const osc = ac.createOscillator(), g = ac.createGain();
++        osc.type = "sine"; osc.frequency.value = voice.freq * ratio * jitter;
++        const peak = (amp / norm) * (i >= 4 ? voice.bright * (0.75 + Math.random() * 0.5) : 1);
++        const d = Math.max(0.35, voice.len * share);
++        g.gain.setValueAtTime(0.0001, t0);
++        g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + 0.006);
++        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
++        osc.connect(g); g.connect(out);
++        osc.start(t0); osc.stop(t0 + d + 0.05);
++      });
++      if (!bellNoise) {
++        bellNoise = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.05), ac.sampleRate);
++        const d = bellNoise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
++      }
++      const ns = ac.createBufferSource(), bp = ac.createBiquadFilter(), ng = ac.createGain();
++      ns.buffer = bellNoise; bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 0.8;
++      ng.gain.setValueAtTime(0.0001, t0); ng.gain.exponentialRampToValueAtTime(0.1, t0 + 0.004); ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
++      ns.connect(bp); bp.connect(ng); ng.connect(out); ns.start(t0);
++      return true;
++    } catch { return false; }
++  }
++
++  // Calls onHour(hour24) at the top of every hour until the returned stop function is called.
++  // A tab that slept through the hour doesn't toll for it late.
++  function startHourToll(onHour) {
++    let timer = 0, alive = true;
++    const arm = () => {
++      const now = new Date(), next = new Date(now.getTime());
++      next.setHours(now.getHours() + 1, 0, 0, 0);
++      timer = setTimeout(() => {
++        if (!alive) return;
++        const late = Date.now() - next.getTime();
++        arm();
++        if (late < 60000) { try { onHour(next.getHours()); } catch {} }
++      }, next.getTime() - now.getTime());
++    };
++    arm();
++    return () => { alive = false; clearTimeout(timer); };
++  }
++
++  // Every finished fic with the day it finished (same rule as the chapel's window), oldest first.
++  function bellRings() {
++    let log = [];
++    try { const l = JSON.parse(localStorage.getItem(READ_LOG_KEY) || "[]"); if (Array.isArray(l)) log = l.filter(e => e && e.date); } catch {}
++    const lastDay = new Map();
++    log.forEach(e => { const id = String(e.key || "").split("::")[0]; if (!id) return; const d = String(e.date).slice(0, 10); if (!lastDay.has(id) || d > lastDay.get(id)) lastDay.set(id, d); });
++    return getTracked().filter(f => f.finished).map(f => ({
++      f, title: f.title || `Work ${f.workId}`, words: Number(f.words) || 0,
++      day: lastDay.get(String(f.workId)) || (f.lastUpdate && String(f.lastUpdate).slice(0, 10)) || (f.trackedAt && String(f.trackedAt).slice(0, 10)) || ""
++    })).sort((a, b) => a.day < b.day ? -1 : a.day > b.day ? 1 : 0);
++  }
++
++  function openBellTower() {
++    const old = document.getElementById("ao3-belltower");
++    if (old) old.remove();
++    if (!document.getElementById("ao3-bt-css")) {
++      const st = document.createElement("style");
++      st.id = "ao3-bt-css";
++      st.textContent = `
++        @keyframes btFlicker{0%,100%{opacity:.8}30%{opacity:1}60%{opacity:.62}}
++        @keyframes btMist{0%,100%{opacity:.08;transform:translateX(-8px)}50%{opacity:.2;transform:translateX(8px)}}
++        @media (prefers-reduced-motion: reduce){.bt-anim{animation:none !important}}
++      `;
++      (document.head || document.documentElement).appendChild(st);
++    }
++    const el = (tag, css, text) => {
++      const e = document.createElement(tag);
++      if (css) e.style.cssText = css;
++      if (text != null) e.textContent = text;
++      return e;
++    };
++    const NS = "http://www.w3.org/2000/svg";
++    const sv = (tag, attrs, parent) => {
++      const e = document.createElementNS(NS, tag);
++      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
++      if (parent) parent.appendChild(e);
++      return e;
++    };
++    const anim = (node, css) => { node.setAttribute("class", "bt-anim"); node.style.cssText += css; return node; };
++    const rnd = seed => { const x = Math.sin(gyHash(String(seed)) * 12.9898) * 43758.5453; return x - Math.floor(x); };
++    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
++    const vibrate = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch {} };
++    const timers = new Set();
++    const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); };
++    const fmtDay = d => { try { const x = new Date(d + "T12:00:00"); return isNaN(x) ? "" : x.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); } catch { return ""; } };
++
++    // time of day: shared with the village and the grounds ("tm" in ao3-gg-prefs); only that one value is touched
++    const PKEY = "ao3-gg-prefs";
++    let tI = 0;
++    try { const p = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; tI = Math.max(0, Math.min(2, p.tm | 0)); } catch {}
++    const saveTime = () => {
++      try { const p = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; p.tm = tI; localStorage.setItem(PKEY, JSON.stringify(p)); } catch {}
++    };
++
++    // the bells: every finished fic, latest first for tapping; this year's in the order they finished for the rope
++    const rings = bellRings();
++    const order = rings.slice().reverse();
++    const year = String(new Date().getFullYear());
++    const thisYear = rings.filter(r => r.day.slice(0, 4) === year);
++    let cursor = 0, pealId = 0;
++
++    // ── shell (same look as the village) ──
++    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000002;");
++    back.id = "ao3-belltower";
++    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.6);border:1px solid rgba(190,170,255,0.18);");
++    back.appendChild(box);
++    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.18);background:rgba(8,6,22,0.55);z-index:3;");
++    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
++    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;line-height:1.2;text-transform:uppercase;color:#d9d0f5;", "\u{1F514} Bell tower"));
++    const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);", "");
++    ttl.appendChild(sub);
++    const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
++    xBtn.type = "button"; xBtn.setAttribute("aria-label", "Close");
++    topbar.appendChild(ttl); topbar.appendChild(xBtn);
++    box.appendChild(topbar);
++    const tools = el("div", "flex:0 0 auto;display:flex;gap:6px;padding:7px 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid rgba(190,170,255,0.12);background:rgba(8,6,22,0.4);z-index:3;");
++    const pill = (label, title, fn) => {
++      const b = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);color:#e6dcf5;border-radius:999px;padding:5px 11px;font:500 12px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", label);
++      b.type = "button"; b.title = title; b.onclick = fn; tools.appendChild(b); return b;
++    };
++    box.appendChild(tools);
++    const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;");
++    box.appendChild(field);
++    const caption = el("div", "flex:0 0 auto;min-height:38px;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);background:rgba(8,6,22,0.45);display:flex;align-items:center;justify-content:center;");
++    box.appendChild(caption);
++
++    let raf = 0, clockTimer = 0, stopToll = () => {};
++    const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); close(); } };
++    const close = () => {
++      pealId++; timers.forEach(clearTimeout); timers.clear();
++      cancelAnimationFrame(raf); clearInterval(clockTimer); stopToll();
++      back.remove(); document.removeEventListener("keydown", onKey, true);
++    };
++    xBtn.onclick = close;
++    back.addEventListener("click", e => { if (e.target === back) close(); });
++    back.addEventListener("pointerdown", () => { bellUnlock(); }, { passive: true });
++    document.addEventListener("keydown", onKey, true);
++
++    // ── the picture: 360 x 640 ──
++    const W = 360, H = 640;
++    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
++    svg.style.cssText = "width:100%;height:auto;display:block;";
++    const defs = sv("defs", {}, svg);
++    const glow = sv("radialGradient", { id: "bt-glow" }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.75" }, glow);
++    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
++    const slot = sv("linearGradient", { id: "bt-slot", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#8a5a2e" }, slot);
++    sv("stop", { offset: "100%", "stop-color": "#2a1d2c" }, slot);
++    const fade = sv("linearGradient", { id: "bt-fade", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#0a0818", "stop-opacity": "0" }, fade);
++    sv("stop", { offset: "100%", "stop-color": "#0a0818", "stop-opacity": "0.85" }, fade);
++
++    const starG = sv("g", {}, svg);
++    for (let i = 0; i < 46; i++) sv("circle", { cx: (rnd("bsx" + i) * W).toFixed(1), cy: (rnd("bsy" + i) * 300).toFixed(1), r: (0.5 + rnd("bsr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("bso" + i) * 0.6).toFixed(2) }, starG);
++    const moonG = sv("g", {}, svg);
++    const moonDisc = sv("circle", { cx: 292, cy: 60, r: 16, fill: "#efe6bd" }, moonG);
++    sv("circle", { cx: 292, cy: 60, r: 32, fill: "url(#bt-glow)", opacity: 0.3 }, moonG);
++    sv("path", { d: "M0 410 Q60 380 130 404 T250 396 T360 406 V500 H0 Z", fill: "#2a2147" }, svg);
++    sv("path", { d: "M0 450 Q90 428 180 448 T360 438 V520 H0 Z", fill: "#241b3b" }, svg);
++    sv("rect", { x: 0, y: 480, width: W, height: H - 480, fill: "#1a1a2e" }, svg);
++    for (let i = 0; i < 70; i++) {
++      const gx = 6 + rnd("btx" + i) * (W - 12), gy = 490 + rnd("bty" + i) * (H - 510);
++      if (Math.abs(gx - 180) < 40 + (gy - 520) * 0.2) continue;
++      sv("path", { d: `M${gx.toFixed(1)} ${gy.toFixed(1)} l-2 -5 M${gx.toFixed(1)} ${gy.toFixed(1)} l0 -7 M${gx.toFixed(1)} ${gy.toFixed(1)} l2 -5`, stroke: "#3f6552", "stroke-width": 1.3, fill: "none", "stroke-linecap": "round", opacity: 0.65 }, svg);
++    }
++
++    // the path from the door down to the village
++    sv("path", { d: "M166 520 H194 L222 640 H138 Z", fill: "#2b2540" }, svg);
++    for (let i = 0; i < 9; i++) sv("path", { d: `M${166 - i * 3} ${526 + i * 13} H${194 + i * 3}`, stroke: "#3a3158", "stroke-width": 1, opacity: 0.7 }, svg);
++
++    // the tower: a stone shaft, a belfry with an open arch, a pointed roof and a weathervane
++    sv("rect", { x: 130, y: 262, width: 100, height: 258, fill: "#3a2e52" }, svg);
++    for (let yy = 276; yy < 520; yy += 22) sv("rect", { x: 128, y: yy, width: 104, height: 2.4, fill: "#4a3d66" }, svg);
++    sv("rect", { x: 118, y: 150, width: 124, height: 112, fill: "#46385f" }, svg);
++    sv("rect", { x: 114, y: 258, width: 132, height: 6, fill: "#5a4b6f" }, svg);
++    sv("polygon", { points: "110,152 250,152 180,72", fill: "#2a2040" }, svg);
++    sv("path", { d: "M110 152 L180 72 L250 152", fill: "none", stroke: "#4a3d66", "stroke-width": 1.4, "stroke-linejoin": "round" }, svg);
++    sv("path", { d: "M180 72 V50 M174 56 H186", stroke: "#8a7aa8", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round" }, svg);
++    sv("path", { d: "M152 258 V196 a28 28 0 0 1 56 0 V258 Z", fill: "#0f0a1c" }, svg);           // the open arch
++    sv("path", { d: "M148 258 V196 a32 32 0 0 1 64 0 V258", fill: "none", stroke: "#5a4b6f", "stroke-width": 4 }, svg);
++    sv("circle", { cx: 180, cy: 214, r: 44, fill: "url(#bt-glow)", opacity: 0.28 }, svg);
++    sv("rect", { x: 156, y: 174, width: 48, height: 5, rx: 1.5, fill: "#5a4030" }, svg);          // the beam the bell hangs from
++
++    // the bell, in its own group so it can swing from the beam
++    const swingG = sv("g", {}, svg);
++    const clapG = sv("g", {}, swingG);
++    sv("path", { d: "M164 238 Q170 233 171 220 Q172 198 180 186 Q188 198 189 220 Q190 233 196 238 Z", fill: "#c9a24a", stroke: "#8a6d2a", "stroke-width": 1 }, swingG);
++    sv("path", { d: "M174 214 Q175 202 180 194", fill: "none", stroke: "#f2dc9a", "stroke-width": 1.4, "stroke-linecap": "round", opacity: 0.7 }, swingG);
++    sv("rect", { x: 177, y: 178, width: 6, height: 9, rx: 1.5, fill: "#6a4a2a" }, swingG);
++    sv("line", { x1: 180, y1: 190, x2: 180, y2: 236, stroke: "#6a5a3a", "stroke-width": 1.4 }, clapG);
++    sv("circle", { cx: 180, cy: 238, r: 3.3, fill: "#8a6d2a" }, clapG);
++    const fxG = sv("g", { "pointer-events": "none" }, svg);                                          // ripples when it rings
++
++    // a clock on the shaft, showing the real time (the bell tolls when both hands point up)
++    sv("circle", { cx: 180, cy: 296, r: 17, fill: "#1a1228", stroke: "#5a4b6f", "stroke-width": 2.4 }, svg);
++    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; sv("line", { x1: (180 + Math.sin(a) * 13.5).toFixed(1), y1: (296 - Math.cos(a) * 13.5).toFixed(1), x2: (180 + Math.sin(a) * 15).toFixed(1), y2: (296 - Math.cos(a) * 15).toFixed(1), stroke: "#cbbfe0", "stroke-width": i % 3 ? 0.7 : 1.3, opacity: 0.8 }, svg); }
++    const hHand = sv("line", { x1: 180, y1: 296, x2: 180, y2: 287, stroke: "#e6dcf5", "stroke-width": 1.8, "stroke-linecap": "round" }, svg);
++    const mHand = sv("line", { x1: 180, y1: 296, x2: 180, y2: 283, stroke: "#e6dcf5", "stroke-width": 1.1, "stroke-linecap": "round" }, svg);
++    sv("circle", { cx: 180, cy: 296, r: 1.4, fill: "#ffd98a" }, svg);
++    const setClock = () => {
++      const d = new Date();
++      hHand.setAttribute("transform", `rotate(${((d.getHours() % 12) + d.getMinutes() / 60) * 30} 180 296)`);
++      mHand.setAttribute("transform", `rotate(${d.getMinutes() * 6} 180 296)`);
++    };
++    setClock(); clockTimer = setInterval(setClock, 20000);
++
++    // the rope: it comes down inside the tower and shows through a tall lit slit, with a striped grip (the sally)
++    sv("rect", { x: 171, y: 324, width: 18, height: 146, rx: 3, fill: "url(#bt-slot)" }, svg);
++    sv("rect", { x: 169, y: 322, width: 22, height: 150, rx: 4, fill: "none", stroke: "#5a4b6f", "stroke-width": 2.4 }, svg);
++    const ropeG = sv("g", {}, svg);
++    sv("path", { d: "M180 324 V452", stroke: "#e8d7b0", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, ropeG);
++    sv("rect", { x: 176.5, y: 392, width: 7, height: 34, rx: 3, fill: "#b3304a" }, ropeG);
++    [398, 406, 414, 422].forEach(yy => sv("rect", { x: 176.5, y: yy, width: 7, height: 2.6, fill: "#f3e6d0" }, ropeG));
++    sv("circle", { cx: 180, cy: 454, r: 2.6, fill: "#e8d7b0" }, ropeG);
++
++    // the door, lanterns, and yews either side
++    sv("path", { d: "M164 520 V502 a16 16 0 0 1 32 0 V520 Z", fill: "#120d22" }, svg);
++    sv("rect", { x: 158, y: 518, width: 44, height: 4, fill: "#5a4b6f" }, svg);
++    [112, 248].forEach(yx => {
++      sv("rect", { x: yx - 2, y: 506, width: 4, height: 16, fill: "#2c2028" }, svg);
++      sv("ellipse", { cx: yx, cy: 500, rx: 14, ry: 22, fill: "#1b2f2b" }, svg);
++      sv("ellipse", { cx: yx - 3, cy: 494, rx: 8, ry: 14, fill: "#223d36" }, svg);
++    });
++    // a signpost back to the village (tap it)
++    const post = sv("g", {}, svg);
++    sv("rect", { x: 289, y: 548, width: 3.4, height: 52, fill: "#4a3326" }, post);
++    sv("polygon", { points: "258,552 286,552 296,558 286,564 258,564", fill: "#6a4a30" }, post);
++    const pt = sv("text", { x: 271, y: 560.2, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 5.6, fill: "#f3e7c8" }, post); pt.textContent = "Hollowbrook";
++    [[118, 566], [244, 566]].forEach(([lx, base], i) => {
++      sv("rect", { x: lx - 1.2, y: base - 30, width: 2.4, height: 30, fill: "#2c2438" }, svg);
++      sv("rect", { x: lx - 3.5, y: base - 38, width: 7, height: 9, rx: 1.6, fill: "#ffd98a" }, svg);
++    });
++    const lit = sv("g", {}, svg);
++    [[118, 566], [244, 566]].forEach(([lx, base], i) => anim(sv("circle", { cx: lx, cy: base - 34, r: 24, fill: "url(#bt-glow)" }, lit), `animation:btFlicker ${(2.2 + rnd("bl" + i) * 1.6).toFixed(1)}s ease-in-out infinite;`));
++    [[180, 512, 16]].forEach(([gx, gy, gr]) => anim(sv("circle", { cx: gx, cy: gy, r: gr, fill: "url(#bt-glow)" }, lit), "animation:btFlicker 2.8s ease-in-out infinite;"));
++    [[110, 600], [250, 618]].forEach(([mx, my], i) => anim(sv("ellipse", { cx: mx, cy: my, rx: 70, ry: 12, fill: "#c8bee6", opacity: 0.1 }, svg), `animation:btMist ${10 + i * 3}s ease-in-out infinite;`));
++    sv("rect", { x: 0, y: 580, width: W, height: H - 580, fill: "url(#bt-fade)", "pointer-events": "none" }, svg);
++    const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
++
++    // ── the swing: a little spring, so a second ring catches the bell mid-swing instead of snapping it back ──
++    let ang = 0, vel = 0, dir = 1, last = 0;
++    const K = Math.pow(2 * Math.PI / 1.7, 2), C = 1.2;
++    const drawSwing = () => {
++      swingG.setAttribute("transform", `rotate(${ang.toFixed(2)} 180 178)`);
++      clapG.setAttribute("transform", `rotate(${(-ang * 0.9 - vel * 0.06).toFixed(2)} 180 190)`);
++    };
++    const tick = now => {
++      const dt = Math.min(0.05, (now - last) / 1000 || 0.016); last = now;
++      vel += (-K * ang - C * vel) * dt; ang += vel * dt;
++      if (Math.abs(ang) < 0.05 && Math.abs(vel) < 0.3) { ang = 0; vel = 0; drawSwing(); raf = 0; return; }
++      drawSwing(); raf = requestAnimationFrame(tick);
++    };
++    const kick = v => {
++      dir = -dir; vel += dir * v * (reduce ? 0.12 : 1);
++      if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
++    };
++    const ripple = hue => {
++      const c = sv("circle", { cx: 180, cy: 212, r: 30, fill: "none", stroke: `hsl(${hue},70%,74%)`, "stroke-width": 2, opacity: 0 }, fxG);
++      c.style.cssText = "transform-box:fill-box;transform-origin:center;";
++      if (reduce || !c.animate) { c.remove(); return; }
++      try { const a = c.animate([{ transform: "scale(.5)", opacity: 0.8 }, { transform: "scale(3.4)", opacity: 0 }], { duration: 1500, easing: "ease-out" }); a.onfinish = () => c.remove(); } catch { c.remove(); }
++    };
++    // one stroke: the sound, the swing and the ripple together
++    const stroke = (voice, vol) => { bellStrike(voice, { vol }); kick(88); ripple(voice.hue); };
++    const knock = () => { bellStrike({ freq: 110, len: 0.9, bright: 0.05, hue: 260 }, { vol: 0.1 }); kick(26); };
++    const offNote = () => bellMuted() ? " (sound is off)" : "";
++
++    // ── tap the bell: the next fic you finished rings ──
++    const ringBell = () => {
++      bellUnlock(); vibrate(12); pealId++;
++      if (!order.length) { knock(); caption.textContent = "No fic has finished yet. The bell is waiting for its first."; return; }
++      const r = order[cursor % order.length]; cursor++;
++      stroke(bellVoice(r.f), 0.2);
++      const when = fmtDay(r.day);
++      caption.textContent = `${r.title}${when ? " \u00B7 finished " + when : ""}${r.words ? " \u00B7 " + r.words.toLocaleString() + " words" : ""}${offNote()}`;
++    };
++    // ── tap the rope: this year rings out, one stroke per fic, in the order you finished them ──
++    const pullRope = () => {
++      bellUnlock(); vibrate(14);
++      try { if (ropeG.animate && !reduce) ropeG.animate([{ transform: "translateY(0)" }, { transform: "translateY(14px)" }, { transform: "translateY(0)" }], { duration: 420, easing: "ease-out" }); } catch {}
++      const id = ++pealId, n = thisYear.length;
++      if (!n) { knock(); caption.textContent = `Nothing has rung this year yet. The rope is waiting.`; return; }
++      const gap = Math.max(220, Math.min(800, 7000 / n));
++      thisYear.forEach((r, i) => later(() => {
++        if (id !== pealId) return;
++        stroke(bellVoice(r.f), 0.15);
++        caption.textContent = `${i + 1} of ${n} \u00B7 ${r.title}`;
++        if (i === n - 1) later(() => { if (id === pealId) caption.textContent = `${n} ${n === 1 ? "fic has" : "fics have"} rung this year.${offNote()}`; }, 1500);
++      }, i * gap));
++    };
++    const hotspot = (x, y, w, h, label, fn) => {
++      const hit = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, svg);
++      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", label);
++      hit.addEventListener("click", fn);
++    };
++    hotspot(150, 168, 60, 92, "Ring the bell", ringBell);
++    hotspot(158, 322, 44, 160, "Pull the rope to hear how many fics have rung this year", pullRope);
++    hotspot(256, 546, 44, 56, "Back to Hollowbrook village", () => { close(); openHollowbrook(); });
++    field.appendChild(svg);
++
++    // ── the hour: the bell tolls it here for real (the grounds hear it from far off) ──
++    stopToll = startHourToll(h24 => {
++      const n = h24 % 12 || 12; pealId++;
++      caption.textContent = `The hour: ${BELL_WORDS[n]} o\u2019clock.${offNote()}`;
++      for (let i = 0; i < n; i++) later(() => stroke(BELL_HOUR, 0.22), i * 2600);
++    });
++
++    // ── time of day (same three looks as the village) ──
++    const TIMES = [
++      { label: "\u{1F319} night", name: "night", bg: "linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%)", stars: 1, orb: "#efe6bd", dy: 0, lit: 1, tint: ["#000000", 0], say: "Night at the bell tower. The bell is only resting." },
++      { label: "\u{1F307} dusk", name: "dusk", bg: "linear-gradient(180deg,#2b1b4a 0%,#6a3566 35%,#a85a52 55%,#33203c 100%)", stars: 0.3, orb: "#ffb067", dy: 34, lit: 0.9, tint: ["#ff8a5c", 0.1], say: "Dusk. The rope sways a little in the draught." },
++      { label: "\u{1F305} dawn", name: "dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, lit: 0.6, tint: ["#ffc9c9", 0.09], say: "Dawn. The bell gets the first word." }
++    ];
++    const applyTime = announce => {
++      const t = TIMES[tI];
++      box.style.background = t.bg;
++      starG.setAttribute("opacity", t.stars);
++      moonDisc.setAttribute("fill", t.orb);
++      moonG.setAttribute("transform", `translate(0 ${t.dy})`);
++      lit.setAttribute("opacity", t.lit);
++      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
++      timeBtn.textContent = t.label;
++      sub.textContent = "by the village \u00B7 " + t.name;
++      if (announce) caption.textContent = t.say;
++    };
++    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; saveTime(); applyTime(true); });
++    const soundBtn = pill("", "Turn the bell's sound on or off", () => { setBellMuted(!bellMuted()); bellUnlock(); syncSound(); });
++    const syncSound = () => { soundBtn.textContent = bellMuted() ? "\u{1F515} sound off" : "\u{1F514} sound on"; };
++    pill("\u{1F3D8}\uFE0F village", "Back to Hollowbrook", () => { close(); openHollowbrook(); });
++    syncSound(); applyTime(false);
++    caption.textContent = "tap the bell to hear a fic \u00B7 tap the rope to hear your year";
++    document.body.appendChild(back);
++  }
++
++
++
++  // ── 🚌 HAWKINS, INDIANA ──
++  // The bus stop in Hollowbrook (tap the shelter at the end of the Hawkins road, answer "board") takes you here:
++  // a simplified night-time map of the town. Everything is drawn from scratch as flat shapes (no artwork reused).
++  // For now only ONE place can be entered, the Wheelers' house (top right); the rest are labelled but closed, and
++  // tapping one just says so. The bus parked at the bottom takes you back to Hollowbrook.
++  //  · openHawkins(arrive)  the map. arrive = true plays the short bus ride in first (tap to skip).
++  //  · openWheelers()       the front of the house: lit windows, porch light, a knock on the door.
++  // Same night / dusk / dawn switch as the village and the grounds (the "tm" value in ao3-gg-prefs).
++  // Nothing in here saves anything except that one time-of-day value.
++
++  const HK_TIMES = [
++    { label: "\u{1F319} night", name: "night", map: "#18203a", sky: "linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%)", stars: 1, orb: "#efe6bd", dy: 0, lit: 1, tint: ["#000000", 0],
++      say: { map: "Night in Hawkins. Every porch light is a small promise.", house: "Night. Somebody upstairs is still awake." } },
++    { label: "\u{1F307} dusk", name: "dusk", map: "#2c2a4a", sky: "linear-gradient(180deg,#2b1b4a 0%,#6a3566 35%,#a85a52 55%,#33203c 100%)", stars: 0.3, orb: "#ffb067", dy: 34, lit: 0.9, tint: ["#ff8a5c", 0.1],
++      say: { map: "Dusk. The streetlights are making up their minds.", house: "Dusk. Dinner smells drift out across the lawn." } },
++    { label: "\u{1F305} dawn", name: "dawn", map: "#2f3a5e", sky: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, lit: 0.6, tint: ["#ffc9c9", 0.09],
++      say: { map: "Dawn. The paper boys are out already.", house: "Dawn. One window is still lit from last night." } }
++  ];
++  const hkTimeGet = () => { try { const p = JSON.parse(localStorage.getItem("ao3-gg-prefs") || "{}") || {}; return Math.max(0, Math.min(2, p.tm | 0)); } catch { return 0; } };
++  const hkTimeSet = i => { try { const p = JSON.parse(localStorage.getItem("ao3-gg-prefs") || "{}") || {}; p.tm = i; localStorage.setItem("ao3-gg-prefs", JSON.stringify(p)); } catch {} };
++
++  function hkKit() {
++    const el = (tag, css, text) => {
++      const e = document.createElement(tag);
++      if (css) e.style.cssText = css;
++      if (text != null) e.textContent = text;
++      return e;
++    };
++    const NS = "http://www.w3.org/2000/svg";
++    const sv = (tag, attrs, parent) => {
++      const e = document.createElementNS(NS, tag);
++      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
++      if (parent) parent.appendChild(e);
++      return e;
++    };
++    const rnd = seed => { const x = Math.sin(gyHash(String(seed)) * 12.9898) * 43758.5453; return x - Math.floor(x); };
++    const anim = (node, css) => { node.setAttribute("class", "hk-anim"); node.style.cssText += css; return node; };
++    return { el, sv, rnd, anim };
++  }
++
++  // The frame both Hawkins scenes share (same look as the village). Set shell.onClose to clean up timers.
++  function hkShell(id, titleText) {
++    const old = document.getElementById(id);
++    if (old) old.remove();
++    if (!document.getElementById("ao3-hk-css")) {
++      const st = document.createElement("style");
++      st.id = "ao3-hk-css";
++      st.textContent = `
++        @keyframes hkFlicker{0%,100%{opacity:.8}30%{opacity:1}60%{opacity:.62}}
++        @keyframes hkPulse{0%,100%{opacity:.35}50%{opacity:.9}}
++        @keyframes hkMist{0%,100%{opacity:.08;transform:translateX(-8px)}50%{opacity:.2;transform:translateX(8px)}}
++        @media (prefers-reduced-motion: reduce){.hk-anim{animation:none !important}}
++      `;
++      (document.head || document.documentElement).appendChild(st);
++    }
++    const kit = hkKit(), el = kit.el;
++    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000002;");
++    back.id = id;
++    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.6);border:1px solid rgba(190,170,255,0.18);");
++    back.appendChild(box);
++    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(190,170,255,0.18);background:rgba(8,6,22,0.55);z-index:3;");
++    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
++    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;line-height:1.2;text-transform:uppercase;color:#d9d0f5;", titleText));
++    const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(217,208,245,0.6);", "");
++    ttl.appendChild(sub);
++    const xBtn = el("button", "background:none;border:none;color:rgba(217,208,245,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
++    xBtn.type = "button"; xBtn.setAttribute("aria-label", "Close");
++    topbar.appendChild(ttl); topbar.appendChild(xBtn);
++    box.appendChild(topbar);
++    const tools = el("div", "flex:0 0 auto;display:flex;gap:6px;padding:7px 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid rgba(190,170,255,0.12);background:rgba(8,6,22,0.4);z-index:3;");
++    box.appendChild(tools);
++    const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;");
++    box.appendChild(field);
++    const caption = el("div", "flex:0 0 auto;min-height:38px;padding:9px 14px;text-align:center;border-top:1px solid rgba(190,170,255,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(230,220,245,0.85);background:rgba(8,6,22,0.45);display:flex;align-items:center;justify-content:center;");
++    box.appendChild(caption);
++    const pill = (label, title, fn) => {
++      const b = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);color:#e6dcf5;border-radius:999px;padding:5px 11px;font:500 12px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", label);
++      b.type = "button"; b.title = title; b.onclick = fn; tools.appendChild(b); return b;
++    };
++    const timers = new Set();
++    const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); };
++    const shell = { back, box, sub, field, caption, pill, later, onClose: null, close: null, kit };
++    const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); shell.close(); } };
++    shell.close = () => {
++      timers.forEach(clearTimeout); timers.clear();
++      if (shell.onClose) shell.onClose();
++      back.remove(); document.removeEventListener("keydown", onKey, true);
++    };
++    xBtn.onclick = shell.close;
++    back.addEventListener("click", e => { if (e.target === back) shell.close(); });
++    document.addEventListener("keydown", onKey, true);
++    return shell;
++  }
++
++  // ── the map ──
++  function openHawkins(arrive) {
++    const sh = hkShell("ao3-hawkins", "\u{1F68C} Hawkins");
++    const { el, sv, rnd, anim } = sh.kit;
++    const { box, sub, field, caption, pill, later, close } = sh;
++    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
++    let tI = hkTimeGet();
++
++    const W = 360, H = 600;
++    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
++    svg.style.cssText = "width:100%;height:auto;display:block;";
++    const defs = sv("defs", {}, svg);
++    const glow = sv("radialGradient", { id: "hk-glow" }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.75" }, glow);
++    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
++    const ground = sv("rect", { x: 0, y: 0, width: W, height: H, fill: HK_TIMES[0].map }, svg);
++    for (let i = 0; i < 160; i++) sv("circle", { cx: (rnd("hmx" + i) * W).toFixed(1), cy: (rnd("hmy" + i) * H).toFixed(1), r: 0.8, fill: "#2a3558", opacity: 0.6 }, svg);   // grain
++
++    // streets: a wide dark road with a faint dashed centre line
++    const road = (d, w) => { sv("path", { d, stroke: "#2a3454", "stroke-width": w || 11, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, svg); sv("path", { d, stroke: "#46527a", "stroke-width": 0.8, "stroke-dasharray": "4 4", fill: "none", opacity: 0.6 }, svg); };
++    [["M173 52 V570"], ["M26 178 H336"], ["M54 238 H346"], ["M215 238 V338"], ["M215 305 H346"], ["M300 94 V338"], ["M75 150 V420"], ["M70 398 L172 336"]].forEach(([d]) => road(d));
++    const street = (txt, x, y, rot) => { const t = sv("text", { x, y, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 5, "letter-spacing": 1, fill: "#9aa6cc", opacity: 0.8, transform: rot ? `rotate(${rot} ${x} ${y})` : "" }, svg); t.textContent = txt; };
++    street("CHERRY OAK DRIVE", 173, 430, -90); street("WATER STREET", 262, 180, 0); street("MAIN STREET", 120, 240, 0);
++    street("MULBERRY STREET", 300, 215, -90); street("KERLEY BLVD", 75, 340, -90); street("6TH STREET", 280, 307, 0); street("OAK STREET", 215, 285, -90);
++
++    const solids = [];                                   // boxes the trees keep out of
++    const lits = [];                                     // everything that glows, drawn last
++    const litRect = (x, y, w, h, op, r) => lits.push(g => { if (r) sv("circle", { cx: x + w / 2, cy: y + h / 2, r, fill: "url(#hk-glow)", opacity: 0.45 }, g); sv("rect", { x, y, width: w, height: h, fill: "#f0b45a", opacity: op }, g); });
++    const label = (txt, x, y, col) => { const t = sv("text", { x, y, "text-anchor": "middle", "font-family": "Georgia,serif", "font-style": "italic", "font-size": 6.4, fill: col || "#cbbfe0", opacity: 0.85 }, svg); t.textContent = txt; };
++    const say = t => { caption.textContent = t; };
++    const closed = (x, y, w, h, name) => {              // a place that isn't open yet: tapping it just says so
++      const hit = sv("rect", { x: x - 2, y: y - 12, width: w + 4, height: h + 26, fill: "transparent" }, svg);
++      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", name);
++      hit.addEventListener("click", () => say(`${name}. Closed for now.`));
++    };
++    // a plain little building: walls, a roof, a couple of lit windows
++    const building = (x, y, w, h, wall, roof, name, o) => {
++      o = o || {};
++      solids.push([x - 6, y - 14, w + 12, h + 30]);
++      sv("rect", { x, y, width: w, height: h, fill: wall }, svg);
++      if (o.pitch) sv("polygon", { points: `${x - 3},${y + 1} ${x + w + 3},${y + 1} ${x + w / 2},${y - o.pitch}`, fill: roof }, svg);
++      else sv("rect", { x: x - 2, y: y - 4, width: w + 4, height: 5, fill: roof }, svg);
++      const n = Math.max(1, Math.floor((w - 6) / 14));
++      for (let i = 0; i < n; i++) { const wx = x + 5 + i * ((w - 10) / n) + ((w - 10) / n - 7) / 2; if (rnd(name + i) > 0.2) litRect(wx, y + h * 0.3, 7, Math.min(9, h * 0.34), 0.85, 11); else sv("rect", { x: wx, y: y + h * 0.3, width: 7, height: Math.min(9, h * 0.34), fill: "#120d22" }, svg); }
++      label(name, x + w / 2, y + h + 9);
++      closed(x, y, w, h, name);
++    };
++
++    // natural things: the quarry and the lake
++    const water = (cx, cy, rx, ry, name) => { solids.push([cx - rx - 8, cy - ry - 8, rx * 2 + 16, ry * 2 + 24]); sv("ellipse", { cx, cy, rx: rx + 4, ry: ry + 3, fill: "#34364a" }, svg); sv("ellipse", { cx, cy, rx, ry, fill: "#1f3a5e" }, svg); sv("path", { d: `M${cx - rx * 0.5} ${cy} q${rx * 0.25} -3 ${rx * 0.5} 0 t${rx * 0.5} 0`, stroke: "#4a6a96", "stroke-width": 0.9, fill: "none", opacity: 0.8 }, svg); label(name, cx, cy + ry + 14); };
++    water(36, 288, 22, 12, "Sattler\u2019s Quarry"); water(128, 506, 36, 16, "Lover\u2019s Lake");
++
++    // the town
++    building(100, 142, 62, 17, "#7a3a30", "#2a2236", "Middle school");
++    building(190, 188, 70, 28, "#8a4a3a", "#3a3347", "General store");
++    building(130, 248, 44, 32, "#5a2a28", "#2a2236", "The Hawk");
++    litRect(138, 262, 28, 4, 0.95, 16);                                   // the marquee
++    building(222, 250, 54, 30, "#8a3a3a", "#2f2540", "Town hall", { pitch: 9 });
++    building(148, 362, 48, 20, "#8a7a60", "#3a3040", "The Byers\u2019", { pitch: 9 });
++    building(298, 384, 46, 22, "#5a4030", "#2a2236", "Hopper\u2019s cabin", { pitch: 8 });
++    building(20, 416, 54, 58, "#4a5570", "#2a2236", "Hawkins Lab");
++    building(196, 68, 40, 34, "#2a4a5a", "#23203a", "The Creels\u2019", { pitch: 12 });
++    building(310, 100, 40, 18, "#37507a", "#27406a", "The Sinclairs\u2019", { pitch: 7 });
++
++    // the Wheelers' house, top right: brick below, white siding above. The one place you can go in.
++    solids.push([226, 8, 124, 84]);
++    const hw = sv("g", {}, svg);
++    sv("rect", { x: 240, y: 28, width: 92, height: 14, fill: "#cfc9dc" }, hw);
++    sv("rect", { x: 240, y: 42, width: 92, height: 16, fill: "#7d3a33" }, hw);
++    sv("polygon", { points: "234,29 338,29 326,17 246,17", fill: "#35283f" }, hw);
++    sv("rect", { x: 240, y: 58, width: 92, height: 2.5, fill: "#2a2236" }, hw);
++    [250, 280, 308].forEach(wx => { litRect(wx, 31, 9, 8, 0.9, 12); });
++    sv("rect", { x: 278, y: 46, width: 9, height: 12, fill: "#2a1b20" }, hw);
++    litRect(250, 47, 12, 9, 0.8, 0); litRect(310, 47, 12, 9, 0.8, 0);
++    sv("rect", { x: 244, y: 59, width: 22, height: 9, fill: "#2c2a42" }, hw);                     // the driveway
++    lits.push(g => anim(sv("circle", { cx: 283, cy: 44, r: 10, fill: "url(#hk-glow)" }, g), "animation:hkFlicker 2.6s ease-in-out infinite;"));
++    const ring = anim(sv("ellipse", { cx: 286, cy: 37, rx: 58, ry: 28, fill: "none", stroke: "#ffd98a", "stroke-width": 1.2, "stroke-dasharray": "3 4" }, svg), "animation:hkPulse 2.8s ease-in-out infinite;");
++    ring.setAttribute("pointer-events", "none");
++    label("The Wheelers\u2019", 286, 78, "#ffe3a0");
++    const wh = sv("rect", { x: 228, y: 8, width: 116, height: 76, fill: "transparent" }, svg);
++    wh.style.cursor = "pointer"; wh.setAttribute("role", "button"); wh.setAttribute("aria-label", "Walk up to the Wheelers' house");
++    wh.addEventListener("click", () => { close(); openWheelers(); });
++
++    // the bus parked at the end of Cherry Oak Drive, and its stop
++    solids.push([140, 520, 90, 56]);
++    const bus = sv("g", {}, svg);
++    sv("rect", { x: 186, y: 550, width: 46, height: 17, rx: 4, fill: "#d9b44a" }, bus);
++    [191, 201, 211, 221].forEach(wx => sv("rect", { x: wx, y: 553, width: 7, height: 6, rx: 1, fill: "#1a1330" }, bus));
++    sv("rect", { x: 186, y: 561, width: 46, height: 2, fill: "#8a6d2a" }, bus);
++    [196, 222].forEach(wx => sv("circle", { cx: wx, cy: 567.5, r: 3.2, fill: "#120d22", stroke: "#3a3347", "stroke-width": 1 }, bus));
++    sv("rect", { x: 230, y: 556, width: 2.4, height: 3, fill: "#c9482e" }, bus);
++    sv("rect", { x: 160, y: 530, width: 2.6, height: 38, fill: "#4a3326" }, svg);
++    sv("circle", { cx: 161.3, cy: 527, r: 7, fill: "#a8553f", stroke: "#4a3326", "stroke-width": 1.2 }, svg);
++    const bt = sv("text", { x: 161.3, y: 529, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 5, "font-weight": 700, fill: "#f6ead0" }, svg); bt.textContent = "BUS";
++    label("bus to Hollowbrook", 190, 582);
++    const bh = sv("rect", { x: 150, y: 518, width: 92, height: 58, fill: "transparent" }, svg);
++    bh.style.cursor = "pointer"; bh.setAttribute("role", "button"); bh.setAttribute("aria-label", "Take the bus back to Hollowbrook");
++    bh.addEventListener("click", () => { close(); openHollowbrook(); });
++
++    // trees, kept off the roads and buildings
++    const nearRoad = (x, y) => Math.abs(x - 173) < 14 || Math.abs(y - 178) < 12 || Math.abs(y - 238) < 12 || Math.abs(x - 300) < 12 && y < 340 || Math.abs(x - 75) < 12 && y > 140 && y < 425 || Math.abs(x - 215) < 12 && y > 232 && y < 340 || Math.abs(y - 305) < 12 && x > 208;
++    for (let i = 0, n = 0; i < 160 && n < 34; i++) {
++      const tx = 10 + rnd("htx" + i) * (W - 20), ty = 20 + rnd("hty" + i) * (H - 40);
++      if (nearRoad(tx, ty) || solids.some(([sx, sy, sw, sh2]) => tx > sx - 8 && tx < sx + sw + 8 && ty > sy - 8 && ty < sy + sh2 + 8)) continue;
++      n++;
++      const r = 6 + rnd("htr" + i) * 6;
++      sv("circle", { cx: tx.toFixed(1), cy: ty.toFixed(1), r: r.toFixed(1), fill: rnd("htc" + i) > 0.5 ? "#1f3a37" : "#27483f" }, svg);
++      sv("circle", { cx: (tx - r * 0.3).toFixed(1), cy: (ty - r * 0.3).toFixed(1), r: (r * 0.55).toFixed(1), fill: "#2d5547", opacity: 0.7 }, svg);
++    }
++    // streetlamps at the crossings
++    [[188, 168], [188, 228], [204, 296], [288, 168], [88, 228]].forEach(([lx, ly], i) => {
++      sv("rect", { x: lx - 0.8, y: ly - 14, width: 1.6, height: 14, fill: "#2c2438" }, svg);
++      sv("rect", { x: lx - 2.2, y: ly - 18, width: 4.4, height: 5, rx: 1, fill: "#ffd98a" }, svg);
++      lits.push(g => anim(sv("circle", { cx: lx, cy: ly - 15, r: 14, fill: "url(#hk-glow)" }, g), `animation:hkFlicker ${(2.2 + rnd("hl" + i) * 1.6).toFixed(1)}s ease-in-out infinite;`));
++    });
++    [[110, 400], [250, 470]].forEach(([mx, my], i) => anim(sv("ellipse", { cx: mx, cy: my, rx: 60, ry: 10, fill: "#c8bee6", opacity: 0.1 }, svg), `animation:hkMist ${10 + i * 3}s ease-in-out infinite;`));
++    const lit = sv("g", {}, svg);
++    lits.forEach(f => f(lit));
++    const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
++    const title = sv("text", { x: 180, y: 24, "text-anchor": "middle", "font-family": "Georgia,serif", "font-weight": 700, "font-size": 14, "letter-spacing": 3, fill: "#e6dcf5", opacity: 0.55 }, svg); title.textContent = "HAWKINS";
++    const title2 = sv("text", { x: 180, y: 35, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 6.5, "letter-spacing": 4, fill: "#e6dcf5", opacity: 0.45 }, svg); title2.textContent = "INDIANA";
++    field.appendChild(svg);
++
++    const applyTime = announce => {
++      const t = HK_TIMES[tI];
++      box.style.background = t.map;
++      ground.setAttribute("fill", t.map);
++      lit.setAttribute("opacity", t.lit);
++      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
++      timeBtn.textContent = t.label;
++      sub.textContent = "indiana \u00B7 " + t.name;
++      if (announce) caption.textContent = t.say.map;
++    };
++    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % HK_TIMES.length; hkTimeSet(tI); applyTime(true); });
++    pill("\u{1F3E1} Wheelers\u2019", "Walk up to the Wheelers\u2019 house", () => { close(); openWheelers(); });
++    pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
++    applyTime(true);
++    document.body.appendChild(sh.back);
++
++    // ── the bus ride in (tap to skip) ──
++    if (arrive && !reduce) {
++      const ride = el("div", "position:absolute;inset:0;z-index:30;background:#070510;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:opacity .7s;cursor:pointer;");
++      const lane = el("div", "position:absolute;left:0;right:0;top:50%;height:0;border-top:2px dashed rgba(190,170,255,0.28);");
++      const busSvg = sv("svg", { viewBox: "0 0 120 50", width: 120, height: 50 });
++      busSvg.style.cssText = "position:absolute;left:0;top:calc(50% - 46px);";
++      sv("rect", { x: 4, y: 8, width: 104, height: 32, rx: 7, fill: "#d9b44a" }, busSvg);
++      for (let i = 0; i < 6; i++) sv("rect", { x: 12 + i * 15, y: 14, width: 10, height: 10, rx: 2, fill: "#1a1330" }, busSvg);
++      sv("rect", { x: 4, y: 30, width: 104, height: 3, fill: "#8a6d2a" }, busSvg);
++      sv("rect", { x: 106, y: 24, width: 6, height: 5, rx: 1.5, fill: "#fff1c9" }, busSvg);
++      [26, 88].forEach(cx => sv("circle", { cx, cy: 41, r: 6.5, fill: "#120d22", stroke: "#3a3347", "stroke-width": 1.5 }, busSvg));
++      const words = el("div", "position:absolute;left:0;right:0;top:calc(50% + 26px);text-align:center;font-family:Georgia,'Times New Roman',serif;font-size:20px;letter-spacing:0.16em;text-transform:uppercase;color:#f1e4c0;white-space:pre;line-height:1.5;opacity:0;transition:opacity .8s;", "Hawkins\nIndiana");
++      ride.appendChild(lane); ride.appendChild(busSvg); ride.appendChild(words);
++      box.appendChild(ride);
++      let over = false;
++      const end = () => { if (over) return; over = true; ride.style.opacity = "0"; later(() => ride.remove(), 750); };
++      ride.addEventListener("click", end);
++      try { busSvg.animate([{ transform: "translateX(-140px)" }, { transform: `translateX(${Math.max(360, box.clientWidth || 360) + 20}px)` }], { duration: 2300, easing: "ease-in-out", fill: "forwards" }); } catch {}
++      later(() => { words.style.opacity = "1"; }, 500);
++      later(end, 2900);
++    }
++  }
++
++  // a knock: three low thumps (obeys the bell tower's sound setting)
++  function hkKnock() {
++    const ac = bellUnlock();
++    if (!ac || ac.state !== "running" || bellMuted()) return;
++    try {
++      const t0 = ac.currentTime + 0.01;
++      [0, 0.22, 0.44].forEach(d => {
++        const o = ac.createOscillator(), g = ac.createGain();
++        o.type = "sine"; o.frequency.setValueAtTime(170, t0 + d); o.frequency.exponentialRampToValueAtTime(70, t0 + d + 0.09);
++        g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.25, t0 + d + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.12);
++        o.connect(g); g.connect(ac.destination); o.start(t0 + d); o.stop(t0 + d + 0.14);
++      });
++    } catch {}
++  }
++
++  // ── the Wheelers' house, from the front lawn ──
++  function openWheelers() {
++    const sh = hkShell("ao3-wheelers", "\u{1F3E1} The Wheelers\u2019");
++    const { sv, rnd, anim } = sh.kit;
++    const { box, sub, field, caption, pill, close } = sh;
++    let tI = hkTimeGet(), nKnock = 0, nWin = 0;
++    const W = 360, H = 540;
++    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
++    svg.style.cssText = "width:100%;height:auto;display:block;";
++    const defs = sv("defs", {}, svg);
++    const glow = sv("radialGradient", { id: "wh-glow" }, defs);
++    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.8" }, glow);
++    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
++    const lits = [];
++
++    const starG = sv("g", {}, svg);
++    for (let i = 0; i < 40; i++) sv("circle", { cx: (rnd("wsx" + i) * W).toFixed(1), cy: (rnd("wsy" + i) * 150).toFixed(1), r: (0.5 + rnd("wsr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("wso" + i) * 0.6).toFixed(2) }, starG);
++    const moonG = sv("g", {}, svg);
++    const moonDisc = sv("circle", { cx: 300, cy: 44, r: 15, fill: "#efe6bd" }, moonG);
++    sv("circle", { cx: 300, cy: 44, r: 30, fill: "url(#wh-glow)", opacity: 0.3 }, moonG);
++    // the tree line behind, the lawn, the pavement and the road
++    sv("path", { d: "M0 190 Q40 150 80 176 T170 168 T260 174 T360 160 V340 H0 Z", fill: "#16212a" }, svg);
++    for (let i = 0; i < 16; i++) { const tx = i * 24 + rnd("wt" + i) * 10; sv("circle", { cx: tx, cy: 172 + rnd("wu" + i) * 10, r: 13 + rnd("wv" + i) * 8, fill: i % 2 ? "#13201f" : "#182826" }, svg); }
++    sv("rect", { x: 0, y: 330, width: W, height: 150, fill: "#1b2b2c" }, svg);
++    sv("rect", { x: 0, y: 462, width: W, height: 16, fill: "#3a3a52" }, svg);
++    sv("rect", { x: 0, y: 478, width: W, height: 62, fill: "#17172a" }, svg);
++    sv("path", { d: "M0 509 H360", stroke: "#8a7a50", "stroke-width": 1.4, "stroke-dasharray": "12 10", opacity: 0.6 }, svg);
++    for (let i = 0; i < 60; i++) { const gx = 6 + rnd("wgx" + i) * (W - 12), gy = 340 + rnd("wgy" + i) * 118; sv("path", { d: `M${gx.toFixed(1)} ${gy.toFixed(1)} l-2 -5 M${gx.toFixed(1)} ${gy.toFixed(1)} l0 -7 M${gx.toFixed(1)} ${gy.toFixed(1)} l2 -5`, stroke: "#3f6552", "stroke-width": 1.2, fill: "none", "stroke-linecap": "round", opacity: 0.6 }, svg); }
++    // the driveway and the path to the door
++    sv("polygon", { points: "66,346 128,346 142,478 52,478", fill: "#2c2a42" }, svg);
++    sv("polygon", { points: "196,350 226,350 238,462 184,462", fill: "#3a3550" }, svg);
++    for (let i = 0; i < 6; i++) sv("path", { d: `M${194 - i * 2} ${364 + i * 18} H${228 + i * 2}`, stroke: "#4a4468", "stroke-width": 1, opacity: 0.7 }, svg);
++
++    // the house: white siding above, brick below, a dark low roof, a garage on the left
++    sv("polygon", { points: "42,200 318,200 288,144 72,144", fill: "#35283f" }, svg);
++    sv("path", { d: "M72 144 L288 144", stroke: "#4a3d56", "stroke-width": 2 }, svg);
++    sv("rect", { x: 232, y: 112, width: 14, height: 36, fill: "#5a2f2a" }, svg);                      // chimney
++    sv("rect", { x: 229, y: 109, width: 20, height: 5, fill: "#3a2230" }, svg);
++    sv("rect", { x: 58, y: 200, width: 244, height: 68, fill: "#cfc9dc" }, svg);
++    for (let yy = 207; yy < 268; yy += 7) sv("path", { d: `M58 ${yy} H302`, stroke: "#a8a2bb", "stroke-width": 0.8, opacity: 0.7 }, svg);
++    sv("rect", { x: 58, y: 268, width: 244, height: 78, fill: "#7d3a33" }, svg);
++    for (let yy = 274, r = 0; yy < 346; yy += 6, r++) { sv("path", { d: `M58 ${yy} H302`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.8 }, svg); for (let xx = 58 + (r % 2) * 8; xx < 302; xx += 16) sv("path", { d: `M${xx} ${yy} v6`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.6 }, svg); }
++    sv("rect", { x: 54, y: 266, width: 252, height: 4, fill: "#2a2236" }, svg);
++    sv("rect", { x: 54, y: 344, width: 252, height: 5, fill: "#3a3347" }, svg);
++    // the upstairs windows: shutters, warm light, curtains. The middle one is the one somebody left on
++    const wins = [];
++    [[80, 1], [165, 1], [250, 0.8]].forEach(([wx, lum], i) => {
++      sv("rect", { x: wx - 7, y: 208, width: 6, height: 34, fill: "#3a2a4a" }, svg);
++      sv("rect", { x: wx + 32, y: 208, width: 6, height: 34, fill: "#3a2a4a" }, svg);
++      sv("rect", { x: wx - 2, y: 207, width: 36, height: 36, fill: "#e6e0ef" }, svg);
++      sv("rect", { x: wx, y: 209, width: 32, height: 32, fill: "#120d22" }, svg);
++      lits.push(g => {
++        const gg = sv("g", {}, g);
++        sv("circle", { cx: wx + 16, cy: 225, r: 34, fill: "url(#wh-glow)", opacity: 0.4 * lum }, gg);
++        sv("rect", { x: wx, y: 209, width: 32, height: 32, fill: "#f0b45a", opacity: 0.85 * lum }, gg);
++        sv("path", { d: `M${wx + 11} 209 q-1 14 1 32 M${wx + 21} 209 q1 14 -1 32`, stroke: "#b9772a", "stroke-width": 1.6, fill: "none", opacity: 0.8 }, gg);
++        if (i === 1) anim(gg, "animation:hkFlicker 3.4s ease-in-out infinite;");
++      });
++      sv("path", { d: `M${wx + 16} 209 V241 M${wx} 225 H${wx + 32}`, stroke: "#e6e0ef", "stroke-width": 1.4 }, svg);
++      const hit = sv("rect", { x: wx - 7, y: 205, width: 46, height: 40, fill: "transparent" }, svg);
++      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", "An upstairs window");
++      wins.push(hit);
++    });
++    const WIN_SAY = ["A light has been left on upstairs.", "A curtain moves. Or the draught does.", "Somewhere up there, a radio is playing very quietly."];
++    wins.forEach(h => h.addEventListener("click", () => { caption.textContent = WIN_SAY[nWin++ % WIN_SAY.length]; }));
++    // the garage door and a window beside the front door
++    sv("rect", { x: 68, y: 284, width: 62, height: 62, fill: "#d9d4e4", stroke: "#a8a2bb", "stroke-width": 1.2 }, svg);
++    for (let i = 0; i < 4; i++) sv("rect", { x: 71, y: 287 + i * 15, width: 56, height: 12, rx: 1, fill: "none", stroke: "#b4aec7", "stroke-width": 0.9 }, svg);
++    sv("rect", { x: 244, y: 288, width: 40, height: 34, fill: "#e6e0ef" }, svg);
++    sv("rect", { x: 246, y: 290, width: 36, height: 30, fill: "#120d22" }, svg);
++    lits.push(g => { sv("rect", { x: 246, y: 290, width: 36, height: 30, fill: "#f0b45a", opacity: 0.7 }, g); sv("circle", { cx: 264, cy: 305, r: 30, fill: "url(#wh-glow)", opacity: 0.3 }, g); });
++    sv("path", { d: "M264 290 V320 M246 305 H282", stroke: "#e6e0ef", "stroke-width": 1.2 }, svg);
++    // the front door under a little porch roof, with the porch light
++    sv("polygon", { points: "184,284 238,284 232,272 190,272", fill: "#35283f" }, svg);
++    sv("rect", { x: 188, y: 284, width: 3, height: 62, fill: "#e6e0ef" }, svg);
++    sv("rect", { x: 231, y: 284, width: 3, height: 62, fill: "#e6e0ef" }, svg);
++    sv("rect", { x: 197, y: 292, width: 28, height: 54, rx: 1.5, fill: "#2a3a5a", stroke: "#3a4a6a", "stroke-width": 1.2 }, svg);
++    sv("rect", { x: 202, y: 297, width: 8, height: 14, fill: "#1a2540" }, svg); sv("rect", { x: 212, y: 297, width: 8, height: 14, fill: "#1a2540" }, svg);
++    sv("circle", { cx: 220, cy: 322, r: 1.6, fill: "#d9c3a0" }, svg);
++    sv("rect", { x: 190, y: 346, width: 40, height: 5, fill: "#4a4468" }, svg);
++    sv("rect", { x: 193, y: 351, width: 34, height: 4, fill: "#3f3a5a" }, svg);
++    sv("rect", { x: 207, y: 282, width: 6, height: 7, rx: 1.5, fill: "#ffe3a0" }, svg);
++    const porch = sv("g", {}, svg);                                                                   // the porch light's glow, so a knock can make it buzz
++    lits.push(g => { porch.setAttribute("class", "hk-anim"); porch.style.cssText = "animation:hkFlicker 2.6s ease-in-out infinite;"; sv("circle", { cx: 210, cy: 290, r: 26, fill: "url(#wh-glow)" }, porch); g.appendChild(porch); });
++    const door = sv("rect", { x: 186, y: 282, width: 50, height: 72, fill: "transparent" }, svg);
++    door.style.cursor = "pointer"; door.setAttribute("role", "button"); door.setAttribute("aria-label", "Knock on the front door");
++    const KNOCK = ["You knock. Somewhere inside, a floorboard creaks.", "You knock again. Nobody comes.", "The porch light buzzes. Maybe later."];
++    door.addEventListener("click", () => {
++      hkKnock();
++      try { if (navigator.vibrate) navigator.vibrate([12, 60, 12, 60, 12]); } catch {}
++      caption.textContent = KNOCK[nKnock++ % KNOCK.length];
++      try { if (porch.animate) porch.animate([{ opacity: 1 }, { opacity: 0.15 }, { opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 700 }); } catch {}
++    });
++    // hedges, the garage lamp, a mailbox, two trees
++    [[150, 350, 24, 10], [262, 352, 36, 11], [100, 352, 0, 0]].forEach(([hx, hy, hr, hh]) => { if (hr) { sv("ellipse", { cx: hx, cy: hy, rx: hr, ry: hh, fill: "#1b2f2b" }, svg); sv("ellipse", { cx: hx - 4, cy: hy - 3, rx: hr * 0.6, ry: hh * 0.6, fill: "#223d36" }, svg); } });
++    [[30, 330, 32], [336, 336, 28]].forEach(([tx, ty, tr]) => { sv("rect", { x: tx - 3, y: ty, width: 6, height: 70, fill: "#2c2028" }, svg); sv("circle", { cx: tx, cy: ty - 6, r: tr, fill: "#1f3a37" }, svg); sv("circle", { cx: tx - 8, cy: ty - 14, r: tr * 0.6, fill: "#27483f" }, svg); });
++    sv("rect", { x: 282, y: 428, width: 3, height: 34, fill: "#4a3326" }, svg);
++    sv("rect", { x: 272, y: 418, width: 24, height: 12, rx: 5, fill: "#3a4a66" }, svg);
++    sv("rect", { x: 296, y: 414, width: 2, height: 10, fill: "#c9482e" }, svg);
++    const mt = sv("text", { x: 284, y: 427, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 4.2, fill: "#e6dcf5" }, svg); mt.textContent = "WHEELER";
++    sv("rect", { x: 150, y: 424, width: 2.4, height: 38, fill: "#2c2438" }, svg);
++    sv("rect", { x: 146.5, y: 416, width: 9, height: 9, rx: 2, fill: "#ffd98a" }, svg);
++    lits.push(g => anim(sv("circle", { cx: 151, cy: 420, r: 26, fill: "url(#wh-glow)" }, g), "animation:hkFlicker 3s ease-in-out infinite;"));
++    const mail = sv("rect", { x: 266, y: 412, width: 36, height: 50, fill: "transparent" }, svg);
++    mail.style.cursor = "pointer"; mail.setAttribute("role", "button"); mail.setAttribute("aria-label", "The mailbox");
++    mail.addEventListener("click", () => { caption.textContent = "The mailbox. A flyer from a pizza place and nothing else."; });
++    sv("ellipse", { cx: 110, cy: 440, rx: 70, ry: 10, fill: "#c8bee6", opacity: 0.08 }, svg);
++    const lit = sv("g", {}, svg);
++    lits.forEach(f => f(lit));
++    const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
++    field.appendChild(svg);
++
++    const applyTime = announce => {
++      const t = HK_TIMES[tI];
++      box.style.background = t.sky;
++      starG.setAttribute("opacity", t.stars);
++      moonDisc.setAttribute("fill", t.orb);
++      moonG.setAttribute("transform", `translate(0 ${t.dy})`);
++      lit.setAttribute("opacity", t.lit);
++      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
++      timeBtn.textContent = t.label;
++      sub.textContent = "hawkins \u00B7 " + t.name;
++      if (announce) caption.textContent = t.say.house;
++    };
++    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % HK_TIMES.length; hkTimeSet(tI); applyTime(true); });
++    pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
++    pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
++    applyTime(true);
++    document.body.appendChild(sh.back);
++  }
++
++
++
+   // ── ⛪ THE CHAPEL (inside) ──
+   // Step in through the chapel door in Hollowbrook (or from the keepsakes menu). Three things to look at:
+   //  · the big window: one pane of coloured glass per FINISHED fic, added in the order you finished them.
+@@ -5545,5 +6383,5 @@
+   }
+ 
+ 
+-  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel };
++  return { openGraveyard, openGraveyardGrounds, openCelebration, openConstellation, openAquarium, openBookshelf, openGarden, openStainedGlass, openHollowbrook, openChapel, openBellTower, openHawkins, openWheelers };
+ };
