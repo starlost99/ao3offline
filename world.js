@@ -5972,21 +5972,29 @@ window.__ao3WorldInit = function (core) {
       strand(g, wx + 1, 222, wx + 31, 222, 4, 6, 3, 1.05);
       sv("path", { d: `M${wx + 16} 209 V241 M${wx} 225 H${wx + 32}`, stroke: "#e6e0ef", "stroke-width": 1.4 }, g);
     });
-    // somebody who waves from Mike's window when you arrive (a silhouette in the light, hidden until then)
+    // Will and Mike, two silhouettes in Mike's lit window: they slip into view side by side, heads close, and are gone again
     const fig = sv("g", {}, svg);
     fig.style.opacity = 0; fig.style.transition = "opacity .5s";
-    sv("circle", { cx: 181, cy: 224, r: 4.3, fill: "#1b1226" }, fig);
-    sv("path", { d: "M172 241 Q173 231 181 231 Q189 231 190 241 Z", fill: "#1b1226" }, fig);
-    const armPos = sv("g", { transform: "translate(188 236)" }, fig);
-    const arm = sv("g", { class: "hk-anim" }, armPos);
-    sv("path", { d: "M0 0 L4 -12", stroke: "#1b1226", "stroke-width": 2.8, "stroke-linecap": "round", fill: "none" }, arm);
-    sv("circle", { cx: 4.4, cy: -13.4, r: 2.2, fill: "#1b1226" }, arm);
+    const SIL = "#1b1226";
+    const sil = (cx, headY, r, curls, lean) => {            // a head with a bumpy curl outline, and shoulders, leaning a little
+      const g = sv("g", { transform: `rotate(${lean} ${cx} 241)` }, sv("g", {}, fig));
+      sv("path", { d: `M${cx - r * 2.3} 241 Q${cx - r * 2.2} ${headY + r * 2.2} ${cx} ${headY + r * 2.2} Q${cx + r * 2.2} ${headY + r * 2.2} ${cx + r * 2.3} 241 Z`, fill: SIL }, g);
+      sv("rect", { x: cx - r * 0.45, y: headY + r * 0.8, width: r * 0.9, height: r * 1.6, fill: SIL }, g);
+      sv("circle", { cx, cy: headY, r, fill: SIL }, g);
+      curls.forEach(([dx, dy, cr]) => sv("circle", { cx: cx + dx, cy: headY + dy, r: cr, fill: SIL }, g));
+      return g.parentNode;
+    };
+    const willSil = sil(174.5, 226.5, 3.5, [[-3.2, -1.8, 1.6], [0, -3.6, 1.7], [3.2, -1.8, 1.6]], 4);               // Will: a short mop
+    const mikeSil = sil(188, 224.5, 3.9, [[-3.8, -1.6, 1.9], [-1.6, -4, 1.9], [1.6, -4, 1.9], [3.8, -1.6, 1.9], [-4.1, 1.2, 1.5], [4.1, 1.2, 1.5]], -4);   // Mike: taller, fuller curls
+    [willSil, mikeSil].forEach(n => { n.style.transition = "transform .6s ease-out"; n.style.transform = "translateY(7px)"; });
     let waving = false;
     const wave = () => {
       if (waving || gone) return; waving = true;
       fig.style.opacity = 1;
-      arm.style.cssText = "transform-box:fill-box;transform-origin:0% 100%;animation:hkWave .55s ease-in-out infinite;";
-      later(() => { fig.style.opacity = 0; waving = false; arm.style.animation = "none"; }, reduce ? 2600 : 3800);
+      later(() => { willSil.style.transform = "translateY(0)"; }, 60);
+      later(() => { mikeSil.style.transform = "translateY(0)"; }, 260);
+      later(() => { fig.style.opacity = 0; }, reduce ? 2400 : 3200);
+      later(() => { [willSil, mikeSil].forEach(n => { n.style.transform = "translateY(7px)"; }); waving = false; }, reduce ? 2900 : 3800);
     };
     // ground-floor window beside the front door: curtains drawn, dark
     sv("rect", { x: 244, y: 288, width: 40, height: 34, fill: "#e6e0ef" }, svg);
@@ -6085,7 +6093,7 @@ window.__ao3WorldInit = function (core) {
 
     // tappable things (kept on top of the glows so they always answer)
     const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
-    const WIN_SAY = ["Mike\u2019s room. Fairy lights strung along the glass.", "Somebody waves, then points down towards the basement.", "The lights blink on, off, on. A code, maybe."];
+    const WIN_SAY = ["Mike\u2019s room. Fairy lights strung along the glass.", "Two shadows lean into the glass for a second, then slip back out of sight.", "The lights blink on, off, on. A code, maybe."];
     hit(158, 205, 46, 40, "Mike\u2019s window", () => { say(WIN_SAY[nWin++ % WIN_SAY.length]); wave(); });
     hit(73, 205, 46, 40, "An upstairs window", () => { say("Dark upstairs. A curtain stirs."); twitch(); });
     hit(243, 205, 46, 40, "An upstairs window", () => say("The blind is half down. Nothing moves."));
@@ -6230,7 +6238,7 @@ window.__ao3WorldInit = function (core) {
     paintWeather();
     document.body.appendChild(sh.back);
     const openLine = caption.textContent;
-    later(() => { if (entering) return; if (caption.textContent === openLine) say("Somebody waves from Mike\u2019s window, then points down at the basement."); wave(); }, 1100);   // somebody has seen you coming
+    later(() => { if (entering) return; if (caption.textContent === openLine) say("Two silhouettes appear in Mike\u2019s window, then slip away. Somebody wants you in the basement."); wave(); }, 1100);   // somebody has seen you coming
   }
 
   // ── the two figures: Will (left, bowl cut + flannel) and Mike (right, curls + teal pullover) ──
@@ -7084,7 +7092,62 @@ window.__ao3WorldInit = function (core) {
       ["w", "Mike!", { a: { mood: "cheer", blush: true, R: "mouth" } }],
       ["m", "In the game! The characters! They’d share a door. For efficiency.", { b: { mood: "smirk", blush: true } }],
       ["w", "Sure. Efficiency.", { a: { mood: "smile", eyes: "happy", R: FI_CL[0] }, hearts: 3 }],
-      ["n", "Neither of them lets go.", FI_HOLD]] }
+      ["n", "Neither of them lets go.", FI_HOLD]] },
+    { name: "the storm", beats: [
+      ["n", "Thunder rolls over the house. The fairy lights flicker once, and Will’s hand finds Mike’s sleeve.", { a: { mood: "o", look: -1 }, b: { mood: "o", look: 1 } }],
+      ["m", "That’s just thunder. Thunder is, like, extremely normal.", { b: { mood: "smirk", look: 0 } }],
+      ["w", "You’re holding my hand very hard for someone who isn’t scared.", { a: { mood: "smirk", blush: true, look: 1, R: FI_CL[0] }, b: { L: FI_CL[1] } }],
+      ["m", "It’s a scientific grip. For… static. Electricity.", { b: { mood: "o", blush: true } }],
+      ["w", "Mike. Static is not a thing hands do.", { a: { mood: "grin", eyes: "happy" }, jig: true }],
+      ["n", "A second rumble, further off. Neither of them lets go, and neither of them pretends it’s about the weather.", Object.assign({ hearts: 3 }, FI_HOLD)]] },
+    { name: "the campaign", beats: [
+      ["w", "Okay, but what if the healer just… doesn’t go into the dragon’s cave?", { a: { mood: "smirk", look: 1 } }],
+      ["m", "Then there’s no story. The dragon is, like, the whole point.", { b: { mood: "grin", look: -1 } }],
+      ["w", "The healer doesn’t care about the dragon. The healer likes the quiet part, before.", { a: { mood: "calm", look: 0 } }],
+      ["m", "…Then we stay in the quiet part. Campaign’s on pause. I’m the DM, I can do that.", { b: { mood: "smile", blush: true } }],
+      ["w", "You can’t just pause a campaign.", { a: { mood: "smile" } }],
+      ["m", "Watch me. Paused.", { b: { mood: "grin" }, jig: true }],
+      ["n", "Will laughs into his sleeve. The dice stay exactly where they landed.", { hearts: 2, a: { eyes: "happy", mood: "grin" } }]] },
+    { name: "the ghost story", beats: [
+      ["m", "Okay. So there’s this house. And in the house, there’s a fort.", { b: { mood: "o", look: 1 } }],
+      ["w", "Is this a ghost story, or just our address?", { a: { mood: "smirk" } }],
+      ["m", "Shh. In the fort, two boys. And every night, the flashlight goes off all by itself.", { b: { mood: "o", look: -1 } }],
+      ["w", "Because you keep sitting on it.", { a: { mood: "grin" } }],
+      ["m", "…Because I keep sitting on it. Great storytelling, Will, thank you.", { b: { mood: "smirk", blush: true } }],
+      ["w", "Keep going. I want to know who the ghost is.", { a: { mood: "smile", blush: true, look: 1 } }],
+      ["m", "Spoiler: it’s a boy who’s been staring at the other boy for, like, years.", { b: { mood: "o", blush: true }, hearts: 2 }],
+      ["w", "…That’s not a very scary ghost.", { a: { mood: "calm", blush: true, eyes: "happy" } }],
+      ["m", "No. It’s terrifying. He’s still working up to the ending.", { b: { mood: "calm", look: 1 } }],
+      ["n", "Will picks up the flashlight, switches it on, and sets it down so it points at the two of them.", { hearts: 3, a: { mood: "smile" }, b: { mood: "smile" } }]] },
+    { name: "after", beats: [
+      ["w", "Do you ever think about after? Like, after all of this.", { a: { mood: "calm", look: 0 } }],
+      ["m", "After the basement? After the fort? After… Hawkins?", { b: { mood: "calm", look: 1 } }],
+      ["w", "All of it. Where we’d even go.", { a: { mood: "calm", look: -1 } }],
+      ["m", "Somewhere with a basement. Obviously. And a bigger fort.", { b: { mood: "smile" } }],
+      ["w", "And a TV that isn’t held together with tape.", { a: { mood: "smirk" } }],
+      ["m", "The tape is structural, Will.", { b: { mood: "grin" }, jig: true }],
+      ["w", "I’d go anywhere, as long as you’re doing the voices.", { a: { mood: "smile", blush: true, eyes: "happy" } }],
+      ["m", "…I’ll do every voice. Even the dragon.", { b: { mood: "o", blush: true }, hearts: 3 }],
+      ["n", "Under the blanket, thumbs move slowly over knuckles. Nobody asks where they’re going.", Object.assign({ hearts: 2 }, FI_HOLD)]] },
+    { name: "the last piece", beats: [
+      ["m", "There’s one piece of popcorn left. It’s yours.", { b: { mood: "smile", look: 1 } }],
+      ["w", "You saved it?", { a: { mood: "o" } }],
+      ["m", "I didn’t save it. It just happened to survive. Near me.", { b: { mood: "smirk" } }],
+      ["w", "That’s the same thing.", { a: { mood: "grin" } }],
+      ["m", "Fine. I saved it. Eat the popcorn.", { b: { mood: "grin", blush: true } }],
+      ["w", "Half each.", { a: { mood: "smile", eyes: "happy", R: "mouth" } }],
+      ["m", "That’s barely a crumb.", { b: { mood: "o" } }],
+      ["w", "It’s the best crumb.", { a: { mood: "smile", blush: true, R: FI_CL[0] }, hearts: 2 }]] },
+    { name: "the song", beats: [
+      ["n", "The radio is humming something low. Mike is trying very hard not to tap along.", { a: { mood: "smile", look: -1 }, b: { mood: "calm", look: 1 } }],
+      ["w", "You know every word, don’t you.", { a: { mood: "smirk", look: 1 } }],
+      ["m", "No. Maybe. It’s a very good song.", { b: { mood: "o", blush: true } }],
+      ["w", "Sing it.", { a: { mood: "grin" } }],
+      ["m", "Absolutely not.", { b: { mood: "calm", look: -1 } }],
+      ["w", "Mike.", { a: { mood: "smile", blush: true } }],
+      ["m", "…Only the chorus. And you can’t look.", { b: { mood: "smile", eyes: "closed", blush: true } }],
+      ["w", "I’m not looking.", { a: { mood: "smile", eyes: "closed", blush: true } }],
+      ["n", "Mike sings the chorus very quietly and very slightly off key. Will smiles the whole way through, eyes shut.", Object.assign({ hearts: 3 }, FI_HOLD)]] }
   ];
 
   // ── 🏕️ INSIDE THE FORT (stage 2) ──
@@ -7380,11 +7443,68 @@ window.__ao3WorldInit = function (core) {
     hit(108, 444, 78, 64, "The radio", radioTap);
     hit(96, 250, 100, 140, "Will", next); hit(196, 244, 100, 146, "Mike", next);
     hit(150, 366, 60, 36, "Their hands", () => { say(SAY.hand[nHand++ % SAY.hand.length]); puff(3); });
-    hit(296, 466, 40, 50, "The walkie-talkie", () => {
-      hkCrackle(); clearTimeout(tid); playing = false; hideBubble(); say("The walkie-talkie hisses. “…Mike? Will? It got very quiet. Dustin to the fort. Over.”");
-      setPose({ a: { mood: "o", blush: true, R: "lap" }, b: { mood: "o", blush: true, L: "lap" } });
-      tid = setTimeout(() => { speak("m", "Nothing! We’re fine! Over!"); setPose({ jig: true }); tid = setTimeout(() => { speak("w", "That was extremely believable."); setPose({ a: { mood: "grin", eyes: "happy", R: FI_CL[0] }, b: { mood: "grin", L: FI_CL[1] }, hearts: 2 }); tid = setTimeout(() => { hideBubble(); say("They’re laughing too hard to say anything else. Tap them for another moment."); }, 3400); }, 2600); }, 2600);
-    });
+    // the walkie-talkie: each tap plays the next exchange. "r" = a voice on the radio (caption + crackle), "m" / "w" = Mike / Will, "n" = caption only
+    const WALKIE_TALKS = [
+      [["r", "The walkie-talkie hisses. “…Mike? Will? It got very quiet. Dustin to the fort. Over.”", { a: { mood: "o", blush: true, R: "lap" }, b: { mood: "o", blush: true, L: "lap" } }],
+       ["m", "Nothing! We’re fine! Over!", { jig: true }],
+       ["w", "That was extremely believable.", { a: { mood: "grin", eyes: "happy", R: FI_CL[0] }, b: { mood: "grin", L: FI_CL[1] }, hearts: 2 }]],
+      [["r", "Crackle. “Lucas to Mike. Are you two doing the thing again? Over.”", { a: { mood: "o" }, b: { mood: "o", look: 1 } }],
+       ["m", "What thing?! There’s no thing! Over!", { jig: true }],
+       ["r", "“Mike, you’ve been holding the button down. We can hear everything. Over.”", {}],
+       ["w", "…Oh no.", { a: { mood: "o", blush: true } }],
+       ["m", "Radio silence! Everybody observe radio silence! Over and out!", { b: { mood: "cheer", blush: true } }],
+       ["r", "“That’s not how radio silence works. Over.”", {}],
+       ["n", "Mike switches the walkie-talkie off with one finger, very gently. Will is laughing so hard he’s wheezing.", { hearts: 2, a: { eyes: "happy", mood: "grin" }, b: { mood: "smirk", blush: true } }]],
+      [["r", "“Max to the fort. Dustin says he’s bringing snacks. He says it’s an emergency. Over.”", { a: { mood: "smile" }, b: { mood: "o" } }],
+       ["w", "What kind of emergency is snacks?", { a: { mood: "smirk" } }],
+       ["m", "The best kind. Tell him ten minutes. Over.", { b: { mood: "grin" } }],
+       ["r", "“Copy. Also, Will, don’t let Mike do all the voices again this time. Over.”", {}],
+       ["m", "I do EXCELLENT voices!", { b: { mood: "o", blush: true }, jig: true }],
+       ["w", "…You really don’t.", { a: { mood: "grin", eyes: "happy" } }],
+       ["n", "The walkie-talkie clicks off. Mike is deeply offended, and quietly pleased that Will remembers the voices at all.", { hearts: 1, b: { mood: "smirk" } }]],
+      [["r", "“Nancy here. Mike, Mom wants to know if you’re coming up for dinner. Will’s welcome too. Over.”", { a: { mood: "o" }, b: { mood: "calm", look: -1 } }],
+       ["m", "Tell her we’re in the middle of something. Over.", { b: { mood: "smirk", blush: true } }],
+       ["r", "“You’re under a blanket. Over.”", {}],
+       ["w", "How does she know about the blanket?", { a: { mood: "o", blush: true } }],
+       ["m", "She knows everything. It’s terrifying. Over.", { b: { mood: "o" } }],
+       ["r", "“Dinner in ten. There’s dessert. Over and out.”", {}],
+       ["w", "Dessert.", { a: { mood: "smile", eyes: "happy" } }],
+       ["m", "…Fine. But we’re coming straight back down after.", { b: { mood: "smirk" } }],
+       ["n", "Neither of them lets go of the other’s hand until the top of the stairs.", Object.assign({ hearts: 2 }, FI_HOLD)]],
+      [["r", "“Dustin to the fort. I have a theory about the Mind Flayer. Also about cheese. Mostly cheese. Over.”", { a: { mood: "smirk" }, b: { mood: "calm" } }],
+       ["m", "Not now. Over.", { b: { mood: "o", look: -1 } }],
+       ["r", "“It’s about cheese, Mike! Over!”", {}],
+       ["w", "Okay, now I want to hear about the cheese.", { a: { mood: "grin", look: 1 } }],
+       ["m", "Will!", { b: { mood: "o", blush: true }, jig: true }],
+       ["r", "“Finally, someone with taste. So. There are four kinds. Over.”", {}],
+       ["n", "Mike puts his head in his hands. Will has the walkie-talkie now, and he’s taking notes.", { hearts: 1, a: { mood: "grin", eyes: "happy" } }]],
+      [["n", "The walkie-talkie crackles on by itself. Nobody is talking to them. Somebody left their button stuck down.", { a: { mood: "o", look: 1 }, b: { mood: "o", look: 1 } }],
+       ["r", "Faint, close to the mic: “…no, you hang up first.” “You hang up first.” A giggle. “I’m not hanging up.”", { a: { mood: "smirk" }, b: { mood: "o", blush: true } }],
+       ["m", "Is that— Lucas? And Max?", { b: { mood: "o" } }],
+       ["r", "“…I like it when you do that thing where you pretend you’re not smiling.” “I’m not smiling.” “You’re so smiling.”", {}],
+       ["w", "Mike. We shouldn’t be listening to this.", { a: { mood: "o", blush: true, look: -1 }, b: { blush: true } }],
+       ["m", "I’m not listening! I’m just… not turning it off!", { b: { mood: "cheer", blush: true }, jig: true }],
+       ["r", "“Say something nice about me.” “…You’re the best person I know. Over.” “Aw. Over.” “Over.” “No, you say over.”", {}],
+       ["w", "…That’s actually really sweet.", { a: { mood: "smile", blush: true, eyes: "happy" } }],
+       ["m", "Yeah. It’s… yeah. It’s a good one.", { b: { mood: "calm", blush: true, look: 1 } }],
+       ["n", "Neither of them looks at the other. Neither of them reaches for the off switch. Under the blanket, one hand has found the other.", Object.assign({ hearts: 3 }, FI_HOLD)],
+       ["r", "“…Wait. Is the channel open? Hello? Is anyone— MIKE?! Over.”", { a: { mood: "o", blush: true }, b: { mood: "o", blush: true } }],
+       ["m", "We heard NOTHING! Over and out!", { b: { mood: "cheer", blush: true }, jig: true }],
+       ["w", "That was extremely believable.", { a: { mood: "grin", eyes: "happy", blush: true }, hearts: 2 }]]
+    ];
+    const walkieTalk = () => {
+      clearTimeout(tid); playing = false; hideBubble();
+      const seq = WALKIE_TALKS[nWalkie++ % WALKIE_TALKS.length]; let i = 0;
+      const run = () => {
+        if (i >= seq.length) { hideBubble(); say("The channel goes quiet. Tap them for another moment, or the walkie-talkie for another call."); return; }
+        const [who, text, patch] = seq[i++];
+        setPose(patch || {});
+        if (who === "r") { hkCrackle(); hideBubble(); say(text); } else if (who === "n") { hideBubble(); say(text); } else speak(who, text);
+        tid = setTimeout(run, readTime(text));
+      };
+      hkCrackle(); run();
+    };
+    hit(296, 466, 40, 50, "The walkie-talkie", walkieTalk);
     hit(20, 60, 320, 70, "The fairy lights", () => { say(SAY.lights[nLights++ % SAY.lights.length]); puff(2); });
     hit(286, 430, 60, 30, "The flashlight", () => say(SAY.torch[nTorch++ % SAY.torch.length]));
     hit(30, 450, 64, 60, "The popcorn", () => say(SAY.corn[nCorn++ % SAY.corn.length]));
