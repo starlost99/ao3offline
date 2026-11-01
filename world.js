@@ -6307,17 +6307,26 @@ window.__ao3WorldInit = function (core) {
       sv("polygon", { points: "9,16.4 19.7,16.4 19.7,25.4", fill: "#6a737a" }, g);
       sv("rect", { x: -28, y: 54, width: 56, height: 8, fill: GREY, opacity: 0.9 }, g);
     };
+    // a neck that follows the head: joins the neck base on the torso to the underside of the (shifted, tilted) head, so leaning never snaps it
+    const neckTo = (g, p, baseY, topY, hw) => {
+      const th = p.head[2] * Math.PI / 180, c = Math.cos(th), s = Math.sin(th);
+      const top = x => { const rx = x, ry = topY + 8; return [(rx * c - ry * s + p.head[0]).toFixed(1), (rx * s + ry * c - 8 + p.head[1]).toFixed(1)]; };
+      const l = top(-hw), r = top(hw);
+      sv("polygon", { points: `${-hw},${baseY} ${hw},${baseY} ${r[0]},${r[1]} ${l[0]},${l[1]}`, fill: "#d9b090" }, g);
+    };
     const headA = (g, p) => {                               // soft, fluffy, side-swept fringe: full on top, not long
+      neckTo(g, p, -9, -16, 4.6);
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
       const HAIR = "#3b2a20";
       [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -21.4, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
-      [[-9.5, -43.6, 7.6], [0, -46.4, 8.2], [9.5, -43.6, 7.6], [-14.6, -35.6, 6.4], [14.6, -35.6, 6.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
+      [[-8.5, -41.4, 7], [0, -43, 7.4], [8.5, -41.4, 7], [-13, -34, 5.4], [13, -34, 5.4]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
       sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
-      sv("path", { d: "M-16.4 -24 C-20.4 -37 -15 -50 0 -50 C15 -50 20.4 -37 16.4 -24 C15.6 -27.6 14.4 -30.4 12.2 -32.2 Q9.4 -29.4 6.2 -32.2 Q3 -29 -0.6 -32 Q-4.2 -28.8 -7.4 -32.2 Q-10.8 -29.4 -13.2 -31.6 Q-15.4 -28.6 -16.4 -24 Z", fill: HAIR }, h);
-      sv("path", { d: "M-10 -44 Q-3 -48.6 5 -46", stroke: "#5a4232", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
+      sv("path", { d: "M-15.2 -24 C-18.4 -35 -13 -47.6 0 -47.6 C13 -47.6 18.4 -35 15.2 -24 C14.6 -27.4 13.4 -30 11.4 -31.8 Q5 -35 -1 -33 Q-8 -31 -12.6 -31.2 Q-14.6 -28.4 -15.2 -24 Z", fill: HAIR }, h);
+      sv("path", { d: "M-8 -42 Q-2 -45.6 5 -43.6", stroke: "#5a4232", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", opacity: 0.4 }, h);
       face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
     };
     const headB = (g, p) => {                               // short, soft dark curls: one clean shape, a wavy fringe, nothing hanging down
+      neckTo(g, p, -9, -18, 5);
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
       const HAIR = "#231a1c";
       [[-13, -38, 8.6], [13, -38, 8.6], [-16, -29, 6.4], [16, -29, 6.4], [-7, -45, 8.6], [7, -45, 8.6], [0, -47, 8.6]].forEach(([cx, cy, r]) => sv("circle", { cx, cy, r, fill: HAIR }, h));
@@ -6999,7 +7008,7 @@ window.__ao3WorldInit = function (core) {
       ["m", "I’ll share it. I’ll always share it. Even the good popcorn.", { b: { mood: "smile", blush: true } }],
       ["w", "Even the good popcorn? Mike. That’s practically a vow.", { a: { eyes: "happy", mood: "smile" } }],
       ["m", "It’s a vow.", { hearts: 2 }],
-      ["n", "Will lets his head rest on Mike’s shoulder. Mike stops breathing for a second, then very carefully doesn’t move.", Object.assign({ front: "a", hearts: 3, a: { sx: 14, head: [11, 5, 17], mood: "calm", eyes: "happy", blush: true, R: FI_CL[0] }, b: { head: [-1, 3, -4], mood: "calm", blush: true, L: FI_CL[1] } })]] },
+      ["n", "Will lets his head rest on Mike’s shoulder. Mike stops breathing for a second, then very carefully doesn’t move.", Object.assign({ front: "a", hearts: 3, a: { sx: 14, head: [9, 4, 12], mood: "calm", eyes: "happy", blush: true, R: FI_CL[0] }, b: { head: [-1, 3, -4], mood: "calm", blush: true, L: FI_CL[1] } })]] },
     { name: "the best part", beats: [
       ["w", "Can I tell you something dumb?", { a: { mood: "calm", look: 0.5, lookY: 1 } }],
       ["m", "Nothing you say is dumb. Rule of the fort.", { b: { mood: "smile" } }],
@@ -7067,8 +7076,8 @@ window.__ao3WorldInit = function (core) {
     const defs = sv("defs", {}, svg);
     const radial = (id, stops, o) => { const g = sv("radialGradient", Object.assign({ id }, o || {}), defs); stops.forEach(([off, c, op]) => sv("stop", { offset: off, "stop-color": c, "stop-opacity": op }, g)); };
     radial("fi-glow", [["0%", "#ffd98a", 0.85], ["100%", "#ffd98a", 0]]);
-    radial("fi-wall", [["0%", "#fff0c8", 1], ["60%", "#e9c890", 1], ["100%", "#a8784e", 1]], { cx: "50%", cy: "62%", r: "70%" });
-    radial("fi-vig", [["50%", "#0a060e", 0], ["100%", "#0a060e", 0.7]], { cx: "50%", cy: "55%", r: "75%" });
+    radial("fi-wall", [["0%", "#c99a5c", 1], ["55%", "#8c6038", 1], ["100%", "#3e2616", 1]], { cx: "50%", cy: "62%", r: "70%" });
+    radial("fi-vig", [["35%", "#0a060e", 0], ["100%", "#0a060e", 0.85]], { cx: "50%", cy: "58%", r: "72%" });
     const beam = sv("linearGradient", { id: "fi-beam", x1: 0, y1: 1, x2: 0, y2: 0 }, defs);
     sv("stop", { offset: "0%", "stop-color": "#fff3c8", "stop-opacity": 0.55 }, beam); sv("stop", { offset: "100%", "stop-color": "#fff3c8", "stop-opacity": 0 }, beam);
     const stripe = sv("pattern", { id: "fi-stripe", width: 22, height: 20, patternUnits: "userSpaceOnUse" }, defs);
@@ -7091,7 +7100,7 @@ window.__ao3WorldInit = function (core) {
     sv("polygon", { points: "180,-20 180,100 330,320 480,420 480,-20", fill: "#1a1008", opacity: 0.42 }, svg);
     [[-40, 40], [20, 120], [60, 200]].forEach(([x, y]) => { sv("path", { d: `M180 ${y - 20} Q${x + 90} ${y + 40} ${x} ${y + 150}`, stroke: "#1a0c14", "stroke-width": 1.4, fill: "none", opacity: 0.35 }, svg); sv("path", { d: `M180 ${y - 20} Q${360 - x - 90} ${y + 40} ${360 - x} ${y + 150}`, stroke: "#14100a", "stroke-width": 1.4, fill: "none", opacity: 0.35 }, svg); });
     sv("polygon", { points: "180,100 330,320 30,320", fill: "url(#fi-wall)" }, svg);                              // the back wall: a cream sheet, lit
-    sv("path", { d: "M180 100 L330 320 M180 100 L30 320", stroke: "#efe0c4", "stroke-width": 3, fill: "none", opacity: 0.9, "stroke-linejoin": "round" }, svg);   // its hem
+    sv("path", { d: "M180 100 L330 320 M180 100 L30 320", stroke: "#b89c76", "stroke-width": 3, fill: "none", opacity: 0.8, "stroke-linejoin": "round" }, svg);   // its hem
     sv("path", { d: "M150 150 Q146 240 150 320 M205 140 Q210 240 206 320 M252 200 Q256 260 254 320", stroke: "#a8683a", "stroke-width": 1, fill: "none", opacity: 0.25 }, svg);
     sv("path", { d: "M180 -20 V100", stroke: "#3a2418", "stroke-width": 7, opacity: 0.9 }, svg); sv("path", { d: "M180 -20 V100", stroke: "#8a5a38", "stroke-width": 3.6 }, svg);   // the ridge pole
     sv("rect", { x: 0, y: 320, width: W, height: 220, fill: "#2a1822" }, svg);                                      // floor
@@ -7152,7 +7161,7 @@ window.__ao3WorldInit = function (core) {
     };
     // ── foreground: popcorn, comics, flashlight with its beam, walkie-talkie; fairy lights and pom-poms along the edges ──
     const beamG = sv("g", {}, svg);
-    sv("polygon", { points: "292,452 330,452 250,150 190,150", fill: "url(#fi-beam)", opacity: 0.5 }, beamG);
+    sv("polygon", { points: "292,452 330,452 250,150 190,150", fill: "url(#fi-beam)", opacity: 0.28 }, beamG);
     const fore = sv("g", {}, svg);
     const bowl = sv("g", {}, fore);
     sv("ellipse", { cx: 62, cy: 492, rx: 26, ry: 8, fill: "#d8d0c0", stroke: "#8a8070", "stroke-width": 0.8 }, bowl);
