@@ -2494,7 +2494,7 @@ try {
   // bookshelf, garden, stained glass) are drawn by world.js, which only the web app ships. It is
   // fetched the first time one is opened, so AO3 pages never carry it and the app's first paint
   // doesn't wait for it. `keepsakes.openX()` is what every button in the app calls.
-  const WORLD_NAMES = ["openGraveyard","openGraveyardGrounds","openCelebration","openConstellation","openAquarium","openBookshelf","openGarden","openStainedGlass","openHollowbrook","openChapel"];
+  const WORLD_NAMES = ["openGraveyard","openGraveyardGrounds","openCelebration","openConstellation","openAquarium","openBookshelf","openGarden","openStainedGlass","openHollowbrook","openChapel","openWheelers"];
   const WORLD_URL = (document.currentScript && document.currentScript.src) ? new URL("world.js", document.currentScript.src).href : "world.js";
   let worldPromise = null;
   function loadWorld() {
@@ -25192,6 +25192,16 @@ try {
     groundsNavBtn.onclick = () => { try { window.__ao3Extras && window.__ao3Extras.openGraveyardGrounds(); } catch (e) { console.error(e); } };
     groundsLi.appendChild(groundsNavBtn);
     keepLi.after(groundsLi);
+
+    // and one more right after it: the Wheelers' house in Hawkins (front lawn, with the way down to the basement)
+    const wheelersLi = document.createElement("li");
+    const wheelersNavBtn = document.createElement("a");
+    wheelersNavBtn.textContent = "Wheelers\u2019 house";
+    wheelersNavBtn.href = "javascript:void(0)";
+    wheelersNavBtn.style.cursor = "pointer";
+    wheelersNavBtn.onclick = () => { try { window.__ao3Extras && window.__ao3Extras.openWheelers(); } catch (e) { console.error(e); } };
+    wheelersLi.appendChild(wheelersNavBtn);
+    groundsLi.after(wheelersLi);
   }
   periodCloseBtn.onclick  = closePeriodTracker;
   periodOverlay.addEventListener("click", e => { if (e.target === periodOverlay) closePeriodTracker(); });
