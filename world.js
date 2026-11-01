@@ -6323,19 +6323,47 @@ window.__ao3WorldInit = function (core) {
       face(h, p, { ex: 5.9, ey: -22.4, by: -26.8, my: -13.4, brow: "#26170f", er: 1.32, bw: 1.6, eye: "#3a2018", cheek: true, open: true });
       sv("circle", { cx: 9.4, cy: -18, r: 0.65, fill: "#5a3226" }, h);      // his mole
     };
-    const headB = (g, p) => {                               // dark, shaggy and soft: a swept fringe over the forehead, side hair over the ears that flicks out at the ends
+    const headB = (g, p) => {                               // dark, loose curls: an irregular cloud of soft curl lobes round the head, a swept curly fringe, a few stray ringlets
       neckTo(g, p, -9, -18, 5);
       const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
-      const HAIR = "#1d1517", HAIR_L = "#43323a";
-      // 1. the back: full on top, longer at the sides and the nape, with a little wave to the edge
-      sv("path", { d: "M-15 -9 Q-19 -14 -19.4 -20 Q-23 -22 -21.4 -27 Q-24.4 -32 -20 -37 Q-21 -44 -15 -47 Q-10 -53 -2 -52 Q6 -54 12 -50 Q19 -49 20 -42 Q24 -37 21 -31 Q23 -25 20 -21 Q20.4 -14 15 -11 Q0 -15 -15 -9 Z", fill: HAIR }, h);
+      const HAIR = "#1d1517", HAIR_L = "#43323a", HAIR_D = "#0f0a0c";
+      const rnd = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };   // fixed "randomness": the curls never change between draws
+      // one curl lobe: a slightly squashed, slightly tilted blob (sizes and tilts vary so it reads loose and natural, not like a perm)
+      const lobe = (grp, cx, cy, r, i) => {
+        const rot = (rnd(i + 40) - 0.5) * 80;
+        sv("ellipse", { cx: cx.toFixed(1), cy: cy.toFixed(1), rx: r.toFixed(1), ry: (r * (0.8 + rnd(i + 7) * 0.22)).toFixed(1), fill: HAIR, stroke: HAIR_D, "stroke-width": 0.45, "stroke-opacity": 0.8, transform: `rotate(${rot.toFixed(0)} ${cx.toFixed(1)} ${cy.toFixed(1)})` }, grp);
+      };
+      // a little highlight curl inside a lobe, upper-left, where the light catches it
+      const glint = (grp, cx, cy, r, i) => {
+        const s = rnd(i + 90) > 0.5 ? 1 : -1;
+        sv("path", { d: `M${(cx - r * 0.55 * s).toFixed(1)} ${(cy + r * 0.25).toFixed(1)} Q${(cx - r * 0.5 * s).toFixed(1)} ${(cy - r * 0.55).toFixed(1)} ${(cx + r * 0.3 * s).toFixed(1)} ${(cy - r * 0.45).toFixed(1)}`, stroke: HAIR_L, "stroke-width": 0.85, fill: "none", "stroke-linecap": "round", opacity: 0.6 }, grp);
+      };
+      // 1. the back: a dome, then a ring of curl lobes round it (top, sides) and a few at the nape
+      sv("path", { d: "M-15 -9 Q-19 -14 -19.4 -20 Q-21 -26 -19 -33 Q-19.6 -42 -14 -46 Q-9 -51 -2 -50.4 Q6 -52 12 -48.5 Q18.4 -46 19 -40 Q21 -34 19.6 -28 Q20.6 -21 19.4 -17 Q18 -12 15 -11 Q0 -15 -15 -9 Z", fill: HAIR }, h);
+      const ring = [];
+      for (let i = 0; i < 14; i++) {
+        const th = (205 - i * 16.5) * Math.PI / 180, r = 4.4 + rnd(i) * 2.6, out = (rnd(i + 20) - 0.5) * 2.6;
+        ring.push([17 * Math.cos(th) * (1 + out / 17) , -31 - 17.5 * Math.sin(th) * (1 + out / 17.5), r]);
+      }
+      [[-19, -18.6, 4.2], [-15.6, -14.2, 3.2], [19, -19, 4], [15.8, -14, 3.1]].forEach(l => ring.push(l));
+      ring.forEach((l, i) => lobe(h, l[0], l[1], l[2], i));
       // 2. ears, then the face
       [-1, 1].forEach(sd => sv("ellipse", { cx: sd * 14.9, cy: -23, rx: 2.6, ry: 3.3, fill: SKIN_B, stroke: "#b98f72", "stroke-width": 0.5 }, h));
       sv("ellipse", { cx: 0, cy: -28, rx: 14.4, ry: 17.4, fill: SKIN_B }, h);
-      // 3. the front: a thick fringe with soft wavy tips just above the brows, side locks falling over the temples
-      sv("path", { d: "M-14.8 -22 Q-17.6 -32 -14.2 -40 Q-12 -47 -4 -48.4 Q4 -51 11 -47.6 Q16.8 -44 15.6 -35 Q16.4 -29 14.8 -22 L13.4 -27 Q13 -30.4 11.8 -32.2 Q10 -34.8 8 -35.6 Q6.4 -34.8 4.4 -33.4 Q2.6 -35.2 0.4 -36.4 Q-1.2 -34.6 -3.2 -32.6 Q-5 -34.4 -7 -35.2 Q-8.6 -33.8 -10.6 -31.4 Q-12.4 -30 -13.4 -27 Z", fill: HAIR }, h);
-      sv("path", { d: "M-2 -49 Q-6 -42 -3.2 -33.6 M6 -50 Q9.4 -42 6 -35 M-10 -45 Q-13 -38 -10.8 -32.6 M12 -45 Q14.8 -39 13 -33 M-19 -34 Q-21.4 -27 -17 -19 M20 -34 Q22.4 -26 18 -18", stroke: HAIR_L, "stroke-width": 0.9, fill: "none", "stroke-linecap": "round", opacity: 0.75 }, h);
-      sv("path", { d: "M-6 -48.6 Q0 -51 7 -49.6", stroke: HAIR_L, "stroke-width": 1.6, fill: "none", "stroke-linecap": "round", opacity: 0.5 }, h);
+      // 3. the front: a base over the forehead, then a swept fringe of curl lobes along the hairline, with side locks curling over the temples
+      sv("path", { d: "M-14.8 -22 Q-17.6 -32 -14.2 -40 Q-12 -47 -4 -48.4 Q4 -51 11 -47.6 Q16.8 -44 15.6 -35 Q16.4 -29 14.8 -22 L13.4 -27 Q12 -31 8 -33.4 Q0 -36 -8 -33.4 Q-12.4 -30.6 -13.4 -27 Z", fill: HAIR }, h);
+      ring.slice(0, 14).forEach((l, i) => { if (l[1] < -40) { lobe(h, l[0] * 0.92, l[1] + 1.2, l[2] * 0.9, i + 60); } });   // the crown, in front of the forehead base
+      const fringe = [[-14.4, -27.2, 3.3], [-12.1, -30.8, 3.6], [-8.6, -33.2, 3.9], [-4.6, -34.2, 3.6], [-0.6, -35.6, 4.1], [3.4, -35, 3.7], [7.6, -35, 3.9], [11.2, -32.2, 3.7], [14.4, -28, 3.3]];
+      const fr = fringe.map(([x, y, r], i) => [x + (rnd(i + 120) - 0.5) * 1.2, y - r * 0.62 + (rnd(i + 140) - 0.5) * 1.1, r * (0.92 + rnd(i + 160) * 0.2)]);
+      fr.forEach((l, i) => lobe(h, l[0], l[1], l[2], i + 100));
+      [[-15.8, -27.4, 2.5], [16, -27.8, 2.4]].forEach((l, i) => lobe(h, l[0], l[1], l[2], i + 200));   // short side locks that tip over the tops of the ears
+      // a couple of loose ringlets that drop over the forehead
+      sv("path", { d: "M2 -35 Q0.6 -32.6 2.5 -32.2 Q4.3 -32 4.1 -33.8", stroke: HAIR, "stroke-width": 1.7, fill: "none", "stroke-linecap": "round" }, h);
+      sv("path", { d: "M-7.4 -34 Q-8.6 -32 -6.9 -31.8 Q-5.4 -31.8 -5.6 -33.2", stroke: HAIR, "stroke-width": 1.5, fill: "none", "stroke-linecap": "round" }, h);
+      // 4. the glints that make each curl read as a curl
+      ring.slice(0, 14).forEach((l, i) => { if (l[1] < -36) glint(h, l[0] * 0.92, l[1] + 1.2, l[2] * 0.9, i + 60); });
+      fr.forEach((l, i) => glint(h, l[0], l[1], l[2], i + 100));
+      sv("path", { d: "M-6 -48.6 Q0 -51 7 -49.6", stroke: HAIR_L, "stroke-width": 1.6, fill: "none", "stroke-linecap": "round", opacity: 0.35 }, h);
       face(h, p, { ex: 5.9, ey: -26.2, by: -30.8, my: -17.4, brow: "#1d1517", bw: 1.4, er: 1.12, eye: "#1a1214", cheek: true });
     };
     return { solveArm, drawArm, face, torsoA, torsoB, headA, headB };
