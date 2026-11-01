@@ -3390,6 +3390,574 @@ try {
     document.body.appendChild(back);
   }
 
+  // ── 🏠 BRAM'S COTTAGE (the inside) ──
+  // Tap the cottage by the gate in the grounds (or "Cottage" on Bram's menu) to step in. A warm little room with
+  // Bram in his armchair, the cat by the fire and a kettle on. Five things to do, none of them about his past
+  // (in here he is only the man with the kettle):
+  //   🫖 Tea       he offers a cup, you pick one (he remembers your usual); your mug shows on the table for the day
+  //   🗣️ Vent      type or pick a topic; he listens, says something kind and a bit sassy, asks one gentle question.
+  //                What you type is NEVER saved. If it sounds like a real crisis he drops the act and points you to people.
+  //   📚 Fics      he chats about your dead fics, the ones still going and the finished ones, and reads back lines you saved
+  //   🃏 Tarot     pick one of three face-down cards; one card a day, same card all day (the deck is shuffled by the date)
+  // Only tiny bits are kept, in ao3_cottage_v1 (so cloud sync carries it): visits, today's tea, your tea counts, today's card.
+  function openBramCottage() {
+    const old = document.getElementById("ao3-cottage");
+    if (old) old.remove();
+    if (!document.getElementById("ao3-cot-css")) {
+      const cs = document.createElement("style");
+      cs.id = "ao3-cot-css";
+      cs.textContent = `
+        @keyframes cotFlicker{0%,100%{opacity:.8;transform:scale(1)}30%{opacity:1;transform:scale(1.08)}60%{opacity:.7;transform:scale(.94)}}
+        @keyframes cotSteam{0%{opacity:0;transform:translateY(2px)}35%{opacity:.8}100%{opacity:0;transform:translateY(-8px)}}
+        @keyframes cotBreathe{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.07)}}
+        @keyframes cotFlip{0%{transform:rotateY(90deg);opacity:0}100%{transform:rotateY(0);opacity:1}}
+        @keyframes cotPop{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-26px);opacity:0}}
+        @media (prefers-reduced-motion: reduce){.cot-anim{animation:none !important}}
+      `;
+      (document.head || document.documentElement).appendChild(cs);
+    }
+    const el = (tag, css, text) => {
+      const e = document.createElement(tag);
+      if (css) e.style.cssText = css;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const NS = "http://www.w3.org/2000/svg";
+    const sv = (tag, attrs, parent) => {
+      const e = document.createElementNS(NS, tag);
+      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+      if (parent) parent.appendChild(e);
+      return e;
+    };
+    const anim = (node, css) => { node.setAttribute("class", "cot-anim"); node.style.cssText += css; return node; };
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    const rnd = seed => { const x = Math.sin(gyHash(String(seed)) * 12.9898) * 43758.5453; return x - Math.floor(x); };
+    const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+    // ── the few things he keeps: visits, today's tea, tea counts, today's card (never what you type) ──
+    const KEY = "ao3_cottage_v1";
+    let st = {};
+    try { st = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch { st = {}; }
+    if (!st.teas || typeof st.teas !== "object") st.teas = {};
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} };
+    const pragueDay = () => {                           // Prague date as YYYY-MM-DD; 00:00-01:59 still counts as the day before (same as the grounds)
+      const p = {};
+      new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+        .formatToParts(new Date()).forEach(x => { if (x.type !== "literal") p[x.type] = Number(x.value); });
+      let d = new Date(Date.UTC(p.year, p.month - 1, p.day));
+      if (p.hour * 60 + p.minute < 120) d = new Date(d.getTime() - 864e5);
+      return d.toISOString().slice(0, 10);
+    };
+    const dayKey = pragueDay();
+    const hr = new Date().getHours();
+    const firstEver = !st.visits;
+    const visitedToday = st.last === dayKey;
+    st.visits = (st.visits || 0) + 1; st.last = dayKey; save();
+
+    // ── shell ──
+    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000003;");
+    back.id = "ao3-cottage";
+    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;font-family:inherit;color:#f3e6d3;background:linear-gradient(180deg,#1d130f 0%,#2a1b15 100%);border:1px solid rgba(255,200,140,0.28);box-shadow:0 8px 40px rgba(0,0,0,0.6);");
+    back.appendChild(box);
+    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid rgba(255,200,140,0.2);background:rgba(20,12,8,0.6);");
+    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;");
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;text-transform:uppercase;color:#ffe2b0;", "\u{1F3E0} Bram\u2019s cottage"));
+    ttl.appendChild(el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(243,230,211,0.6);", "kettle\u2019s on \u00B7 no history lessons"));
+    const xBtn = el("button", "background:none;border:none;color:rgba(243,230,211,0.75);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "\u2715");
+    xBtn.type = "button";
+    topbar.appendChild(ttl); topbar.appendChild(xBtn);
+    box.appendChild(topbar);
+
+    // ── the room (SVG) ──
+    const sceneWrap = el("div", "flex:0 0 auto;background:linear-gradient(180deg,#4a352b,#34251f 75%,#2b1e18);");
+    const svg = sv("svg", { viewBox: "0 0 360 170", preserveAspectRatio: "xMidYMid meet" });
+    svg.style.cssText = "width:100%;max-width:520px;height:auto;display:block;margin:0 auto;";
+    sceneWrap.appendChild(svg);
+    box.appendChild(sceneWrap);
+    const defs = sv("defs", {}, svg);
+    const fg = sv("radialGradient", { id: "cot-fire" }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#ffb060", "stop-opacity": "0.55" }, fg);
+    sv("stop", { offset: "100%", "stop-color": "#ffb060", "stop-opacity": "0" }, fg);
+    const lg = sv("radialGradient", { id: "cot-lamp" }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.35" }, lg);
+    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, lg);
+    sv("rect", { x: 0, y: 0, width: 360, height: 128, fill: "#46332a" }, svg);                  // wall
+    sv("rect", { x: 0, y: 128, width: 360, height: 42, fill: "#2b1e18" }, svg);                 // floor
+    [140, 152, 164].forEach(y0 => sv("line", { x1: 0, y1: y0, x2: 360, y2: y0, stroke: "#231813", "stroke-width": 1 }, svg));
+    // window
+    sv("rect", { x: 22, y: 24, width: 58, height: 50, fill: "#1c2140" }, svg);
+    for (let i = 0; i < 7; i++) sv("circle", { cx: (26 + rnd("cs" + i) * 50).toFixed(1), cy: (28 + rnd("cy" + i) * 42).toFixed(1), r: 0.7, fill: "#fff", opacity: 0.7 }, svg);
+    sv("circle", { cx: 38, cy: 40, r: 7, fill: "#efe6bd" }, svg);
+    sv("circle", { cx: 41.5, cy: 38.5, r: 6.4, fill: "#1c2140" }, svg);
+    sv("rect", { x: 22, y: 24, width: 58, height: 50, fill: "none", stroke: "#8a6a4e", "stroke-width": 3 }, svg);
+    sv("path", { d: "M51 24 V74 M22 49 H80", stroke: "#8a6a4e", "stroke-width": 2 }, svg);
+    sv("path", { d: "M18 22 Q30 40 20 78 L16 78 L16 22 Z", fill: "#7a3b4d" }, svg);
+    sv("path", { d: "M84 22 Q72 40 82 78 L86 78 L86 22 Z", fill: "#7a3b4d" }, svg);
+    // shelf with books and a plant
+    sv("rect", { x: 98, y: 46, width: 86, height: 4, fill: "#6b4f35" }, svg);
+    [["#8a3b4d", 9], ["#3f6f8a", 7], ["#b99a5b", 8], ["#5d7a4e", 6], ["#7a5d8a", 9], ["#a86a4a", 7]].reduce((x0, [c, w]) => {
+      sv("rect", { x: x0, y: 46 - (14 + (w % 3) * 2), width: w, height: 14 + (w % 3) * 2, rx: 0.8, fill: c }, svg); return x0 + w + 1.5;
+    }, 102);
+    sv("rect", { x: 160, y: 38, width: 10, height: 8, rx: 1.5, fill: "#8a5a44" }, svg);
+    sv("path", { d: "M165 38 Q158 28 156 24 M165 38 Q166 26 168 22 M165 38 Q173 30 177 28", stroke: "#5d8a55", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, svg);
+    // his hat on its peg (he is not wearing it in here)
+    sv("circle", { cx: 100, cy: 80, r: 1.6, fill: "#6b4f35" }, svg);
+    sv("path", { d: "M93 84 Q100 81 107 84 L103 77 Q100 74 97 77 Z", fill: "#1d1830" }, svg);
+    // fireplace
+    sv("rect", { x: 262, y: 60, width: 76, height: 68, fill: "#5d5057" }, svg);
+    sv("rect", { x: 256, y: 52, width: 88, height: 9, rx: 1.5, fill: "#6b4f35" }, svg);
+    sv("path", { d: "M274 128 V92 Q274 78 300 78 Q326 78 326 92 V128 Z", fill: "#1a1115" }, svg);
+    const fireG = sv("g", {}, svg);
+    const fireGlow = sv("circle", { cx: 300, cy: 108, r: 52, fill: "url(#cot-fire)" }, fireG);
+    anim(fireGlow, "animation:cotFlicker 2.6s ease-in-out infinite;transform-origin:300px 108px;");
+    sv("rect", { x: 282, y: 122, width: 36, height: 5, rx: 2, fill: "#4a3022" }, svg);
+    const fl1 = sv("path", { d: "M287 124 Q281 108 289 96 Q291 108 298 102 Q298 114 308 110 Q314 118 312 124 Z", fill: "#ff9a4a" }, svg);
+    anim(fl1, "animation:cotFlicker 1.7s ease-in-out infinite;transform-origin:300px 124px;");
+    const fl2 = sv("path", { d: "M293 124 Q290 114 297 108 Q299 116 304 112 Q307 118 305 124 Z", fill: "#ffd98a" }, svg);
+    anim(fl2, "animation:cotFlicker 1.3s ease-in-out .3s infinite;transform-origin:299px 124px;");
+    // rug and lamp light
+    sv("ellipse", { cx: 190, cy: 151, rx: 86, ry: 13, fill: "#6b3a48", opacity: 0.85 }, svg);
+    sv("ellipse", { cx: 190, cy: 151, rx: 70, ry: 9, fill: "none", stroke: "#b98a6a", "stroke-width": 1, opacity: 0.6 }, svg);
+    sv("circle", { cx: 190, cy: 100, r: 70, fill: "url(#cot-lamp)" }, svg);
+    // the cat, curled up
+    const cat = sv("g", {}, svg);
+    const catBody = sv("g", {}, cat);
+    anim(catBody, "animation:cotBreathe 3.4s ease-in-out infinite;transform-origin:112px 154px;transform-box:fill-box;");
+    sv("ellipse", { cx: 112, cy: 150, rx: 15, ry: 7, fill: "#3b3340" }, catBody);
+    sv("circle", { cx: 99, cy: 147, r: 5.6, fill: "#3b3340" }, catBody);
+    sv("path", { d: "M94.6 144 L95.6 138.6 L99 142 Z M103.4 144 L102.4 138.6 L99 142 Z", fill: "#3b3340" }, catBody);
+    sv("path", { d: "M126 152 Q134 150 130 144", stroke: "#3b3340", "stroke-width": 3.2, fill: "none", "stroke-linecap": "round" }, catBody);
+    sv("path", { d: "M96.6 147.4 q1.2 1 2.4 0 M100 147.4 q1.2 1 2.4 0", stroke: "#cbbfe0", "stroke-width": 0.7, fill: "none", "stroke-linecap": "round" }, catBody);
+    // the armchair and Bram, sitting with a mug
+    sv("rect", { x: 140, y: 84, width: 44, height: 46, rx: 9, fill: "#5c3a3f" }, svg);
+    sv("rect", { x: 134, y: 106, width: 11, height: 24, rx: 4, fill: "#6e464b" }, svg);
+    const bram = sv("g", {}, svg);
+    sv("path", { d: "M150 118 L153 98 Q162 92 171 98 L174 118 Z", fill: "#2e2a45" }, bram);
+    sv("circle", { cx: 162, cy: 90, r: 6, fill: "#d9c3a8" }, bram);
+    sv("path", { d: "M156 88 Q162 80 168 88 Q162 85 156 88 Z", fill: "#3d2a1e" }, bram);
+    sv("circle", { cx: 160, cy: 90.5, r: 0.7, fill: "#2a2033" }, bram);
+    sv("circle", { cx: 164.4, cy: 90.5, r: 0.7, fill: "#2a2033" }, bram);
+    sv("path", { d: "M160.4 93.4 q1.8 1.2 3.6 0", stroke: "#8a5a44", "stroke-width": 0.7, fill: "none", "stroke-linecap": "round" }, bram);
+    sv("line", { x1: 170, y1: 104, x2: 176, y2: 106, stroke: "#2e2a45", "stroke-width": 2.2, "stroke-linecap": "round" }, bram);
+    sv("rect", { x: 174, y: 102, width: 6, height: 7, rx: 1.4, fill: "#d6deea" }, bram);
+    [0, 1].forEach(i => anim(sv("path", { d: `M${(175.5 + i * 2).toFixed(1)} 100 q-1.4 -3 0 -5 q1.4 -2 0 -4`, stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, bram), `animation:cotSteam ${(1.9 + i * 0.5).toFixed(1)}s ease-out ${(i * 0.6).toFixed(1)}s infinite;`));
+    sv("rect", { x: 180, y: 106, width: 11, height: 24, rx: 4, fill: "#6e464b" }, svg);
+    sv("rect", { x: 134, y: 118, width: 56, height: 12, rx: 5, fill: "#6e464b" }, svg);
+    // little table: teapot, and your mug once you have one
+    sv("rect", { x: 208, y: 114, width: 46, height: 4, rx: 1, fill: "#6b4f35" }, svg);
+    sv("rect", { x: 212, y: 118, width: 3, height: 12, fill: "#5a4129" }, svg);
+    sv("rect", { x: 247, y: 118, width: 3, height: 12, fill: "#5a4129" }, svg);
+    sv("ellipse", { cx: 222, cy: 109, rx: 8, ry: 6, fill: "#8a5a44" }, svg);
+    sv("rect", { x: 219, y: 102, width: 6, height: 2.4, rx: 1, fill: "#6b4f35" }, svg);
+    sv("path", { d: "M229.5 108 Q235 106 233 101", stroke: "#8a5a44", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, svg);
+    sv("path", { d: "M214.5 106 Q209 107 210 112", stroke: "#8a5a44", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round" }, svg);
+    anim(sv("path", { d: "M233 99 q-1.5 -3 0 -5 q1.5 -2 0 -4", stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.6 }, svg), "animation:cotSteam 2.2s ease-out infinite;");
+    const herMug = sv("g", {}, svg);
+    herMug.style.display = "none";
+    const mugBody = sv("rect", { x: 240, y: 106, width: 8, height: 8, rx: 1.6, fill: "#d6a36a" }, herMug);
+    sv("path", { d: "M248 108 q3 0 3 3 q0 2.5 -3 2.5", stroke: "#d6deea", "stroke-width": 1.2, fill: "none" }, herMug);
+    [0, 1].forEach(i => anim(sv("path", { d: `M${(242 + i * 3).toFixed(1)} 104 q-1.4 -3 0 -5 q1.4 -2 0 -4`, stroke: "#e6dcf5", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.75 }, herMug), `animation:cotSteam ${(1.8 + i * 0.5).toFixed(1)}s ease-out ${(i * 0.5).toFixed(1)}s infinite;`));
+    const bramHit = sv("rect", { x: 132, y: 76, width: 62, height: 56, fill: "transparent" }, svg);
+    bramHit.style.cursor = "pointer";
+    const setMug = c => { if (!c) { herMug.style.display = "none"; return; } mugBody.setAttribute("fill", c); herMug.style.display = ""; };
+    const fireBoost = () => {                         // the fire jumps when you toss something on it
+      fireG.style.transition = "transform .25s"; fireG.style.transformOrigin = "300px 124px";
+      fireG.style.transform = "scale(1.35)";
+      setTimeout(() => { fireG.style.transform = "scale(1)"; }, 1200);
+    };
+
+    // ── the card where he talks ──
+    const card = el("div", "flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px;border-top:1px solid rgba(255,200,140,0.25);background:rgba(20,12,8,0.9);text-align:center;");
+    box.appendChild(card);
+    const bcss = "cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;border-radius:8px;padding:7px 12px;border:1px solid rgba(255,200,140,0.4);background:rgba(255,255,255,0.07);color:#f6e8d6;";
+    const speak = (line, build) => {
+      card.textContent = "";
+      card.appendChild(el("div", "font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,217,138,0.85);", "\u{1F3EE} Bram \u00B7 in the cottage"));
+      if (line.t) card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:14px;line-height:1.5;margin:8px 0 2px;color:#f6e8d6;", `\u201C${line.t}\u201D`));
+      if (line.n) card.appendChild(el("div", "font-size:11.5px;line-height:1.4;margin-top:5px;color:rgba(255,217,138,0.9);", line.n));
+      const row = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:11px;");
+      const btn = (label, fn, css) => { const b = el("button", bcss + (css || ""), label); b.type = "button"; b.onclick = fn; row.appendChild(b); return b; };
+      card.appendChild(row);
+      (build || (() => {}))({ btn, add: node => card.insertBefore(node, row) });
+      card.scrollTop = 0;
+    };
+    const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); close(); } };
+    const close = () => { back.remove(); window.removeEventListener("keydown", onKey, true); };
+    xBtn.onclick = close;
+    back.addEventListener("click", e => { if (e.target === back) close(); });
+    window.addEventListener("keydown", onKey, true);       // on window so it runs before the grounds' own Escape handler
+    const heard = [];
+    const fresh = arr => { const f = arr.filter(x => !heard.includes(x)); const v = pick(f.length ? f : arr); heard.push(v); if (heard.length > 24) heard.shift(); return v; };
+
+    bramHit.addEventListener("click", () => speak({ t: fresh([
+      "Hm? Oh, don\u2019t mind me. Drink your tea.",
+      "Not in here. Cottage rule: tea and chat, no history lessons.",
+      "I\u2019m only the man with the kettle in here. Anything else can stay outside with the crows.",
+      "Nothing interesting to tell, love. Ask the cat. She knows everything.",
+      "Sit down, you\u2019re making the room nervous."
+    ]) }, ({ btn }) => { btn("Back", () => room()); }));
+
+    // ═════════ the room: where he starts and where everything comes back to ═════════
+    const room = line => {
+      const had = st.tea && st.tea.d === dayKey;
+      speak(line || { t: pick(["Right. What\u2019ll it be?", "Go on, then. I\u2019m all yours.", "Anything you fancy?"]) }, ({ btn }) => {
+        btn(had ? "\u{1FAD6} Another cup" : "\u{1FAD6} Tea", () => teaMenu());
+        btn("\u{1F5E3}\uFE0F Vent", () => ventStart());
+        btn("\u{1F4DA} Fics", () => ficMenu());
+        btn("\u{1F0CF} Tarot", () => tarotStart());
+        btn("\u{1F6AA} Leave", () => leave());
+      });
+    };
+    const leave = () => {
+      speak({ t: pick(["Mind the step. And the cat.", "Off you go, then. The door\u2019s always on the latch.", "Look after yourself out there, love. I mean it. I\u2019ll know if you don\u2019t.", "Go on. Come back when the kettle gets lonely."]) }, ({ btn }) => { btn("Out I go", close); });
+      setTimeout(close, 2200);
+    };
+
+    // ═════════ 🫖 tea ═════════
+    const TEAS = [
+      { id: "builder", e: "\u2615", n: "Builder\u2019s tea", d: "strong, stewed, splash of milk", c: "#b9794a", say: ["Strong enough to stand a spoon in. For days that have earned it.", "Proper tea. No nonsense. Like a good boot."] },
+      { id: "chamomile", e: "\u{1F33C}", n: "Chamomile & honey", d: "soft, golden, sleepy", c: "#e8cf7a", say: ["Chamomile. For winding down, and for pretending you aren\u2019t wound up.", "Honey in it. Don\u2019t tell the bees I\u2019m a thief."] },
+      { id: "earl", e: "\u{1F9D0}", n: "Earl Grey", d: "bergamot, a bit posh", c: "#a8794f", say: ["Earl Grey. For the part of you that likes to feel elegant. Pinkies out.", "Bergamot. Smells like a library that\u2019s doing well for itself."] },
+      { id: "mint", e: "\u{1F33F}", n: "Peppermint", d: "bright, clearing, for a loud head", c: "#9bd1a0", say: ["Peppermint. Opens the windows in your head. Mind the draught.", "Fresh as a slap, and gentler."] },
+      { id: "lapsang", e: "\u{1F525}", n: "Lapsang souchong", d: "smoky, like a bonfire in a cup", c: "#7a4a32", say: ["Lapsang. Tastes like a campfire went to finishing school. You\u2019ll love it or you\u2019ll glare at me.", "Smoky. Bold choice. I respect it."] },
+      { id: "jasmine", e: "\u{1F338}", n: "Jasmine green", d: "light, floral, clear", c: "#cfe0a0", say: ["Jasmine. Light as a good morning. Sip it, don\u2019t gulp it.", "Delicate stuff. Handle it like gossip."] },
+      { id: "chai", e: "\u{1F9E1}", n: "Spiced chai", d: "cinnamon, cardamom, a hug", c: "#c98a52", say: ["Chai. Cinnamon and cardamom and a bit of attitude. Like you.", "Spiced. It\u2019ll warm you from the toes up."] },
+      { id: "rooibos", e: "\u{1F342}", n: "Vanilla rooibos", d: "red, sweet, no caffeine", c: "#c25a3a", say: ["Rooibos. Caffeine-free, so no excuses about sleep.", "Vanilla. Tastes like being tucked in."] },
+      { id: "hibiscus", e: "\u{1F33A}", n: "Hibiscus", d: "tart, ruby red, sharp", c: "#c0405a", say: ["Hibiscus. Tart as a retort. Suits you on a day like this.", "Sharp and a bit sour, and good for you. Rather like advice."] },
+      { id: "ginger", e: "\u{1FAD0}", n: "Ginger & lemon", d: "zingy, for run-down days", c: "#e6c75a", say: ["Ginger and lemon. For a worn-out body. Drink it all, I\u2019m watching.", "Zingy. It\u2019ll wake up whatever part of you is sulking."] }
+    ];
+    const teaById = id => TEAS.find(t => t.id === id);
+    if (st.tea && st.tea.d === dayKey && teaById(st.tea.id)) setMug(teaById(st.tea.id).c);
+    const favTea = () => {
+      const top = Object.keys(st.teas).sort((a, b) => st.teas[b] - st.teas[a])[0];
+      return top && st.teas[top] >= 3 ? teaById(top) : null;
+    };
+    const timeTea = () => {                           // what he'd choose for you, by the hour
+      const pool = hr < 5 || hr >= 22 ? ["chamomile", "mint", "rooibos"] : hr < 11 ? ["builder", "earl", "ginger"] : hr < 17 ? ["jasmine", "chai", "mint"] : ["chamomile", "rooibos", "chai"];
+      return teaById(pick(pool));
+    };
+    const pour = (t, bySurprise) => {
+      const had = st.tea && st.tea.d === dayKey;
+      st.tea = { d: dayKey, id: t.id }; st.teas[t.id] = (st.teas[t.id] || 0) + 1; save();
+      setMug(t.c);
+      const usual = favTea() && favTea().id === t.id && st.teas[t.id] >= 3;
+      const opener = bySurprise ? pick(["You look like a " + t.n.toLowerCase() + " sort of person tonight. Don\u2019t argue.", "Trust me. I\u2019ve got an eye for these things."]) : "";
+      speak({
+        t: (opener ? opener + " " : "") + pick(t.say) + (usual ? " The usual, then. I knew it." : ""),
+        n: had ? "He tops up your mug. The steam curls round the lamp." : "He sets the cup by your hand. The steam curls round the lamp."
+      }, ({ btn }) => { btn("Thanks, Bram", () => room({ t: pick(["Anything else, while it cools?", "Go on, then. What\u2019s next?", "Drink up. What else?"]) })); });
+    };
+    const teaMenu = (entry) => {
+      const had = st.tea && st.tea.d === dayKey;
+      const line = had ? { t: pick(["Another one? Greedy. I approve.", "Second cup, is it? Go on, it\u2019s a cup, not a commitment."]) }
+        : { t: !entry ? pick(["Go on, then. What\u2019ll it be?", "Have a look. Take your time."]) : firstEver ? "Come in, come in. Wipe your feet. Mind the cat, she\u2019s decided that chair is hers. Tea?" : visitedToday ? "Back again? Good. Sit. Tea?" : pick(
+          hr < 5 || hr >= 22 ? ["Still up? Course you are. Kettle\u2019s just boiled. Tea?", "Late, isn\u2019t it? Sit. I\u2019ll find you something soothing."] :
+          hr < 11 ? ["Morning, love. Tea first, talk after.", "Up already? Brave. Sit, I\u2019ll pour."] :
+          hr < 17 ? ["Afternoon. Sit. You look like you\u2019ve been carrying something. Tea?", "There you are. Kettle\u2019s just boiled. What\u2019ll it be?"] :
+          ["Evening. Sit, sit. Kettle\u2019s on. What\u2019ll it be?", "Ah, there you are. Long day? Tea, then talk."]) };
+      const day = TEAS.slice().map(t => ({ t, k: rnd("tea" + dayKey + t.id) })).sort((a, b) => a.k - b.k).map(o => o.t).slice(0, 4);
+      const fav = favTea();
+      const opts = fav ? [fav].concat(day.filter(t => t.id !== fav.id)).slice(0, 4) : day;
+      speak(line, ({ btn, add }) => {
+        if (fav) add(el("div", "font-size:11px;margin-top:6px;color:rgba(255,217,138,0.85);", `\u2606 Your usual: ${fav.n}`));
+        const list = el("div", "display:flex;flex-direction:column;gap:6px;margin-top:10px;text-align:left;");
+        opts.forEach(t => {
+          const b = el("button", bcss + "display:flex;align-items:center;gap:10px;width:100%;text-align:left;", "");
+          b.type = "button";
+          b.appendChild(el("span", "font-size:20px;line-height:1;", t.e));
+          const tx = el("span", "display:flex;flex-direction:column;gap:1px;");
+          tx.appendChild(el("span", "font-size:13px;", t.n));
+          tx.appendChild(el("span", "font-size:11px;font-weight:400;opacity:0.7;", t.d));
+          b.appendChild(tx);
+          b.onclick = () => pour(t, false);
+          list.appendChild(b);
+        });
+        add(list);
+        btn("\u2728 You pick", () => pour(timeTea(), true));
+        btn(had ? "Back" : "Not now", () => room());
+      });
+    };
+
+    // ═════════ 🗣️ vent ═════════
+    const CRISIS = /\b(kill myself|killing myself|suicid\w*|end it all|end my life|want to die|wanna die|don'?t want to (be here|live|exist)|no point (in )?(living|going on)|hurt myself|harm myself|self[- ]?harm\w*|can'?t go on|better off without me|take my own life)\b/i;
+    const TOPICS = [
+      { id: "anxious", chip: "Brain won\u2019t stop", re: /\b(anxious|anxiety|worried|worry|worrying|scared|panic\w*|nervous|spiral\w*|overthink\w*|dread|stress\w*)\b/i },
+      { id: "work", chip: "Work", re: /\b(work|job|boss|manager|deadline\w*|meeting\w*|co-?workers?|colleagues?|clients?|shifts?|overtime|emails?|office|customers?|promotion|salary|workload)\b/i },
+      { id: "people", chip: "People", re: /\b(friends?|mum|mom|dad|mother|father|family|sister|brother|partner|boyfriend|girlfriend|husband|wife|ex|argument|argued|fight|fought|ignored|ghosted|left out|lonely)\b/i },
+      { id: "tired", chip: "Tired", re: /\b(tired|exhausted|drained|burnt out|burned out|burnout|insomnia|knackered|no energy|wiped|can'?t sleep)\b/i },
+      { id: "sad", chip: "Sad", re: /\b(sad|cry|crying|cried|empty|numb|miserable|alone|grief|heartbroken)\b/i },
+      { id: "angry", chip: "Angry", re: /\b(angry|furious|annoyed|pissed|rage|hate|sick of|fed up|unfair|livid)\b/i },
+      { id: "over", chip: "Just a lot", re: /\b(overwhelmed|too much|can'?t cope|behind on|so much|swamped|drowning)\b/i }
+    ];
+    const VENT = {
+      work: {
+        ack: ["Work again. That place takes an awful lot and gives you a payslip.", "Ah. Work. The thing that eats the best hours and calls it a favour.", "That sounds like a lot to carry through a door every morning.", "So they\u2019ve handed you more than one person\u2019s job. Marvellous. Very generous of them."],
+        nudge: ["Your worth isn\u2019t a performance review, love. Tell it I said so.", "You\u2019re more capable than that email makes you feel. Emails lie. Constantly.", "Nobody ever lay on their deathbed wishing they\u2019d answered one more email. Put the kettle between you and it."],
+        ask: ["What\u2019s the part that actually stings: the amount of it, or how it\u2019s being handled?", "If you could change one thing about it by Friday, what would it be?", "Is it the work that\u2019s heavy, or the people around it?"]
+      },
+      people: {
+        ack: ["People. Lovely, and also the whole problem.", "Mm. It\u2019s always the ones we care about who land hardest.", "That would sting me too. It sounds like it stung you properly."],
+        nudge: ["You\u2019re allowed to be hurt and fair about it. Both fit in the same cup.", "You give people a lot of benefit of the doubt. Keep some back for yourself, eh?", "Caring isn\u2019t the mistake here. Never was."],
+        ask: ["What did you need from them that you didn\u2019t get?", "If they were sitting here, what\u2019s the first thing you\u2019d say?", "Is this a talk-it-out situation, or a let-it-go one?"]
+      },
+      tired: {
+        ack: ["You sound wrung out. Properly, bone-deep.", "Tired. Not \u2018had a late one\u2019 tired. The other kind.", "Your battery\u2019s in the red and you\u2019re still out there being polite to everyone."],
+        nudge: ["Rest isn\u2019t a reward you earn, you daft thing. It\u2019s maintenance.", "I\u2019m ordering you to do absolutely nothing for ten minutes. I\u2019m not a doctor. Do it anyway.", "Even a lantern needs its oil topped up. Nobody calls that weakness."],
+        ask: ["What\u2019s one thing you could put down tonight?", "When did you last do something just because it was nice?", "Is it your body that\u2019s tired, or your head?"]
+      },
+      anxious: {
+        ack: ["That sounds loud in there. All those what-ifs at once.", "Ah, the spiral. It always sounds so sure of itself, doesn\u2019t it?", "That\u2019s a lot of dread to carry round. No wonder you\u2019re worn."],
+        nudge: ["Your brain is brilliant at writing worst cases. Shame it\u2019s rubbish at editing them.", "Feelings aren\u2019t forecasts, love. A grey sky isn\u2019t a prophecy.", "Breathe out slower than you breathe in. Twice. I\u2019ll wait. I\u2019ve nowhere to be."],
+        ask: ["What\u2019s the thing you\u2019re most afraid will happen? Say it out loud, it shrinks.", "Which part is actually yours to deal with tonight, and which part can wait?", "What would you tell a friend who said this to you?"]
+      },
+      sad: {
+        ack: ["I\u2019m sorry, love. That\u2019s a heavy one.", "Some days sit on your chest like wet wool.", "Mm. You don\u2019t have to tidy that up for me."],
+        nudge: ["You don\u2019t have to be fine in here. Fine can wait outside with the crows.", "Sad doesn\u2019t mean broken. It means you\u2019re paying attention.", "Drink your tea. Then, if you like, have a cry. Both are very productive."],
+        ask: ["Do you want me to just sit with you, or help you think it through?", "Has something happened, or has it been building?", "Who in your life could you tell a little of this to?"]
+      },
+      angry: {
+        ack: ["Good. Be furious. It\u2019s a fair reaction to an unfair thing.", "Oh, that would\u2019ve had me kicking a bucket. And I\u2019m a calm man.", "Right, I\u2019m on your side. Tell me all of it. Don\u2019t leave out the rude bits."],
+        nudge: ["Anger is just a love of things being fair that\u2019s had enough.", "You\u2019re allowed to say it badly in here. Nobody\u2019s marking it.", "Say the thing you wish you\u2019d said. Out loud. The kettle\u2019s heard worse."],
+        ask: ["What do you wish had gone differently?", "Is there something you need to say to someone, or just to get out?", "What would fair actually look like here?"]
+      },
+      over: {
+        ack: ["That\u2019s a lot of plates, love. No wonder one\u2019s wobbling.", "Everything at once. That\u2019s how it tends to come.", "You\u2019re juggling the lot and nobody\u2019s said thank you. So: thank you. Now put one down."],
+        nudge: ["You don\u2019t have to solve the whole pile. Just pick up the top thing.", "A graveyard doesn\u2019t get swept in an afternoon. One stone at a time.", "Whatever isn\u2019t on fire can wait until tomorrow."],
+        ask: ["If you could only do one thing tomorrow, what would it be?", "What\u2019s the one item on the list that\u2019s quietly making everything else heavier?", "What can you drop, delay, or hand to somebody else?"]
+      },
+      generic: {
+        ack: ["I hear you.", "Mm. Go on, I\u2019m listening.", "That\u2019s a lot to be holding."],
+        nudge: ["You\u2019re doing better than you think, love. I\u2019m a decent judge. I judge stones for a living.", "Whatever it is, you walked in and said it. That counts for something.", "Not everything has to get fixed tonight. Some things just need saying."],
+        ask: ["How is it sitting with you now you\u2019ve said it out loud?", "What do you need most right now: comfort, or a plan?"]
+      }
+    };
+    let ventTopic = null;
+    const ventStart = (more) => {
+      ventTopic = null;
+      speak({
+        t: more ? pick(["Go on, then.", "And?", "What else is in there?"]) : pick(["Go on. Say it to the kettle if you\u2019d rather. I\u2019m only here to listen.", "Out with it, love. Whatever it is, it\u2019s too heavy to keep carrying round.", "I\u2019ve got all night and a full pot. Tell me."]),
+        n: "What you type stays in this box. It isn\u2019t saved anywhere."
+      }, ({ btn, add }) => {
+        const ta = el("textarea", "width:100%;box-sizing:border-box;min-height:84px;margin-top:10px;padding:9px 10px;border-radius:10px;border:1px solid rgba(255,200,140,0.35);background:rgba(0,0,0,0.3);color:#f6e8d6;font:inherit;font-size:13.5px;line-height:1.45;resize:vertical;");
+        ta.placeholder = "What\u2019s weighing on you?";
+        ta.maxLength = 1500;
+        add(ta);
+        const chips = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:8px;");
+        const chipEls = {};
+        TOPICS.forEach(tp => {
+          const c = el("button", "cursor:pointer;font:inherit;font-size:11.5px;border-radius:999px;padding:4px 10px;border:1px solid rgba(255,200,140,0.35);background:rgba(255,255,255,0.05);color:#f6e8d6;", tp.chip);
+          c.type = "button";
+          c.onclick = () => {
+            ventTopic = ventTopic === tp.id ? null : tp.id;
+            Object.keys(chipEls).forEach(k => { chipEls[k].style.background = k === ventTopic ? "rgba(255,217,138,0.3)" : "rgba(255,255,255,0.05)"; });
+          };
+          chipEls[tp.id] = c; chips.appendChild(c);
+        });
+        add(chips);
+        add(el("div", "font-size:10px;margin-top:9px;color:rgba(243,230,211,0.5);", "Bram\u2019s a cosy character, not a therapist."));
+        btn("Let it out", () => ventReply(ta.value, ventTopic));
+        btn("Back", () => room());
+        setTimeout(() => { try { ta.focus(); } catch {} }, 60);
+      });
+    };
+    const ventReply = (raw, chip) => {
+      const text = String(raw || "").trim();
+      const norm = text.replace(/[\u2018\u2019]/g, "'");       // phones type curly apostrophes
+      if (CRISIS.test(norm)) {                        // he puts the sass down and points to people
+        speak({ t: "Love, I\u2019m putting the sass down for a minute. What you just said sounds really heavy, and I don\u2019t want you holding it alone tonight.",
+          n: "Please reach out to someone who can be with you properly: a person you trust, or a crisis line. If you might act on it or you\u2019re in danger, call your local emergency number now." }, ({ btn, add }) => {
+          const a = el("a", "display:inline-block;margin-top:9px;font-size:12px;color:#ffd98a;text-decoration:underline;", "findahelpline.com lists free lines by country");
+          a.href = "https://findahelpline.com"; a.target = "_blank"; a.rel = "noopener noreferrer";
+          add(a);
+          btn("I\u2019m here, keep going", () => ventStart(true));
+          btn("Back", () => room());
+        });
+        return;
+      }
+      if (!text && !chip) {
+        speak({ t: "Nothing? That\u2019s allowed too. Sit with the tea. Say it when it\u2019s ready." }, ({ btn }) => { btn("Try again", () => ventStart(true)); btn("Back", () => room()); });
+        return;
+      }
+      const hit = TOPICS.find(tp => tp.re.test(norm));
+      const topic = chip || (hit && hit.id) || "generic";
+      const P = VENT[topic] || VENT.generic;
+      speak({ t: pick(P.ack) + " " + pick(P.nudge) }, ({ btn, add }) => {
+        add(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;line-height:1.45;margin-top:9px;color:rgba(255,217,138,0.95);", `Then, gently: \u201C${pick(P.ask)}\u201D`));
+        btn("Keep going", () => ventStart(true));
+        btn("\u{1F525} Put it on the fire", () => {
+          fireBoost();
+          speak({ t: pick(["There. Gone. The smoke takes the worst of it up the chimney.", "Into the fire with you. That\u2019s me done with it, too.", "Burned. Properly. The cat approves."]), n: "Better out than in." }, ({ btn: b2 }) => { b2("Thanks, Bram", () => room()); });
+        });
+        btn("Done for now", () => room({ t: pick(["Good. That\u2019s a weight shifted. Now: something gentler?", "Well said, love. Better? Go on, pick something nice.", "You did well, saying all that. Now. Biscuit? Metaphorical biscuit. What next?"]) }));
+      });
+    };
+
+    // ═════════ 📚 fics: dead ones, ones still going, finished ones, and lines you saved ═════════
+    const titleOf = f => f.title || `Work ${f.workId}`;
+    const quotesOf = f => getLog().filter(e => e && e.quote && String(e.quote).trim() && (String(e.key || "").split("::")[0] === String(f.workId) || (e.title && e.title === f.title)));
+    const clip = s => { s = String(s).replace(/\s+/g, " ").trim(); return s.length > 260 ? s.slice(0, 257) + "\u2026" : s; };
+    const QUOTE_REACT = ["Oh, that line. Yes. I see why you kept it.", "That\u2019s well put. Annoyingly well put.", "You\u2019ve got good taste in sentences, I\u2019ll give you that.", "I\u2019d have underlined that too. In pen. Like a vandal.", "Hm. Read it again. Slower. There.", "That one\u2019s got teeth."];
+    const quoteBlock = (q, who) => {
+      const w = el("div", "text-align:left;margin-top:10px;padding:8px 11px;border-left:3px solid rgba(255,217,138,0.6);background:rgba(255,255,255,0.05);border-radius:0 8px 8px 0;");
+      w.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;line-height:1.5;color:#f6e8d6;overflow-wrap:anywhere;", `\u201C${clip(q)}\u201D`));
+      if (who) w.appendChild(el("div", "font-size:10.5px;margin-top:5px;color:rgba(243,230,211,0.6);", who));
+      return w;
+    };
+    const ficList = () => {
+      const all = getTracked();
+      return {
+        dead: abandonedFics(),
+        alive: all.filter(f => !f.finished && isWip(f)),
+        done: all.filter(f => f.finished),
+        quotes: getLog().filter(e => e && e.quote && String(e.quote).trim())
+      };
+    };
+    const ficLine = (f, kind) => {
+      const tt = `\u2018${titleOf(f)}\u2019`, by = f.author ? ` by ${f.author}` : "";
+      const quiet = daysSince(f.lastUpdate), ago = quiet != null ? gyAgo(quiet) : "a good while";
+      const words = f.words ? `${Number(f.words).toLocaleString()} words` : "";
+      const pool = kind === "dead" ? [
+        `${tt} again? Quiet for ${ago}, and yet here we are, still talking about it.`,
+        `Ah, ${tt}${by}. ${words ? words + " and then" : "And then"} nothing. You never quite let that one go, did you?`,
+        `${ago} since an update. You and I both know you\u2019ll check again next week.`,
+        `${tt}. Dead, but not forgotten. And you\u2019re allowed to leave a fic unfinished, love. Libraries don\u2019t send you a bill.`
+      ] : kind === "alive" ? [
+        `${tt} is still breathing. Updating, even! A fic with manners.`,
+        `${tt}${by} is still going. Do try not to read it all in one sitting. (You will.)`,
+        `Ooh, ${tt}. A living one. Your favourite kind of heartache: the kind with a next chapter.`
+      ] : [
+        `${tt}${by}. Finished! A whole, complete story. I had to sit down.`,
+        `A finished one${words ? ", " + words : ""}, and an actual ending. Rarer than a dry day.`,
+        `${tt}. You read it to the end. I\u2019m proud of you and slightly jealous.`
+      ];
+      return fresh(pool);
+    };
+    const ficDetail = (f) => {
+      const bits = [];
+      if (f.chaptersLabel) bits.push(`chapters ${f.chaptersLabel}`);
+      if (f.currentChapter) bits.push(`you\u2019re up to chapter ${f.currentChapter}`);
+      if (f.words) bits.push(`${Number(f.words).toLocaleString()} words`);
+      const q = daysSince(f.lastUpdate);
+      if (q != null) bits.push(q === 0 ? "updated today" : `last update ${gyAgo(q)} ago`);
+      return bits.join(" \u00B7 ");
+    };
+    let lastFic = null;
+    const ficCard = (f, kind) => {
+      lastFic = f;
+      const qs = quotesOf(f);
+      const line = { t: ficLine(f, kind), n: ficDetail(f) };
+      speak(line, ({ btn, add }) => {
+        if (qs.length) {
+          const q = pick(qs);
+          add(quoteBlock(q.quote, q.chapter ? `${titleOf(f)}, ${q.chapter}` : titleOf(f)));
+          add(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;margin-top:8px;color:#f6e8d6;", `\u201C${pick(QUOTE_REACT)}\u201D`));
+          if (qs.length > 1) btn("Another line", () => ficCard(f, kind));
+        } else {
+          add(el("div", "font-size:11.5px;margin-top:8px;color:rgba(243,230,211,0.6);", "No saved lines from this one yet."));
+        }
+        btn("Another fic", () => ficPick(kind));
+        btn("Back", () => ficMenu());
+      });
+    };
+    const ficPick = kind => {
+      const L = ficList()[kind];
+      if (!L.length) { ficMenu(); return; }
+      let f = pick(L);
+      for (let k = 0; k < 5 && L.length > 1 && f === lastFic; k++) f = pick(L);
+      ficCard(f, kind);
+    };
+    const randomLine = () => {
+      const L = ficList().quotes;
+      if (!L.length) { ficMenu(); return; }
+      const q = pick(L);
+      speak({ t: pick(["Here\u2019s one you kept.", "You saved this one. Good eye.", "Found this in your pile."]) }, ({ btn, add }) => {
+        add(quoteBlock(q.quote, [q.title, q.chapter].filter(Boolean).join(", ")));
+        add(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;margin-top:8px;color:#f6e8d6;", `\u201C${pick(QUOTE_REACT)}\u201D`));
+        if (L.length > 1) btn("Another line", () => randomLine());
+        btn("Back", () => ficMenu());
+      });
+    };
+    const ficMenu = () => {
+      const L = ficList();
+      if (!L.dead.length && !L.alive.length && !L.done.length) {
+        speak({ t: "Your shelf\u2019s empty, love. Add a fic to the tracker and come back, and we\u2019ll have a proper natter." }, ({ btn }) => { btn("Back", () => room()); });
+        return;
+      }
+      speak({ t: pick(["Right, which one are we gossiping about?", "Fics, is it? My favourite subject. Pick a shelf.", "Go on. Dead, alive or finished: I\u2019ve opinions on all three."]) }, ({ btn }) => {
+        if (L.dead.length) btn(`\u{1FAA6} A dead one (${L.dead.length})`, () => ficPick("dead"));
+        if (L.alive.length) btn(`\u{1F331} Still going (${L.alive.length})`, () => ficPick("alive"));
+        if (L.done.length) btn(`\u2728 A finished one (${L.done.length})`, () => ficPick("done"));
+        if (L.quotes.length) btn("\u275D A line you saved", () => randomLine());
+        btn("Back", () => room());
+      });
+    };
+
+    // ═════════ 🃏 tarot: pick one of three face-down cards; one card a day ═════════
+    const DECK = [
+      ["The Fool", "\u{1F0CF}", "A fresh start. Step off the edge with a snack and a plan-ish.", "Leaping without looking. Look first. Briefly."],
+      ["The Magician", "\u2728", "You\u2019ve got everything you need on the table. You only have to use it.", "Scattered tools. Pick one and finish it."],
+      ["The High Priestess", "\u{1F319}", "Trust the quiet knowing. You already sense the answer.", "You\u2019re ignoring your gut. It\u2019s been waving at you."],
+      ["The Empress", "\u{1F33F}", "Comfort, creativity, being looked after. Including by yourself.", "Pouring from an empty pot. Refill first."],
+      ["The Emperor", "\u{1F3F0}", "Structure and boundaries. Decide, and stick to it.", "Too rigid, or too bossed about. Loosen your grip, or take it back."],
+      ["The Hierophant", "\u{1F4DC}", "Tradition, mentors, learning from those who\u2019ve walked it.", "Rules that don\u2019t fit you. Permission to colour outside them."],
+      ["The Lovers", "\u{1F49E}", "A meaningful choice, and staying true to what you value.", "What you say and what you want don\u2019t match. Be honest with yourself."],
+      ["The Chariot", "\u{1F6E1}\uFE0F", "Momentum. Hold the reins and keep going.", "Pulled two ways. Pick a direction, then steer."],
+      ["Strength", "\u{1F981}", "Quiet courage. Gentle isn\u2019t weak.", "Self-doubt. You\u2019re stronger than your inner critic admits."],
+      ["The Hermit", "\u{1F3EE}", "Time alone to find your own light. Pairs well with a good book.", "Isolation creeping in. Open a window. Text someone."],
+      ["Wheel of Fortune", "\u{1F3A1}", "A turn in luck. Things move; they always do.", "A rough patch. Wheels keep turning. It won\u2019t stay down."],
+      ["Justice", "\u2696\uFE0F", "Fairness, honesty, weighing it properly.", "Unfairness, or being unfair to yourself. Check the scales."],
+      ["The Hanged Man", "\u{1F643}", "A pause. A new angle. Nothing wrong with waiting.", "Stalling. Decide or let go; hanging about isn\u2019t free."],
+      ["Death", "\u{1F312}", "An ending that makes room. Not the literal one. I\u2019d tell you.", "Clinging to what\u2019s over. Let it go gently."],
+      ["Temperance", "\u{1FAD6}", "Balance, patience, a bit of everything. Tea, in short.", "Overdoing it. Ease off a notch."],
+      ["The Devil", "\u26D3\uFE0F", "A habit or worry has hold of you. The chain\u2019s looser than it looks.", "Breaking free. Keep going."],
+      ["The Tower", "\u26A1", "A sudden shake-up. Rough, then clearing.", "Putting off the inevitable. Repair what\u2019s worth keeping."],
+      ["The Star", "\u2B50", "Hope and healing. Things are getting better.", "Faith running low. Look up anyway; the stars haven\u2019t gone."],
+      ["The Moon", "\u{1F315}", "Not clear yet. Trust your feet, not your fears.", "Fog lifting. The scary shape was a coat on a hook."],
+      ["The Sun", "\u2600\uFE0F", "Joy, warmth, things going right. Enjoy it without suspicion.", "Cloud cover, not night. It\u2019s still up there."],
+      ["Judgement", "\u{1F4EF}", "A call to rise to something. Forgive your old self.", "Doubt and dodging the call. Listen anyway."],
+      ["The World", "\u{1F30D}", "Completion. You\u2019ve come further than you realise.", "Almost there. Finish the last bit."]
+    ];
+    const spread = () => DECK.map((c, i) => ({ i, k: rnd("tarot" + dayKey + i) })).sort((a, b) => a.k - b.k).slice(0, 3)
+      .map(o => ({ i: o.i, rev: rnd("rev" + dayKey + o.i) < 0.28 }));
+    const cardFace = (c, rev, big) => {
+      const w = el("div", `display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:${big ? 112 : 70}px;height:${big ? 158 : 100}px;border-radius:10px;border:2px solid #d9b26a;background:linear-gradient(160deg,#2a1b3a,#47264f);box-shadow:0 4px 14px rgba(0,0,0,0.5);animation:cotFlip .45s ease-out;`);
+      w.className = "cot-anim";
+      const sym = el("div", `font-size:${big ? 44 : 28}px;line-height:1;${rev ? "transform:rotate(180deg);" : ""}`, c[1]);
+      w.appendChild(sym);
+      w.appendChild(el("div", `font-family:Georgia,'Times New Roman',serif;font-size:${big ? 12 : 9.5}px;color:#ffe2b0;text-align:center;padding:0 4px;line-height:1.2;`, c[0]));
+      return w;
+    };
+    const reveal = idx => {
+      const sp = spread(), s = sp[idx], c = DECK[s.i];
+      const first = !(st.tarot && st.tarot.d === dayKey);
+      if (first) { st.tarot = { d: dayKey, pick: idx }; st.readings = (st.readings || 0) + 1; save(); }
+      const tail = pick(["Don\u2019t take it as gospel. I only read the cards, I don\u2019t write them.", "For entertainment, love. Mostly.", "If it\u2019s rubbish, blame the cat. She shuffled.", "Whatever it says, you\u2019ve handled harder.", "You\u2019re going to be alright. That\u2019s not the cards, that\u2019s me."]);
+      speak({ t: `${c[0]}${s.rev ? ", reversed" : ""}. ${s.rev ? c[3] : c[2]} ${tail}`, n: first ? "That\u2019s your card for today." : "Same card as before. They don\u2019t like being nagged." }, ({ btn, add }) => {
+        const wrap = el("div", "margin-top:10px;");
+        wrap.appendChild(cardFace(c, s.rev, true));
+        add(wrap);
+        btn("Thanks, Bram", () => room());
+      });
+    };
+    const tarotStart = () => {
+      if (st.tarot && st.tarot.d === dayKey && spread()[st.tarot.pick]) { reveal(st.tarot.pick); return; }
+      speak({ t: pick(["Three cards. Pick the one that looks at you funny.", "Go on, then. Don\u2019t overthink it. The cards can tell.", "I don\u2019t believe in it. Mostly. The cards believe in you."]), n: "One card a day. Tap one." }, ({ btn, add }) => {
+        const rowC = el("div", "display:flex;justify-content:center;gap:12px;margin-top:12px;");
+        [0, 1, 2].forEach(i => {
+          const b = el("button", "cursor:pointer;width:70px;height:100px;border-radius:10px;border:2px solid #d9b26a;background:repeating-linear-gradient(45deg,#2a1b3a,#2a1b3a 6px,#38214a 6px,#38214a 12px);color:#ffe2b0;font-size:22px;box-shadow:0 4px 14px rgba(0,0,0,0.5);", "\u2726");
+          b.type = "button";
+          b.onclick = () => reveal(i);
+          rowC.appendChild(b);
+        });
+        add(rowC);
+        btn("Back", () => room());
+      });
+    };
+
+    document.body.appendChild(back);
+    teaMenu(true);                                      // he opens by offering you a cup
+  }
+
   // ── 🪦 GRAVEYARD GROUNDS ──
   // An expansion of the fic graveyard: a walkable night-time cemetery map. A winding cobbled path
   // runs from the iron gate down past five plots (Long Lives, Almost There, Gone Too Soon,
@@ -4197,7 +4765,7 @@ try {
       ];
       cotHit.addEventListener("click", () => {
         if (mode === "inside") talk(solved() ? { t: pick(RAIN_LINES), n: "A pen scratches somewhere behind him." } : { t: pick(RAIN_LINES) });
-        else say(pick(["Bram\u2019s cottage. The kettle is always on.", "The cottage sits dark and quiet. He\u2019ll be back by the lamps.", "A tidy little cottage. The roof only leaks in one corner."]));
+        else bramCard({ t: pick(["The door\u2019s on the latch. Come in if you like.", "Kettle\u2019s on. Come in, come in.", "A tidy little cottage. The roof only leaks in one corner."]) }, ({ btn }) => { btn("\u{1F6AA} Step inside", () => { closeCard(); openBramCottage(); }); btn("Close", closeCard); });
       });
 
       // ── the figure: facing flips with the walk, items swap with the job ──
@@ -4444,6 +5012,7 @@ try {
         btn("\u{1F9ED} Errands", () => errandsMenu());
         btn("\u{1F337} Gift", () => giftMenu());
         btn("\u2726 Tip jar", () => tipMenu());
+        btn("\u{1F3E0} Cottage", () => { closeCard(); openBramCottage(); });
         btn("Who are you?", () => storyMenu());
         btn("Close", closeCard);
       });
