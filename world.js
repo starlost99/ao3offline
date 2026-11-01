@@ -6250,8 +6250,8 @@ window.__ao3WorldInit = function (core) {
       const score = c => 0.6 * c[1] + 0.8 * (left ? -c[0] : c[0]);
       return [score(c1) >= score(c2) ? c1 : c2, [S[0] + dx, S[1] + dy]];
     };
-    const drawArm = (g, who, left, T, sx, dy, bendProp) => {
-      const F = FIG[who], isA = who === "a", S = left ? F.sl : F.sr;
+    const drawArm = (g, who, left, T, sx, dy, bendProp, Sov) => {
+      const F = FIG[who], isA = who === "a", S = Sov || (left ? F.sl : F.sr);
       const [E, Hd] = solveArm(S, T, F.u, F.f, left);
       const w = isA ? 10.6 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
       seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
@@ -7014,7 +7014,7 @@ window.__ao3WorldInit = function (core) {
       ["m", "I’ll share it. I’ll always share it. Even the good popcorn.", { b: { mood: "smile", blush: true } }],
       ["w", "Even the good popcorn? Mike. That’s practically a vow.", { a: { eyes: "happy", mood: "smile" } }],
       ["m", "It’s a vow.", { hearts: 2 }],
-      ["n", "Will lets his head rest on Mike’s shoulder. Mike stops breathing for a second, then very carefully doesn’t move.", Object.assign({ front: "a", hearts: 3, a: { sx: 14, head: [9, 4, 12], mood: "calm", eyes: "happy", blush: true, R: FI_CL[0] }, b: { head: [-1, 3, -4], mood: "calm", blush: true, L: FI_CL[1] } })]] },
+      ["n", "Will lets his head rest on Mike’s shoulder. Mike stops breathing for a second, then very carefully doesn’t move.", Object.assign({ front: "a", hearts: 3, a: { sx: 14, lean: 9, head: [2, 3, 7], mood: "calm", eyes: "happy", blush: true, R: FI_CL[0] }, b: { head: [-1, 3, -4], mood: "calm", blush: true, L: FI_CL[1] } })]] },
     { name: "the best part", beats: [
       ["w", "Can I tell you something dumb?", { a: { mood: "calm", look: 0.5, lookY: 1 } }],
       ["m", "Nothing you say is dumb. Rule of the fort.", { b: { mood: "smile" } }],
@@ -7029,7 +7029,7 @@ window.__ao3WorldInit = function (core) {
       ["n", "The movie ended an hour ago. Will’s eyes keep closing.", { a: { mood: "calm", look: 0 } }],
       ["w", "I’m awake. I’m just resting my eyes. Very… actively.", { a: { eyes: "closed" } }],
       ["m", "Sure. Very actively.", { b: { mood: "smirk" } }],
-      ["w", "Mm. You’re warm.", { a: { sx: 11, head: [9, 4, 14], mood: "smile" }, front: "a", hearts: 1 }],
+      ["w", "Mm. You’re warm.", { a: { sx: 11, lean: 9, head: [2, 3, 7], mood: "smile" }, front: "a", hearts: 1 }],
       ["m", "I’m basically a heater. You’re welcome.", { b: { mood: "smile", blush: true, head: [-1, 3, -4] } }],
       ["w", "Stay like this a bit?", { a: { blush: true } }],
       ["m", "As long as you want. I’ll tell Dustin the fort is closed for renovations.", { b: { mood: "grin" } }],
@@ -7153,17 +7153,21 @@ window.__ao3WorldInit = function (core) {
       clear(F.b1); clear(F.b2);
       const tr = `translate(${(F.cx + (p.sx || 0)).toFixed(1)} ${(F.sy + (p.dy || 0)).toFixed(1)}) scale(${F.s})`;
       F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr);
-      (isA ? torsoA : torsoB)(F.b1);
+      // leaning: the whole upper body (torso, neck, head) tips about the hips, so the head stays on its neck; the arms' shoulders follow
+      const lean = p.lean || 0, la = lean * Math.PI / 180, lc = Math.cos(la), ls = Math.sin(la);
+      const tg = sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1);
+      const shoulder = left => { const S = left ? F.sl : F.sr, rx = S[0], ry = S[1] - 58; return [rx * lc - ry * ls, rx * ls + ry * lc + 58]; };
+      (isA ? torsoA : torsoB)(tg);
       const cx = F.cx + (p.sx || 0), cy = F.sy + (p.dy || 0), toLocal = t => [(t[0] - cx) / F.s, (t[1] - cy) / F.s];
       const mouth = () => [cx + (p.head[0] + (isA ? 0 : 0)) * F.s, cy + ((isA ? -13.6 : -17.4) + p.head[1] + 3) * F.s];
       const hand = (left, t) => {
-        if (t === "lap") { drawArm(F.b1, key, left, [left ? -17 : 17, 50]); return; }
+        if (t === "lap") { drawArm(F.b1, key, left, [left ? -17 : 17, 50], 0, 0, 0, shoulder(left)); return; }
         if (t === "mouth") t = mouth();
-        const Hd = drawArm(F.b2, key, left, toLocal(t));
+        const Hd = drawArm(F.b2, key, left, toLocal(t), 0, 0, 0, shoulder(left));
         if (t[2]) prop(F.b2, t[2], Hd[0], Hd[1]);
       };
       hand(false, p.R || "lap"); hand(true, p.L || "lap");
-      (isA ? headA : headB)(F.b1, p);
+      (isA ? headA : headB)(tg, p);
     };
     // ── foreground: popcorn, comics, flashlight with its beam, walkie-talkie; fairy lights and pom-poms along the edges ──
     const beamG = sv("g", {}, svg);
