@@ -5535,7 +5535,7 @@ window.__ao3WorldInit = function (core) {
   // takes you back to Hollowbrook.
   //  · openHawkins(arrive)  the map. arrive = true plays the short bus ride in first (tap to skip).
   //  · openWheelers()       the front of the house: Mike's lit window, the glowing basement window (the way in), weather and season.
-  //  · openBasement()       through the window well: a table, a map, a radio, the stairs up.
+  //  · openBasement()       through the window well: a D&D table (campaign map, dice, minis) with two small figures sitting close, in a different pose each visit; the stairs up.
   // Same night / dusk / dawn switch as the village and the grounds (the "tm" value in ao3-gg-prefs).
   // Nothing in here saves anything except that one time-of-day value.
 
@@ -5587,6 +5587,8 @@ window.__ao3WorldInit = function (core) {
         @keyframes hkTwinkle{0%,100%{opacity:.35}50%{opacity:1}}
         @keyframes hkWave{0%,100%{transform:rotate(-16deg)}50%{transform:rotate(20deg)}}
         @keyframes hkRing{0%{opacity:.8;transform:scale(.4)}100%{opacity:0;transform:scale(2.6)}}
+        @keyframes hkBreathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.1px)}}
+        @keyframes hkBlink{0%,93%,100%{transform:scaleY(1)}96.5%{transform:scaleY(.08)}}
         @keyframes hkFirefly{0%,100%{opacity:.1;transform:translate(0,0)}25%{opacity:1;transform:translate(8px,-7px)}50%{opacity:.3;transform:translate(-5px,-14px)}75%{opacity:1;transform:translate(7px,-5px)}}
         @media (prefers-reduced-motion: reduce){.hk-anim{animation:none !important}}
       `;
@@ -6227,14 +6229,58 @@ window.__ao3WorldInit = function (core) {
     later(() => { if (entering) return; if (caption.textContent === openLine) say("Somebody waves from Mike\u2019s window, then points down at the basement."); wave(); }, 1100);   // somebody has seen you coming
   }
 
-  // ── the Wheelers' basement (reached through the window well; a small first pass: a table, a map, a radio, the stairs up) ──
+  // ── the Wheelers' basement (reached through the window well) ──
+  // A D&D table under a hanging lamp: a hand-drawn campaign map, dice, little painted minis, snacks and a walkie-talkie,
+  // with two small figures sitting shoulder to shoulder behind it. The one on the left has a straight-fringed bowl cut and a
+  // plaid flannel over a grey thermal; the one on the right is taller, with long dark curls and a teal pullover with grey
+  // shoulder panels and a pocket. They sit in a different pose each visit: the last pose is remembered under "ao3-bs-pose"
+  // (the only thing the basement saves), so you never get the same one twice running. Tap either of them to make them shift.
+  // Tap the die to roll it; the little minis, the map, the snacks and the walkie-talkie all say something too.
+  const BS_POSE_KEY = "ao3-bs-pose";
+  // Each pose: a = the one on the left, b = the one on the right. sx/dy shift the body (px), head = [dx, dy, tilt°] (local units),
+  // L/R = where each hand goes on the canvas [x, y, prop?] or "lap" (hidden under the table), cross = arms folded.
+  const BS_POSES = [
+    { say: "Shoulder to shoulder, heads together over the map. Somebody is about to make a very bad decision.",
+      a: { sx: 1, head: [3, 1, 5], mood: "smile", look: 1, lookY: 1, L: [128, 344], R: [196, 342] },
+      b: { sx: 0, head: [-2, 2, -5], mood: "o", look: -1, lookY: 1, L: [210, 339], R: [236, 344] } },
+    { say: "One of them has his arms folded. The other is explaining the plan again.",
+      a: { sx: 2, head: [2, 0, -4], mood: "smirk", look: 1, cross: true },
+      b: { sx: -2, head: [-4, 1, -8], mood: "o", look: -1, lookY: 0.4, L: "lap", R: "lap" } },
+    { say: "A roll is about to happen. Nobody is breathing.",
+      a: { head: [1, 1, 3], mood: "grin", look: 1, lookY: 1, L: [140, 288], R: [156, 288] },
+      b: { sx: -2, head: [4, -1, 5], mood: "grin", look: 0, lookY: 1, L: [200, 348], R: [252, 318, "die"] } },
+    { say: "A whisper. Whatever it was, the other one is trying very hard not to laugh.",
+      a: { sx: 1, head: [2, 1, 6], mood: "grin", eyes: "happy", look: 1, L: [128, 346], R: [160, 283] },
+      b: { sx: 0, head: [-4, 3, -10], mood: "o", look: -1.5, L: [188, 270], R: [238, 348] } },
+    { say: "A small tin hero is walking across the map, with sound effects.",
+      a: { head: [-1, 0, -4], mood: "grin", look: -1, L: [124, 331, "mini"], R: [168, 346] },
+      b: { sx: -1, head: [2, 2, 5], mood: "smile", look: -1, lookY: 1, L: [193, 278], R: [238, 346] } },
+    { say: "Heads down over the character sheet. The pencil is doing most of the talking.",
+      a: { sx: 2, head: [3, 6, 10], mood: "neutral", look: 0.5, lookY: 1.8, L: [137, 344, "pencil"], R: [168, 345] },
+      b: { sx: -2, head: [-3, 6, -9], mood: "neutral", look: 0, lookY: 1.8, L: [190, 268], R: [236, 346] } },
+    { say: "One of them has fallen asleep against the other’s shoulder. The other is quietly working the walkie-talkie.",
+      front: "a",
+      a: { sx: 6, head: [8, 3, 15], mood: "calm", eyes: "closed", L: "lap", R: "lap" },
+      b: { sx: -2, head: [-1, -1, -4], mood: "o", look: 0.5, L: "lap", R: [226, 280, "walkie"] } },
+    { say: "A natural twenty! The whole table erupts.", die: 20, cheer: true,
+      a: { head: [0, -3, 0], mood: "cheer", eyes: "happy", L: [110, 262], R: [180, 254] },
+      b: { head: [0, -3, -3], mood: "cheer", eyes: "happy", L: [183, 250], R: [252, 254] } },
+    { say: "Snack break. Strictly speaking, the popcorn is part of the map.",
+      a: { sx: -2, head: [-3, 1, -6], mood: "smile", look: -1.2, lookY: 0.8, L: [104, 345], R: [170, 346] },
+      b: { sx: 2, head: [4, 0, 6], mood: "smile", look: -1, L: "lap", R: [238, 342, "can"] } },
+    { say: "A disagreement about the rules. The rulebook is being consulted, slowly.",
+      a: { head: [0, 0, -5], mood: "smirk", look: 1, L: [104, 314], R: [182, 312] },
+      b: { head: [3, 0, 8], mood: "o", look: -1, L: [166, 306], R: "lap" } }
+  ];
+
   function openBasement() {
     const sh = hkShell("ao3-basement", "\u{1F3B2} The basement");
     const { sv, rnd, anim } = sh.kit;
-    const { sub, field, caption, pill, close } = sh;
+    const { sub, field, caption, pill, close, later } = sh;
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hits = [];
-    let nTable = 0, nDie = 0, nCouch = 0;
+    let nTable = 0, nCouch = 0, nMap = 0, nMini = 0, nSnack = 0, nPoster = 0;
     sh.box.style.background = "#241a26";
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
     svg.style.cssText = "width:100%;height:auto;display:block;";
@@ -6242,13 +6288,31 @@ window.__ao3WorldInit = function (core) {
     const glow = sv("radialGradient", { id: "bs-glow" }, defs);
     sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.85" }, glow);
     sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
+    const cone = sv("linearGradient", { id: "bs-cone", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.26" }, cone);
+    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0.03" }, cone);
+    const vig = sv("radialGradient", { id: "bs-vig", cx: "50%", cy: "52%", r: "75%" }, defs);
+    sv("stop", { offset: "55%", "stop-color": "#0a060e", "stop-opacity": "0" }, vig);
+    sv("stop", { offset: "100%", "stop-color": "#0a060e", "stop-opacity": "0.6" }, vig);
+    // the flannel: tan with blue bands and thin orange lines
+    const plaid = sv("pattern", { id: "bs-plaid", width: 12, height: 12, patternUnits: "userSpaceOnUse" }, defs);
+    sv("rect", { width: 12, height: 12, fill: "#b9a27c" }, plaid);
+    sv("rect", { x: 0, y: 0, width: 12, height: 4.2, fill: "#5d82b4", opacity: 0.8 }, plaid);
+    sv("rect", { x: 0, y: 0, width: 4.2, height: 12, fill: "#5d82b4", opacity: 0.8 }, plaid);
+    sv("rect", { x: 7.4, y: 0, width: 1.4, height: 12, fill: "#d9803a", opacity: 0.95 }, plaid);
+    sv("rect", { x: 0, y: 7.4, width: 12, height: 1.4, fill: "#d9803a", opacity: 0.95 }, plaid);
+    const mapClip = sv("clipPath", { id: "bs-mapclip" }, defs);
+    sv("polygon", { points: "112,331 248,331 270,366 90,366" }, mapClip);
+
+    // ── the room ──
     sv("rect", { x: 0, y: 0, width: W, height: 330, fill: "#3b2a34" }, svg);                                      // the back wall, with wood panelling
     for (let x = 0; x < W; x += 20) sv("path", { d: `M${x} 40 V330`, stroke: "#2c1f29", "stroke-width": 1, opacity: 0.7 }, svg);
     sv("rect", { x: 0, y: 0, width: W, height: 40, fill: "#1b1320" }, svg);                                       // the low ceiling
     sv("rect", { x: 0, y: 36, width: W, height: 6, fill: "#2c2028" }, svg);
+    sv("rect", { x: 0, y: 322, width: W, height: 8, fill: "#2c1f29" }, svg);                                      // skirting board
     sv("rect", { x: 0, y: 330, width: W, height: 210, fill: "#2a2030" }, svg);                                     // the carpet, and a rug under the table
-    sv("rect", { x: 34, y: 372, width: 292, height: 130, rx: 10, fill: "#5a2f4a" }, svg);
-    sv("rect", { x: 42, y: 380, width: 276, height: 114, rx: 8, fill: "none", stroke: "#8a5a6a", "stroke-width": 1.4, "stroke-dasharray": "6 5" }, svg);
+    sv("rect", { x: 22, y: 352, width: 316, height: 150, rx: 10, fill: "#5a2f4a" }, svg);
+    sv("rect", { x: 30, y: 360, width: 300, height: 134, rx: 8, fill: "none", stroke: "#8a5a6a", "stroke-width": 1.4, "stroke-dasharray": "6 5" }, svg);
     // the high window you came through, showing the sky outside
     const sky = { night: "#18203a", dusk: "#8a4a62", dawn: "#6e75b0" }[HK_TIMES[hkTimeGet()].name];
     sv("rect", { x: 22, y: 68, width: 70, height: 30, fill: "#cfc9dc" }, svg);
@@ -6265,6 +6329,17 @@ window.__ao3WorldInit = function (core) {
       sv("rect", { x: sx, y: sy + 28, width: 112, height: 4, fill: "#4a3326" }, svg);
       for (let i = 0; i < 7; i++) { const bh = 18 + rnd("bk" + r + i) * 8; sv("rect", { x: sx + 4 + i * 15, y: sy + 28 - bh, width: 12, height: bh, fill: ["#c9482e", "#3f7fd0", "#e0a032", "#4a8a5a", "#8a4a9a"][(i + r) % 5], opacity: 0.85 }, svg); }
     });
+    // two things pinned to the wall: a scribbled dungeon plan, and a crayon dragon
+    const plan = sv("g", {}, svg);
+    sv("polygon", { points: "140,104 172,102 174,142 142,144", fill: "#d8c9a0" }, plan);
+    sv("path", { d: "M147 112 H166 V122 H158 V134 H147 Z M158 122 H168 M150 138 H165", stroke: "#5a4a3a", "stroke-width": 1, fill: "none" }, plan);
+    sv("circle", { cx: 156, cy: 104, r: 1.6, fill: "#c9482e" }, plan);
+    const crayon = sv("g", {}, svg);
+    sv("polygon", { points: "196,108 238,110 236,154 197,152", fill: "#efe8d6" }, crayon);
+    sv("path", { d: "M204 140 Q210 126 220 130 Q228 122 232 114 M220 130 Q226 138 232 136 M204 140 Q214 146 228 142", stroke: "#4a8a5a", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, crayon);
+    sv("circle", { cx: 230, cy: 118, r: 1.2, fill: "#c9482e" }, crayon);
+    sv("path", { d: "M233 113 q6 -2 8 -8 M233 116 q5 3 9 0", stroke: "#e0a032", "stroke-width": 1.8, fill: "none", "stroke-linecap": "round" }, crayon);
+    sv("circle", { cx: 217, cy: 108, r: 1.6, fill: "#3f7fd0" }, crayon);
     // lights along the ceiling beam
     const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
     sv("path", { d: "M0 46 Q90 72 180 46 Q270 72 360 46", stroke: "#2a1d1a", "stroke-width": 1, fill: "none" }, svg);
@@ -6273,42 +6348,304 @@ window.__ao3WorldInit = function (core) {
       sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 5, fill: col, opacity: 0.2 }, svg);
       anim(sv("circle", { cx: bx.toFixed(1), cy: by.toFixed(1), r: 1.8, fill: col }, svg), `animation:hkTwinkle ${(1.6 + rnd("bt" + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("bu" + i) * 3).toFixed(1)}s infinite;`);
     }
-    // the table: a hand-drawn map, a die, a few little figures, a walkie-talkie, and a lamp hanging over it
-    sv("path", { d: "M180 40 V176", stroke: "#14111f", "stroke-width": 1.4 }, svg);
-    sv("polygon", { points: "160,176 200,176 212,192 148,192", fill: "#3a2a1a" }, svg);
-    anim(sv("circle", { cx: 180, cy: 250, r: 120, fill: "url(#bs-glow)", opacity: 0.4 }, svg), "animation:hkFlicker 4s ease-in-out infinite;");
-    sv("polygon", { points: "72,300 288,300 312,336 48,336", fill: "#6b4630" }, svg);
-    sv("rect", { x: 48, y: 336, width: 264, height: 8, fill: "#4a2f1e" }, svg);
-    sv("rect", { x: 60, y: 344, width: 8, height: 40, fill: "#3a2418" }, svg); sv("rect", { x: 292, y: 344, width: 8, height: 40, fill: "#3a2418" }, svg);
-    sv("polygon", { points: "100,306 232,306 244,330 88,330", fill: "#d8c9a0" }, svg);                           // the map
-    sv("path", { d: "M104 322 Q130 310 150 320 T196 316 T236 322 M120 313 l8 5 l8 -5 M176 326 q10 -8 20 0", stroke: "#5a4a3a", "stroke-width": 1.1, fill: "none" }, svg);
-    sv("path", { d: "M206 312 l8 8 M214 312 l-8 8", stroke: "#c9482e", "stroke-width": 1.6 }, svg);
-    [[132, 324, "#3f7fd0"], [146, 320, "#c9482e"], [160, 325, "#4a8a5a"], [172, 320, "#e0a032"]].forEach(([mx, my, mc]) => { sv("ellipse", { cx: mx, cy: my + 1, rx: 4, ry: 1.4, fill: "#000", opacity: 0.3 }, svg); sv("path", { d: `M${mx - 3} ${my} L${mx} ${my - 9} L${mx + 3} ${my} Z`, fill: mc }, svg); });
-    sv("polygon", { points: "262,320 270,314 278,320 276,328 264,328", fill: "#e6dcf5", stroke: "#8a86a0", "stroke-width": 0.8 }, svg);   // the die
-    sv("rect", { x: 250, y: 296, width: 14, height: 22, rx: 2, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.8 }, svg);      // the walkie-talkie
-    sv("path", { d: "M254 296 V284", stroke: "#4a4a5a", "stroke-width": 1.4 }, svg);
-    sv("rect", { x: 253, y: 301, width: 8, height: 5, fill: "#7a8a6a" }, svg);
-    // the couch on the left
-    sv("rect", { x: 10, y: 388, width: 104, height: 44, rx: 8, fill: "#6a3a4a" }, svg);
-    sv("rect", { x: 10, y: 360, width: 104, height: 36, rx: 8, fill: "#7a4658" }, svg);
-    sv("path", { d: "M62 392 V430", stroke: "#4a2634", "stroke-width": 1.2 }, svg);
-    sv("path", { d: "M18 404 Q40 396 60 408 L60 426 L18 426 Z", fill: "#3f7a6a", opacity: 0.85 }, svg);               // a blanket
+    // the couch, on the left (half out of the picture)
+    sv("rect", { x: -30, y: 340, width: 92, height: 40, rx: 8, fill: "#7a4658" }, svg);
+    sv("rect", { x: -30, y: 372, width: 100, height: 46, rx: 8, fill: "#6a3a4a" }, svg);
+    sv("path", { d: "M20 376 V416", stroke: "#4a2634", "stroke-width": 1.2 }, svg);
+    sv("path", { d: "M-6 388 Q16 378 36 392 L36 412 L-6 412 Z", fill: "#3f7a6a", opacity: 0.85 }, svg);               // a blanket
+    // the lamp hanging over the table, and its cone of light
+    sv("polygon", { points: "168,200 192,200 292,380 68,380", fill: "url(#bs-cone)" }, svg);
+    anim(sv("circle", { cx: 180, cy: 270, r: 130, fill: "url(#bs-glow)", opacity: 0.32 }, svg), "animation:hkFlicker 4s ease-in-out infinite;");
+    sv("path", { d: "M180 40 V172", stroke: "#14111f", "stroke-width": 1.4 }, svg);
+    sv("polygon", { points: "157,198 203,198 193,172 167,172", fill: "#3a2a1a" }, svg);
+    sv("ellipse", { cx: 180, cy: 198, rx: 23, ry: 3.4, fill: "#ffe3a0" }, svg);
+    sv("circle", { cx: 180, cy: 199, r: 3, fill: "#fff6d8" }, svg);
+
+    // ── the two at the table ──
+    const SKIN_A = "#ecc6a6", SKIN_B = "#e7c0a1", TEAL = "#2c8aa6", TEAL_D = "#1f6a82", GREY = "#5e6770", THERMAL = "#aab0bb";
+    const FIG = {
+      a: { cx: 146, sy: 292, s: 1.25, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] },
+      b: { cx: 210, sy: 286, s: 1.25, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] }
+    };
+    const bodyL = sv("g", {}, svg);                         // the bodies and heads, behind the table
+    // the table
+    sv("ellipse", { cx: 180, cy: 424, rx: 142, ry: 14, fill: "#000", opacity: 0.28 }, svg);
+    [[72, 378, 7, 48], [281, 378, 7, 48]].forEach(([lx, ly, lw, lh]) => sv("rect", { x: lx, y: ly, width: lw, height: lh, fill: "#3a2418" }, svg));
+    sv("polygon", { points: "90,324 270,324 300,372 60,372", fill: "#6b4630" }, svg);                             // the top
+    sv("polygon", { points: "90,324 270,324 272,327 88,327", fill: "#82583c" }, svg);
+    sv("rect", { x: 60, y: 372, width: 240, height: 10, fill: "#4a2f1e" }, svg);
+    sv("path", { d: "M100 340 L72 340 M270 338 L292 338 M96 358 H66 M268 358 H296", stroke: "#5a3a26", "stroke-width": 0.8, opacity: 0.8 }, svg);
+    // the campaign map
+    sv("polygon", { points: "112,331 248,331 270,366 90,366", fill: "#d8c9a0", stroke: "#a88a58", "stroke-width": 1 }, svg);
+    const mp = sv("g", { "clip-path": "url(#bs-mapclip)" }, svg);
+    sv("path", { d: "M112 331 L140 331 Q134 338 138 344 Q126 348 118 352 L90 352 Z", fill: "#9bb5b0", opacity: 0.8 }, mp);        // the sea, and its coast
+    sv("path", { d: "M140 331 Q134 338 138 344 Q126 348 118 352", stroke: "#6a8a8a", "stroke-width": 0.8, fill: "none" }, mp);
+    sv("path", { d: "M114 337 q3 -2 6 0 t6 0 M120 345 q3 -2 6 0", stroke: "#6a8a8a", "stroke-width": 0.6, fill: "none", opacity: 0.8 }, mp);
+    for (let i = 0; i < 10; i++) { const fx = 150 + rnd("mf" + i) * 30, fy = 336 + rnd("mg" + i) * 8; sv("circle", { cx: fx.toFixed(1), cy: fy.toFixed(1), r: 1.7, fill: i % 2 ? "#5a7a4a" : "#6a8a52" }, mp); }   // the forest
+    [[198, 338], [205, 335.6], [212, 338.4], [219, 335.8], [226, 338]].forEach(([mx, my]) => { sv("path", { d: `M${mx - 5} ${my + 4} L${mx} ${my - 4} L${mx + 5} ${my + 4} Z`, fill: "#a8987a", stroke: "#6a5238", "stroke-width": 0.5 }, mp); sv("path", { d: `M${mx - 1.6} ${my - 1.6} L${mx} ${my - 4} L${mx + 1.6} ${my - 1.6} Z`, fill: "#f4efe0" }, mp); });
+    sv("path", { d: "M198 342 Q188 348 194 354 T180 366", stroke: "#7fa0b8", "stroke-width": 1.7, fill: "none", "stroke-linecap": "round" }, mp);   // the river
+    sv("ellipse", { cx: 234, cy: 357, rx: 8, ry: 3, fill: "#7fa0b8" }, mp);                                            // a lake
+    [[152, 342], [158, 343.5], [155, 345.5]].forEach(([tx, ty]) => { sv("rect", { x: tx - 1.4, y: ty - 1, width: 2.8, height: 2.2, fill: "#8a4a3a" }, mp); sv("path", { d: `M${tx - 1.9} ${ty - 1} L${tx} ${ty - 2.8} L${tx + 1.9} ${ty - 1} Z`, fill: "#4a2a30" }, mp); });   // a town
+    sv("rect", { x: 236, y: 336, width: 11, height: 6, fill: "#9a8a7a", stroke: "#5a4a3a", "stroke-width": 0.5 }, mp);                 // a castle
+    [236, 240, 244].forEach(cx => sv("rect", { x: cx, y: 334, width: 2.6, height: 2.4, fill: "#9a8a7a", stroke: "#5a4a3a", "stroke-width": 0.4 }, mp));
+    sv("path", { d: "M155 346 Q170 340 186 345 T202 343", stroke: "#a83a2a", "stroke-width": 0.9, "stroke-dasharray": "2 2", fill: "none" }, mp);   // the planned route
+    sv("path", { d: "M180 331 V366 M112 348 H270", stroke: "#a88a58", "stroke-width": 0.7, opacity: 0.35 }, mp);     // fold lines
+    sv("path", { d: "M200.4 338.8 l7.2 7.2 M207.6 338.8 l-7.2 7.2", stroke: "#c9482e", "stroke-width": 1.8, "stroke-linecap": "round" }, mp);   // the X
+    sv("path", { d: "M255 354 V364 M250 359 H260 M251.5 355.5 L258.5 362.5 M258.5 355.5 L251.5 362.5", stroke: "#6a5238", "stroke-width": 0.6, fill: "none" }, mp);   // compass rose
+    const nTxt = sv("text", { x: 255, y: 353, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 3.4, fill: "#6a5238" }, mp); nTxt.textContent = "N";
+    const mTxt = sv("text", { x: 176, y: 334.6, "text-anchor": "middle", "font-family": "Georgia,serif", "font-style": "italic", "font-size": 3.6, "letter-spacing": 0.5, fill: "#6a5238", opacity: 0.85 }, mp); mTxt.textContent = "THE VALE OF ASH";
+    sv("polygon", { points: "112,331 248,331 270,366 90,366", fill: "none", stroke: "#8a6a3a", "stroke-width": 2.4, opacity: 0.3 }, mp);
+    // a character sheet and a pencil
+    sv("polygon", { points: "100,350 134,348 138,364 102,367", fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, svg);
+    sv("path", { d: "M106 354 L128 353 M107 357.5 L130 356.5 M108 361 L124 360 M115 355 v8", stroke: "#6a6a7a", "stroke-width": 0.7, fill: "none", opacity: 0.8 }, svg);
+    // the minis
+    const mini = (g, x, y, col, kind, sc) => {
+      const M = sv("g", { transform: `translate(${x} ${y}) scale(${sc || 1})` }, g);
+      sv("ellipse", { cx: 0, cy: 1.2, rx: 4.3, ry: 1.7, fill: "#1a120c", opacity: 0.55 }, M);
+      sv("ellipse", { cx: 0, cy: 0, rx: 3.8, ry: 1.4, fill: "#4a4a58" }, M);
+      sv("path", { d: "M-2.8 0 L-1.4 -8 L1.4 -8 L2.8 0 Z", fill: col }, M);
+      sv("circle", { cx: 0, cy: -9.4, r: 2.2, fill: kind === "goblin" ? "#7aa05a" : "#e8c4a8" }, M);
+      if (kind === "wizard") { sv("path", { d: "M-3.4 -10.6 L3.4 -10.6 L0.6 -19 Z", fill: col }, M); sv("path", { d: "M3.4 -1 L4 -14", stroke: "#8a6a3a", "stroke-width": 0.9 }, M); sv("circle", { cx: 4, cy: -14.6, r: 1, fill: "#7ad6ff" }, M); }
+      else if (kind === "knight") { sv("path", { d: "M-2.7 -9.6 Q0 -14.4 2.7 -9.6 Z", fill: "#9aa0ae" }, M); sv("path", { d: "M3.6 -2 L3.6 -12", stroke: "#cfd4de", "stroke-width": 0.9 }, M); }
+      else if (kind === "rogue") { sv("path", { d: "M-2.8 -9.2 Q0 -14 2.8 -9.2 Z", fill: "#2a2a36" }, M); sv("path", { d: "M-3.6 -3 L-3.6 -8", stroke: "#cfd4de", "stroke-width": 0.8 }, M); }
+      else if (kind === "cleric") { sv("ellipse", { cx: 0, cy: -12.8, rx: 2.8, ry: 0.8, fill: "none", stroke: "#e0b032", "stroke-width": 0.7 }, M); }
+      else if (kind === "goblin") { sv("polygon", { points: "-2,-10 -5,-12 -2.4,-8.6", fill: "#7aa05a" }, M); sv("polygon", { points: "2,-10 5,-12 2.4,-8.6", fill: "#7aa05a" }, M); }
+      return M;
+    };
+    const party = sv("g", {}, svg);
+    mini(party, 146, 352, "#c9482e", "knight"); mini(party, 158, 348, "#3f7fd0", "wizard"); mini(party, 170, 353, "#4a8a5a", "rogue"); mini(party, 182, 348, "#e0a032", "cleric");
+    const foes = sv("g", {}, svg);
+    mini(foes, 214, 352, "#4a7a3a", "goblin"); mini(foes, 226, 347.5, "#5a8a42", "goblin");
+    // the dragon, the best-painted thing in the house
+    const dr = sv("g", { transform: "translate(246 348)" }, svg);
+    sv("ellipse", { cx: 0, cy: 2, rx: 11, ry: 2.6, fill: "#1a120c", opacity: 0.5 }, dr);
+    sv("ellipse", { cx: 0, cy: 0.6, rx: 10, ry: 2.5, fill: "#4a4a58" }, dr);
+    sv("path", { d: "M-6 -3 Q-14 -2 -13 -10 Q-9 -6 -5 -6 Z", fill: "#2f7a3e" }, dr);
+    sv("path", { d: "M-2 -9 L-9 -21 L-3 -16.5 L0 -23 L3 -12 Z", fill: "#2d6a3a", stroke: "#1f4a2a", "stroke-width": 0.5 }, dr);
+    sv("ellipse", { cx: 0, cy: -6.5, rx: 6.8, ry: 4.6, fill: "#3f8a4a" }, dr);
+    sv("ellipse", { cx: 1, cy: -4.6, rx: 3.6, ry: 2.2, fill: "#c9d68a", opacity: 0.85 }, dr);
+    sv("path", { d: "M3 -8.6 Q7.4 -12.6 7.2 -16.6", stroke: "#3f8a4a", "stroke-width": 3.6, fill: "none", "stroke-linecap": "round" }, dr);
+    sv("ellipse", { cx: 9, cy: -17.8, rx: 3.8, ry: 2.4, fill: "#3f8a4a" }, dr);
+    sv("circle", { cx: 9.8, cy: -18.4, r: 0.65, fill: "#ffd98a" }, dr);
+    sv("polygon", { points: "6,-19.6 5,-23 8,-20.4", fill: "#e6dcf5" }, dr);
+    sv("rect", { x: -4.4, y: -2.4, width: 2.6, height: 3.4, fill: "#2f7a3e" }, dr); sv("rect", { x: 2.4, y: -2.4, width: 2.6, height: 3.4, fill: "#2f7a3e" }, dr);
+    // dice
+    const d20 = (g, x, y, sc, val) => {
+      const D = sv("g", { transform: `translate(${x} ${y}) scale(${sc})` }, g);
+      sv("polygon", { points: "0,-8 7,-4 7,4 0,8 -7,4 -7,-4", fill: "#e6dcf5", stroke: "#8a86a0", "stroke-width": 0.8 }, D);
+      sv("path", { d: "M0 -8 L-3.4 2.4 L3.4 2.4 Z M-7 -4 L-3.4 2.4 L-7 4 M7 -4 L3.4 2.4 L7 4 M0 8 L-3.4 2.4 M0 8 L3.4 2.4", stroke: "#8a86a0", "stroke-width": 0.5, fill: "none", opacity: 0.6 }, D);
+      const t = sv("text", { x: 0, y: 1.6, "text-anchor": "middle", "font-family": "Georgia,serif", "font-weight": 700, "font-size": 4.6, fill: "#3a2a5a" }, D); t.textContent = String(val);
+      return { D, t };
+    };
+    const tableDie = sv("g", { style: "transform-box:fill-box;transform-origin:center;" }, svg);
+    let dieVal = 1 + Math.floor(Math.random() * 20);
+    const die = d20(tableDie, 280, 348, 1.15, dieVal);
+    const setDie = n => { dieVal = n; die.t.textContent = String(n); };
+    sv("rect", { x: 258, y: 360, width: 8, height: 8, rx: 1, fill: "#c9482e", stroke: "#6a2a1e", "stroke-width": 0.6 }, svg);           // a d6
+    [[260.4, 362.4], [263.6, 362.4], [260.4, 365.6], [263.6, 365.6]].forEach(([px, py]) => sv("circle", { cx: px, cy: py, r: 0.75, fill: "#f6ead0" }, svg));
+    sv("polygon", { points: "290,367 295,367 292.5,361", fill: "#3f7fd0", stroke: "#1f4a8a", "stroke-width": 0.5 }, svg);           // a d4
+    // snacks, and the walkie-talkie
+    sv("ellipse", { cx: 90, cy: 355, rx: 12, ry: 5, fill: "#d8d0c0", stroke: "#8a8070", "stroke-width": 0.6 }, svg);
+    sv("path", { d: "M80 353 L81 358 M86 351.6 L86.6 359.8 M93 351.6 L92.4 359.8 M99 353 L98 358", stroke: "#c9482e", "stroke-width": 1.5, opacity: 0.8 }, svg);
+    [[82, 351], [87, 349], [92, 350], [97, 351.4], [85, 352.4], [90, 352], [95, 353], [88.6, 347.6], [93.6, 347.8]].forEach(([px, py], i) => sv("circle", { cx: px, cy: py, r: 2 + (i % 3) * 0.3, fill: i % 2 ? "#f6ead0" : "#efdca8" }, svg));
+    [[98, 335, "#3f7fd0"], [108, 333.4, "#c9482e"]].forEach(([cx, cy, cc]) => { sv("rect", { x: cx - 3.4, y: cy - 10, width: 6.8, height: 11, rx: 1.6, fill: cc }, svg); sv("rect", { x: cx - 3.4, y: cy - 10, width: 6.8, height: 2, rx: 1, fill: "#cfd4de" }, svg); sv("path", { d: `M${cx - 1.6} ${cy - 6} h3.2`, stroke: "#f6ead0", "stroke-width": 1, opacity: 0.8 }, svg); });
+    sv("rect", { x: 262, y: 316, width: 13, height: 22, rx: 2, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.8 }, svg);              // the walkie-talkie
+    sv("path", { d: "M266 316 V304", stroke: "#4a4a5a", "stroke-width": 1.4 }, svg);
+    sv("rect", { x: 265, y: 321, width: 7, height: 5, fill: "#7a8a6a" }, svg);
+    sv("circle", { cx: 268.5, cy: 331, r: 2, fill: "#3a3a4a", stroke: "#5a5a6a", "stroke-width": 0.5 }, svg);
+    anim(sv("circle", { cx: 266, cy: 303, r: 1.4, fill: "#ff7a7a" }, svg), "animation:hkTwinkle 2.4s ease-in-out infinite;");
+
+    // the arms and props, in front of the table
+    const armL = sv("g", {}, svg);
+    // soft dust in the lamplight, and a dark vignette round the edges
+    for (let i = 0; i < 9; i++) anim(sv("circle", { cx: (150 + rnd("bd" + i) * 60).toFixed(1), cy: (205 + rnd("be" + i) * 110).toFixed(1), r: 0.9, fill: "#ffe3a0" }, svg), `animation:hkFirefly ${(7 + rnd("bh" + i) * 6).toFixed(1)}s ease-in-out -${(rnd("bi" + i) * 8).toFixed(1)}s infinite;opacity:0.4;`);
+    const vgn = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "url(#bs-vig)" }, svg); vgn.setAttribute("pointer-events", "none");
+
+    // ── drawing the two ──
+    const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
+    const mkFig = key => {
+      const F = FIG[key];
+      F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL);
+      F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
+      F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${key === "a" ? 4.2 : 4.8}s ease-in-out infinite;`);
+      F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${key === "a" ? 4.2 : 4.8}s ease-in-out infinite;`);
+    };
+    mkFig("a"); mkFig("b");
+
+    // two-bone arm: the shoulder S and the hand target T (local units), the elbow bends out and down
+    const solveArm = (S, T, u, f, left) => {
+      let dx = T[0] - S[0], dy = T[1] - S[1], d = Math.hypot(dx, dy);
+      const maxD = u + f - 0.6;
+      if (d > maxD) { dx *= maxD / d; dy *= maxD / d; d = maxD; }
+      if (d < 4) { d = 4; if (!dx && !dy) dy = 4; }
+      const a = (u * u - f * f + d * d) / (2 * d), h = Math.sqrt(Math.max(0, u * u - a * a));
+      const mx = S[0] + dx / d * a, my = S[1] + dy / d * a;
+      const c1 = [mx - dy / d * h, my + dx / d * h], c2 = [mx + dy / d * h, my - dx / d * h];
+      const score = c => 0.6 * c[1] + 0.8 * (left ? -c[0] : c[0]);
+      return [score(c1) >= score(c2) ? c1 : c2, [S[0] + dx, S[1] + dy]];
+    };
+    const prop = (g, kind, x, y) => {
+      if (kind === "die") d20(g, x, y - 4, 0.95, "20");
+      else if (kind === "pencil") { sv("path", { d: `M${x - 7} ${y + 7} L${x + 4} ${y - 6}`, stroke: "#e0b032", "stroke-width": 2.2, "stroke-linecap": "round" }, g); sv("path", { d: `M${x - 7} ${y + 7} L${x - 8.4} ${y + 9}`, stroke: "#3a3a46", "stroke-width": 1.4, "stroke-linecap": "round" }, g); sv("circle", { cx: x + 4.4, cy: y - 6.6, r: 1.3, fill: "#e8a0a0" }, g); }
+      else if (kind === "mini") mini(g, x, y + 4, "#3f7fd0", "wizard");
+      else if (kind === "can") { sv("rect", { x: x - 3.6, y: y - 10, width: 7.2, height: 11.5, rx: 1.6, fill: "#c9482e" }, g); sv("rect", { x: x - 3.6, y: y - 10, width: 7.2, height: 2, rx: 1, fill: "#cfd4de" }, g); }
+      else if (kind === "walkie") { sv("rect", { x: x - 3.6, y: y - 12, width: 7.2, height: 15, rx: 1.4, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.6 }, g); sv("path", { d: `M${x - 1.4} ${y - 12} V${y - 21}`, stroke: "#4a4a5a", "stroke-width": 1.2 }, g); sv("rect", { x: x - 2.2, y: y - 9, width: 4.4, height: 3, fill: "#7a8a6a" }, g); }
+    };
+    const drawArm = (g, who, left, T, sx, dy, bendProp) => {
+      const F = FIG[who], isA = who === "a", S = left ? F.sl : F.sr;
+      const [E, Hd] = solveArm(S, T, F.u, F.f, left);
+      const w = isA ? 10.6 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
+      seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
+      seg(S, E, isA ? "url(#bs-plaid)" : TEAL, w); seg(E, Hd, isA ? THERMAL : TEAL, w - 1.6);
+      if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], GREY, w - 0.6, "butt"); }
+      if (isA && left) { const k = 0.78, wx = E[0] + (Hd[0] - E[0]) * k, wy = E[1] + (Hd[1] - E[1]) * k, ang = Math.atan2(Hd[1] - E[1], Hd[0] - E[0]) * 180 / Math.PI; const wg = sv("g", { transform: `translate(${wx.toFixed(1)} ${wy.toFixed(1)}) rotate(${ang.toFixed(1)})` }, g); sv("rect", { x: -1.9, y: -3.9, width: 3.8, height: 7.8, rx: 0.8, fill: "#2a2a36" }, wg); sv("rect", { x: -0.9, y: -1.6, width: 1.8, height: 3.2, fill: "#9ac6e0", opacity: 0.9 }, wg); }
+      sv("circle", { cx: Hd[0].toFixed(1), cy: Hd[1].toFixed(1), r: 4.4, fill: isA ? SKIN_A : SKIN_B, stroke: "#b98f72", "stroke-width": 0.6 }, g);
+      return Hd;
+    };
+    const face = (g, p, o) => {
+      const lk = Math.max(-1.6, Math.min(1.6, p.look || 0)) * 0.9, lky = Math.max(-1, Math.min(2, p.lookY || 0)) * 0.7, mood = p.mood || "neutral", ek = p.eyes || "open";
+      const eyes = sv("g", {}, g);
+      [-1, 1].forEach(sd => {
+        const x = sd * o.ex + lk, y = o.ey + lky;
+        if (ek === "closed") sv("path", { d: `M${x - 2.2} ${y} Q${x} ${y + 1.7} ${x + 2.2} ${y}`, stroke: "#2a1d1a", "stroke-width": 1, fill: "none", "stroke-linecap": "round" }, eyes);
+        else if (ek === "happy") sv("path", { d: `M${x - 2.2} ${y + 0.9} Q${x} ${y - 2} ${x + 2.2} ${y + 0.9}`, stroke: "#2a1d1a", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round" }, eyes);
+        else { sv("ellipse", { cx: x, cy: y, rx: 1.35, ry: 1.7, fill: "#2a1d1a" }, eyes); sv("circle", { cx: x + 0.5, cy: y - 0.6, r: 0.45, fill: "#fff", opacity: 0.85 }, eyes); }
+      });
+      if (ek === "open") anim(eyes, `transform-box:fill-box;transform-origin:center;animation:hkBlink ${(4.6 + Math.random() * 2.4).toFixed(1)}s ease-in-out -${(Math.random() * 4).toFixed(1)}s infinite;`);
+      const up = { o: [-1.8, -1.8], smirk: [-0.2, -1.8], grin: [-0.8, -0.8], cheer: [-1.4, -1.4], smile: [-0.3, -0.3] }[mood] || [0, 0];
+      [-1, 1].forEach((sd, i) => { const x = sd * o.ex + lk * 0.5, y = o.by + up[i]; sv("path", { d: `M${x - 3} ${y + 0.4} Q${x} ${y - 0.9} ${x + 3} ${y + (sd > 0 ? 0.4 : 0.4)}`, stroke: o.brow, "stroke-width": 1.15, fill: "none", "stroke-linecap": "round" }, g); });
+      const m = o.my, mc = "#7a2f2f", MS = { stroke: "#7a3a30", "stroke-width": 1, fill: "none", "stroke-linecap": "round" };
+      if (mood === "o") sv("ellipse", { cx: 0, cy: m + 0.6, rx: 1.9, ry: 2.4, fill: mc }, g);
+      else if (mood === "grin") { sv("path", { d: `M-4.4 ${m - 0.6} Q0 ${m + 5.4} 4.4 ${m - 0.6} Z`, fill: mc }, g); sv("path", { d: `M-3.4 ${m - 0.4} Q0 ${m + 1.2} 3.4 ${m - 0.4}`, stroke: "#f6ead0", "stroke-width": 1.1, fill: "none" }, g); }
+      else if (mood === "cheer") { sv("path", { d: `M-5 ${m - 1.2} Q0 ${m + 7.4} 5 ${m - 1.2} Z`, fill: mc }, g); sv("path", { d: `M-4 ${m - 0.8} Q0 ${m + 0.8} 4 ${m - 0.8}`, stroke: "#f6ead0", "stroke-width": 1.2, fill: "none" }, g); }
+      else if (mood === "smile") sv("path", Object.assign({ d: `M-3.4 ${m - 0.6} Q0 ${m + 3} 3.4 ${m - 0.6}` }, MS), g);
+      else if (mood === "smirk") sv("path", Object.assign({ d: `M-3 ${m + 0.2} Q1 ${m + 1.4} 4 ${m - 1.6}` }, MS), g);
+      else if (mood === "calm") sv("path", Object.assign({ d: `M-2.4 ${m} Q0 ${m + 1.4} 2.4 ${m}` }, MS), g);
+      else sv("path", Object.assign({ d: `M-2.8 ${m + 0.4} Q0 ${m + 0.9} 2.8 ${m + 0.4}` }, MS), g);
+      if (mood === "smile" || mood === "grin" || mood === "cheer") [-1, 1].forEach(sd => sv("ellipse", { cx: sd * (o.ex + 2.6), cy: m - 2.4, rx: 2.4, ry: 1.4, fill: "#e8908a", opacity: 0.3 }, g));
+    };
+    const torsoA = g => {                                   // the flannel, open over a grey thermal
+      sv("path", { d: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", fill: "url(#bs-plaid)", stroke: "#4a3a2c", "stroke-width": 0.8 }, g).setAttribute("stroke-opacity", 0.5);
+      sv("rect", { x: -4.6, y: -12, width: 9.2, height: 8, fill: "#d9b090" }, g);
+      sv("path", { d: "M-8.4 -5 Q0 2.4 8.4 -5 L7.6 -9 Q0 -3 -7.6 -9 Z", fill: THERMAL }, g);
+      sv("path", { d: "M0 4 V58", stroke: "#6b5a40", "stroke-width": 0.9, opacity: 0.8 }, g);
+      sv("polygon", { points: "-9.4,-6 -1.2,-2 -9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
+      sv("polygon", { points: "9.4,-6 1.2,-2 9,5", fill: "#8a7452", stroke: "#4a3a2c", "stroke-width": 0.5 }, g);
+      [10, 22, 34].forEach(y => sv("circle", { cx: 0, cy: y, r: 0.95, fill: "#efe3c6" }, g));
+      sv("path", { d: "M-19 12 H-8 V23 H-19 Z", stroke: "#4a3a2c", "stroke-width": 0.7, fill: "none", opacity: 0.6 }, g);
+    };
+    const torsoB = g => {                                   // the teal pullover: grey shoulder panels, a snap collar, a pocket with a grey triangle
+      sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.8 }, g);
+      sv("path", { d: "M-27 11 Q-27 -3 -14 -6 L-3 -6 L-9 6 Q-18 9 -27 15 Z", fill: GREY }, g);
+      sv("path", { d: "M27 11 Q27 -3 14 -6 L3 -6 L9 6 Q18 9 27 15 Z", fill: GREY }, g);
+      sv("rect", { x: -5, y: -13, width: 10, height: 9, fill: "#d9b090" }, g);
+      sv("path", { d: "M-8.6 -6 Q0 3.6 8.6 -6 L7.8 -9.4 Q0 -4 -7.8 -9.4 Z", fill: "#f1efe9" }, g);
+      sv("polygon", { points: "-10.4,-7.4 -1.6,-3 -11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
+      sv("polygon", { points: "10.4,-7.4 1.6,-3 11,4.4", fill: TEAL, stroke: TEAL_D, "stroke-width": 0.6 }, g);
+      sv("path", { d: "M0 -1 V15", stroke: TEAL_D, "stroke-width": 0.9 }, g);
+      [3, 10].forEach(y => sv("circle", { cx: 0, cy: y, r: 1, fill: "#cfd4de" }, g));
+      sv("rect", { x: 8, y: 15.5, width: 12.5, height: 11, rx: 1, fill: "none", stroke: TEAL_D, "stroke-width": 0.9 }, g);
+      sv("polygon", { points: "9,16.4 19.7,16.4 19.7,25.4", fill: "#6a737a" }, g);
+      sv("rect", { x: -28, y: 54, width: 56, height: 8, fill: GREY, opacity: 0.9 }, g);
+    };
+    const headA = (g, p) => {                               // the bowl cut: straight fringe, round all the way round
+      const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
+      [-1, 1].forEach(sd => sv("circle", { cx: sd * 14.2, cy: -22, r: 3, fill: SKIN_A, stroke: "#b98f72", "stroke-width": 0.5 }, h));
+      sv("ellipse", { cx: 0, cy: -24, rx: 14, ry: 15.5, fill: SKIN_A }, h);
+      sv("path", { d: "M-16.4 -19 L-16.4 -33 C-16.4 -49 16.4 -49 16.4 -33 L16.4 -19 L13.2 -19 L13.2 -31 L-13.2 -31 L-13.2 -19 Z", fill: "#3b2a20" }, h);
+      sv("path", { d: "M-12 -43 Q-4 -46 4 -44.6 M-14.6 -36 Q-14 -40 -10.6 -42.6", stroke: "#5a4232", "stroke-width": 1.2, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, h);
+      sv("path", { d: "M-9 -31 v1.6 M-3 -31 v1.6 M3 -31 v1.6 M9 -31 v1.6", stroke: "#2a1c15", "stroke-width": 0.8, opacity: 0.8 }, h);
+      face(h, p, { ex: 5.2, ey: -22.4, by: -26.4, my: -13.6, brow: "#3b2a20" });
+    };
+    const headB = (g, p) => {                               // long dark curls, parted in the middle
+      const h = sv("g", { transform: `translate(${p.head[0]} ${p.head[1]}) rotate(${p.head[2]} 0 -8)` }, g);
+      [[-16, -34, 9], [16, -34, 9], [-19.5, -23, 8.6], [19.5, -23, 8.6], [-18.5, -12, 8.2], [18.5, -12, 8.2], [-12, -45, 9], [12, -45, 9], [0, -47.4, 10], [-21, -2, 7.6], [21, -2, 7.6], [-16, -2.4, 6]].forEach(([cx, cy, r], i) => sv("circle", { cx, cy, r, fill: i % 2 ? "#2d2124" : "#231a1c" }, h));
+      sv("ellipse", { cx: 0, cy: -28, rx: 14.4, ry: 17.4, fill: SKIN_B }, h);
+      sv("path", { d: "M0 -46.4 C-13 -46.4 -17.4 -34 -15.8 -19 C-12.8 -31 -7 -37.6 0 -38.4 Z", fill: "#231a1c" }, h);
+      sv("path", { d: "M0 -46.4 C13 -46.4 17.4 -34 15.8 -19 C12.8 -31 7 -37.6 0 -38.4 Z", fill: "#2d2124" }, h);
+      sv("path", { d: "M-8 -43 Q-3 -45 -1 -41.6 M8 -43 Q3 -45 1 -41.6 M-14 -30 Q-14.6 -24 -14 -20 M14 -30 Q14.6 -24 14 -20", stroke: "#3f3034", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.8 }, h);
+      face(h, p, { ex: 5.8, ey: -26.2, by: -30.6, my: -17.4, brow: "#1a1214" });
+    };
+    const drawFig = (key, p) => {
+      const F = FIG[key], isA = key === "a";
+      clear(F.b1); clear(F.b2);
+      const tr = `translate(${(F.cx + (p.sx || 0)).toFixed(1)} ${(F.sy + (p.dy || 0)).toFixed(1)}) scale(${F.s})`;
+      F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr);
+      (isA ? torsoA : torsoB)(F.b1);
+      const cx = F.cx + (p.sx || 0), cy = F.sy + (p.dy || 0), toLocal = t => [(t[0] - cx) / F.s, (t[1] - cy) / F.s];
+      const hand = (left, t) => {
+        if (t === "lap") { drawArm(F.b1, key, left, [left ? -17 : 17, 50], 0, 0); return; }
+        const Hd = drawArm(F.b2, key, left, toLocal(t));
+        if (t[2]) prop(F.b2, t[2], Hd[0], Hd[1]);
+      };
+      if (p.cross) {                                        // arms folded: the right arm underneath, the left over the top
+        drawArm(F.b2, key, false, [-12, 23]);
+        drawArm(F.b2, key, true, [12, 15]);
+      } else { hand(false, p.R || "lap"); hand(true, p.L || "lap"); }
+      (isA ? headA : headB)(F.b1, p);
+    };
+
+    let pi = 0;
+    const applyPose = (i, announce) => {
+      pi = i;
+      const P = BS_POSES[i];
+      drawFig("a", P.a); drawFig("b", P.b);
+      if (P.front === "a") { bodyL.appendChild(FIG.a.g1); armL.appendChild(FIG.a.g2); } else { bodyL.appendChild(FIG.b.g1); armL.appendChild(FIG.b.g2); }
+      if (P.die) setDie(P.die);
+      try { localStorage.setItem(BS_POSE_KEY, String(i)); } catch {}
+      if (announce) say(P.say);
+      if (P.cheer && !reduce) later(() => react("cheer"), 80);
+    };
+    const react = kind => {
+      if (reduce) return;
+      const fr = kind === "cheer" ? [{ transform: "translateY(0)" }, { transform: "translateY(-7px)" }, { transform: "translateY(0)" }, { transform: "translateY(-4px)" }, { transform: "translateY(0)" }] : [{ transform: "translateX(0)" }, { transform: "translateX(-3px)" }, { transform: "translateX(3px)" }, { transform: "translateX(-2px)" }, { transform: "translateX(0)" }];
+      ["a", "b"].forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate(fr, { duration: 520, easing: "ease-out" }); } catch {} }));
+    };
+    // a different pose each visit: never the same one twice running
+    let first = Math.floor(Math.random() * BS_POSES.length);
+    try { const last = parseInt(localStorage.getItem(BS_POSE_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < BS_POSES.length) first = (last + 1 + Math.floor(Math.random() * (BS_POSES.length - 1))) % BS_POSES.length; } catch {}
+    applyPose(first, false);
+    const shift = () => { applyPose((pi + 1 + Math.floor(Math.random() * (BS_POSES.length - 1))) % BS_POSES.length, true); };
+
+    const roll = () => {
+      const n = 1 + Math.floor(Math.random() * 20);
+      if (!reduce) try { tableDie.animate([{ transform: "rotate(0deg) scale(1)" }, { transform: "rotate(300deg) scale(1.5)", offset: 0.5 }, { transform: "rotate(720deg) scale(1)" }], { duration: 560, easing: "ease-out" }); } catch {}
+      later(() => {
+        setDie(n);
+        if (n === 20) { say("You roll the die. 20! The whole table erupts."); react("cheer"); }
+        else if (n === 1) { say("You roll the die. 1. A very small, very quiet groan."); react("groan"); }
+        else say(`You roll the die. ${n}.${n >= 15 ? " Somebody mutters “that’s good”." : n <= 5 ? " Somebody mutters “oh no”." : ""}`);
+      }, reduce ? 0 : 520);
+    };
+
     // tappable things
     const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
-    hit(72, 296, 180, 44, "The table", () => say(["A campaign in progress. Someone has drawn a dragon, badly.", "The little figures stand in a ring around an X on the map.", "Chips, notes, a half-eaten sandwich on a coaster."][nTable++ % 3]));
-    hit(258, 306, 24, 26, "The die", () => say(`You roll the die. ${1 + Math.floor(Math.random() * 20)}.`));
-    hit(246, 280, 24, 42, "The walkie-talkie", () => { hkCrackle(); say("The walkie-talkie hisses. \u201C\u2026Mike? Where did you go? Over.\u201D"); });
     hit(262, 60, 90, 270, "The stairs up", () => say("The stairs up to the house. Something warm is cooking up there."));
-    hit(10, 356, 106, 78, "The couch", () => say(["Somebody has been asleep here. The blanket is still warm.", "A sock. Just the one."][nCouch++ % 2]));
+    hit(116, 232, 60, 92, "The one with the bowl cut", shift);
+    hit(176, 218, 70, 106, "The one with the curly hair", shift);
+    hit(90, 328, 180, 40, "The campaign map", () => say(["The campaign map, hand-drawn and much folded. Somebody has marked an X in red pencil.", "The route runs from the little town, through the forest, straight at the mountains. Nobody is happy about that.", "In the corner, in tiny letters: HERE BE DRAGONS. Underlined twice."][nMap++ % 3]));
+    hit(100, 347, 38, 22, "The character sheet", () => say("A character sheet. Strength is crossed out and rewritten, twice."));
+    hit(138, 334, 52, 24, "The party minis", () => say(["The party: a knight, a wizard, a rogue and a cleric, painted by hand and a little crooked.", "The wizard’s hat is a cut-down cone. Nobody mentions it."][nMini++ % 2]));
+    hit(206, 334, 28, 24, "The goblin minis", () => say("Two goblins by the red X, chipped and slightly cross-eyed."));
+    hit(230, 322, 32, 32, "The dragon mini", () => say("The dragon is the best-painted thing in the house. Nobody is sure who is allowed to touch it."));
+    hit(266, 334, 28, 36, "The dice", roll);
+    hit(76, 342, 28, 20, "The popcorn", () => say(["A bowl of popcorn. It is mostly the unpopped kind by now.", "Somebody keeps eating it off the edge of the map."][nSnack++ % 2]));
+    hit(90, 322, 26, 16, "The sodas", () => say("Two cans of soda, one already shaken."));
+    hit(258, 300, 22, 40, "The walkie-talkie", () => { hkCrackle(); say("The walkie-talkie hisses. “…Mike? Where did you go? Over.”"); });
+    hit(-4, 336, 70, 84, "The couch", () => say(["Somebody has been asleep here. The blanket is still warm.", "A sock. Just the one."][nCouch++ % 2]));
     hit(16, 130, 120, 100, "The games shelves", () => say("Shelves of board games and a very dented box of dice."));
     hit(20, 66, 74, 34, "The window", () => say("The little window you came through, high up on the wall."));
+    hit(138, 100, 38, 46, "The pinned plan", () => say("A scribbled dungeon plan. One room is labelled “probably a trap”."));
+    hit(194, 106, 46, 50, "The crayon dragon", () => say(["A crayon dragon, pinned up very proudly.", "It has seven legs. It is still the scariest thing in the room."][nPoster++ % 2]));
     const hitG = sv("g", {}, svg);
     hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     field.appendChild(svg);
-    sub.textContent = "hawkins \u00B7 the basement";
-    say("Warm, low-ceilinged, smelling of popcorn. The window you came through is up by the ceiling.");
+    sub.textContent = "hawkins · the basement";
+    say("Warm, low-ceilinged, smelling of popcorn. " + BS_POSES[pi].say);
+    pill("\u{1F9CD} shift", "Make the two of them sit differently", shift);
+    pill("\u{1F3B2} roll", "Roll the die", roll);
     pill("\u{1F3E1} outside", "Climb back out to the front lawn", () => { close(); openWheelers(); });
-    pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     document.body.appendChild(sh.back);
   }
 
