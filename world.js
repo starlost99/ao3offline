@@ -5907,20 +5907,34 @@ window.__ao3WorldInit = function (core) {
     // the house: white siding above, brick below, a dark low roof, a garage on the left
     sv("polygon", { points: "42,200 318,200 288,144 72,144", fill: "#35283f" }, svg);
     sv("path", { d: "M72 144 L288 144", stroke: "#4a3d56", "stroke-width": 2 }, svg);
-    sv("rect", { x: 232, y: 112, width: 14, height: 36, fill: "#5a2f2a" }, svg);                      // chimney
-    sv("rect", { x: 229, y: 109, width: 20, height: 5, fill: "#3a2230" }, svg);
+    sv("rect", { x: 294, y: 116, width: 16, height: 62, fill: "#7d3a33" }, svg);                      // brick chimney up the right side
+    for (let yy = 122; yy < 178; yy += 6) sv("path", { d: `M294 ${yy} H310`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.8 }, svg);
+    sv("rect", { x: 291, y: 112, width: 22, height: 5, fill: "#3a2230" }, svg);
     sv("rect", { x: 58, y: 200, width: 244, height: 68, fill: "#cfc9dc" }, svg);
     for (let yy = 207; yy < 268; yy += 7) sv("path", { d: `M58 ${yy} H302`, stroke: "#a8a2bb", "stroke-width": 0.8, opacity: 0.7 }, svg);
     sv("rect", { x: 58, y: 268, width: 244, height: 78, fill: "#7d3a33" }, svg);
     for (let yy = 274, r = 0; yy < 346; yy += 6, r++) { sv("path", { d: `M58 ${yy} H302`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.8 }, svg); for (let xx = 58 + (r % 2) * 8; xx < 302; xx += 16) sv("path", { d: `M${xx} ${yy} v6`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.6 }, svg); }
     sv("rect", { x: 54, y: 266, width: 252, height: 4, fill: "#2a2236" }, svg);
     sv("rect", { x: 54, y: 344, width: 252, height: 5, fill: "#3a3347" }, svg);
+    [[8, 58, "2,284 12,262 58,254 58,284", 22], [302, 352, "302,254 348,262 358,284 302,284", 316]].forEach(([x0, x1, roof, wx]) => {
+      sv("rect", { x: x0, y: 276, width: x1 - x0, height: 70, fill: "#7d3a33" }, svg);
+      for (let yy = 282, r = 0; yy < 346; yy += 6, r++) { sv("path", { d: `M${x0} ${yy} H${x1}`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.8 }, svg); for (let xx = x0 + (r % 2) * 8; xx < x1; xx += 16) sv("path", { d: `M${xx} ${yy} v6`, stroke: "#5a2a26", "stroke-width": 0.8, opacity: 0.6 }, svg); }
+      sv("polygon", { points: roof, fill: "#2f2338" }, svg);
+      sv("path", { d: roof.split(" ").slice(0, 3).map((p, i) => (i ? "L" : "M") + p.replace(",", " ")).join(" "), stroke: "#4a3d56", "stroke-width": 1.6, fill: "none" }, svg);
+      sv("rect", { x: x0 - 2, y: 344, width: x1 - x0 + 4, height: 5, fill: "#3a3347" }, svg);
+      sv("rect", { x: wx - 2, y: 292, width: 28, height: 30, fill: "#e6e0ef" }, svg);                        // a window on each wing
+      sv("rect", { x: wx, y: 294, width: 24, height: 26, fill: "#120d22" }, svg);
+      sv("rect", { x: wx, y: 294, width: 24, height: 26, fill: "#4a4263", opacity: 0.5 }, svg);
+      sv("path", { d: `M${wx + 12} 294 V320 M${wx} 307 H${wx + 24}`, stroke: "#e6e0ef", "stroke-width": 1.2 }, svg);
+      sv("rect", { x: wx - 7, y: 292, width: 5, height: 30, fill: "#1d1b26" }, svg);                         // black shutters
+      sv("rect", { x: wx + 26, y: 292, width: 5, height: 30, fill: "#1d1b26" }, svg);
+    });
 
     // the upstairs windows. Only the middle one (Mike's room) is lit: fairy lights, curtains, a desk. The left one is dark with a
     // curtain that twitches now and then; the right one has its blind half down.
     const winFrame = wx => {
-      sv("rect", { x: wx - 7, y: 208, width: 6, height: 34, fill: "#3a2a4a" }, svg);
-      sv("rect", { x: wx + 32, y: 208, width: 6, height: 34, fill: "#3a2a4a" }, svg);
+      sv("rect", { x: wx - 7, y: 208, width: 6, height: 34, fill: "#1d1b26" }, svg);
+      sv("rect", { x: wx + 32, y: 208, width: 6, height: 34, fill: "#1d1b26" }, svg);
       sv("rect", { x: wx - 2, y: 207, width: 36, height: 36, fill: "#e6e0ef" }, svg);
       sv("rect", { x: wx, y: 209, width: 32, height: 32, fill: "#120d22" }, svg);
     };
@@ -6025,13 +6039,16 @@ window.__ao3WorldInit = function (core) {
       });
     }
     // two trees, the lamp, the mailbox
-    [[30, 330, 32], [336, 336, 28]].forEach(([tx, ty, tr]) => { sv("rect", { x: tx - 3, y: ty, width: 6, height: 70, fill: "#2c2028" }, svg); sv("circle", { cx: tx, cy: ty - 6, r: tr, fill: "#1f3a37" }, svg); sv("circle", { cx: tx - 8, cy: ty - 14, r: tr * 0.6, fill: "#27483f" }, svg); });
+    [[10, 384, 24], [350, 388, 24]].forEach(([tx, ty, tr]) => { sv("rect", { x: tx - 3, y: ty, width: 6, height: 56, fill: "#2c2028" }, svg); sv("circle", { cx: tx, cy: ty - 6, r: tr, fill: "#1f3a37" }, svg); sv("circle", { cx: tx - 8, cy: ty - 14, r: tr * 0.6, fill: "#27483f" }, svg); });
     sv("ellipse", { cx: 262, cy: 352, rx: 36, ry: 11, fill: "#1b2f2b" }, svg);                                  // the hedge by the window
     sv("ellipse", { cx: 258, cy: 349, rx: 22, ry: 6.6, fill: "#223d36" }, svg);
-    sv("rect", { x: 282, y: 428, width: 3, height: 34, fill: "#4a3326" }, svg);
-    sv("rect", { x: 272, y: 418, width: 24, height: 12, rx: 5, fill: "#3a4a66" }, svg);
-    sv("rect", { x: 296, y: 414, width: 2, height: 10, fill: "#c9482e" }, svg);
-    const mt = sv("text", { x: 284, y: 427, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 4.2, fill: "#e6dcf5" }, svg); mt.textContent = "WHEELER";
+    sv("rect", { x: 281, y: 429, width: 4, height: 33, fill: "#241c16" }, svg);
+    sv("rect", { x: 266, y: 413, width: 36, height: 17, rx: 7, fill: "#17151b" }, svg);
+    sv("path", { d: "M270 416 Q284 413 298 416", stroke: "#3a3744", "stroke-width": 1, fill: "none" }, svg);
+    sv("path", { d: "M268 421 v5", stroke: "#2a2833", "stroke-width": 0.8 }, svg);
+    sv("rect", { x: 301, y: 402, width: 2.2, height: 14, fill: "#c9482e" }, svg);                           // the flag, up
+    sv("polygon", { points: "303,402 311,404 303,408", fill: "#c9482e" }, svg);
+    const mt = sv("text", { x: 284, y: 424.6, "text-anchor": "middle", "font-family": "'Snell Roundhand','Segoe Script','Brush Script MT','Lucida Handwriting',cursive", "font-style": "italic", "font-size": 8, textLength: 30, lengthAdjust: "spacingAndGlyphs", fill: "#f1e4c0" }, svg); mt.textContent = "The Wheelers";
     sv("rect", { x: 100, y: 424, width: 2.4, height: 38, fill: "#2c2438" }, svg);                               // the garden lamp
     sv("rect", { x: 96.5, y: 416, width: 9, height: 9, rx: 2, fill: "#ffd98a" }, svg);
     lits.push(g => anim(sv("circle", { cx: 101, cy: 420, r: 26, fill: "url(#wh-glow)" }, g), "animation:hkFlicker 3s ease-in-out infinite;"));
@@ -6050,8 +6067,8 @@ window.__ao3WorldInit = function (core) {
       sv("circle", { cx: -1, cy: -8, r: 2.4, fill: "none", stroke: "#8a86a0", "stroke-width": 1 }, g);
     };
     sv("ellipse", { cx: 46, cy: 447, rx: 44, ry: 4.5, fill: "#000", opacity: 0.3 }, svg);
-    bike(26, 444, 15, false, "#c9482e");
-    bike(66, 445, -15, true, "#3f7fd0");
+    bike(26, 444, 15, false, "#2f6fd6");
+    bike(66, 445, -15, true, "#f2c230");
 
     const dynG = sv("g", {}, svg);                                                                             // snow cover, warm spill, smoke, puddles: rebuilt when the weather changes
     dynG.style.pointerEvents = "none";
@@ -6073,7 +6090,7 @@ window.__ao3WorldInit = function (core) {
       say(["You knock. Somewhere inside, a floorboard creaks.", "You knock again. Nobody comes.", "The porch light buzzes. Try the little window instead."][nKnock++ % 3]);
       try { if (porch.animate) porch.animate([{ opacity: 1 }, { opacity: 0.15 }, { opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 700 }); } catch {}
     });
-    hit(266, 410, 36, 52, "The mailbox", () => say(["The mailbox. A flyer from a pizza place and nothing else.", "Still just the flyer."][nBox++ % 2]));
+    hit(264, 400, 48, 62, "The mailbox", () => say(["The mailbox. A flyer from a pizza place and nothing else.", "Still just the flyer."][nBox++ % 2]));
     hit(0, 396, 92, 60, "Two bikes, dropped on the lawn", () => say(["Two bikes, dropped mid-argument, leaning on each other like they are holding each other up.", "One bell, one rattly chain. Both of them wet from the grass."][nBike++ % 2]));
     hit(126, 316, 60, 52, "Climb in through the basement window", () => goIn());
     const hitG = sv("g", {}, svg);
@@ -6132,9 +6149,10 @@ window.__ao3WorldInit = function (core) {
         sv("path", { d: "M72 143 H288 L293 150 Q250 154 180 151 Q110 154 67 150 Z", fill: "#eef2ff", opacity: 0.95 }, dynG);      // the roof, the porch roof, the chimney
         sv("path", { d: "M44 199 H316", stroke: "#eef2ff", "stroke-width": 3, opacity: 0.8 }, dynG);
         sv("path", { d: "M190 271 H232", stroke: "#eef2ff", "stroke-width": 3.4, opacity: 0.9 }, dynG);
-        sv("rect", { x: 228, y: 106, width: 22, height: 4, rx: 2, fill: "#f4f7ff" }, dynG);
-        sv("ellipse", { cx: 284, cy: 417, rx: 11, ry: 2.6, fill: "#f4f7ff" }, dynG);                                        // the mailbox
-        [[30, 330, 32], [336, 336, 28]].forEach(([tx, ty, tr]) => sv("ellipse", { cx: tx, cy: ty - 6 - tr * 0.72, rx: tr * 0.7, ry: tr * 0.26, fill: "#f4f7ff", opacity: 0.85 }, dynG));
+        sv("rect", { x: 290, y: 109, width: 24, height: 4, rx: 2, fill: "#f4f7ff" }, dynG);
+        sv("path", { d: "M2 283 L12 261 L58 253 M302 253 L348 261 L358 283", stroke: "#eef2ff", "stroke-width": 3, fill: "none", opacity: 0.9 }, dynG);
+        sv("ellipse", { cx: 284, cy: 413.5, rx: 13, ry: 2.6, fill: "#f4f7ff" }, dynG);                                        // the mailbox
+        [[10, 384, 24], [350, 388, 24]].forEach(([tx, ty, tr]) => sv("ellipse", { cx: tx, cy: ty - 6 - tr * 0.72, rx: tr * 0.7, ry: tr * 0.26, fill: "#f4f7ff", opacity: 0.85 }, dynG));
         [[27, 418], [65, 419], [46, 420]].forEach(([sx, sy]) => sv("ellipse", { cx: sx, cy: sy, rx: 6, ry: 2.2, fill: "#f4f7ff", opacity: 0.9 }, dynG));  // the bike tops
         sv("ellipse", { cx: 262, cy: 342, rx: 30, ry: 4, fill: "#f4f7ff", opacity: 0.8 }, dynG);                            // the hedge
       }
@@ -6145,7 +6163,7 @@ window.__ao3WorldInit = function (core) {
         for (let i = 0; i < 9; i++) { const t = i / 8; sv("ellipse", { cx: (112 + t * 40 + (i % 2 ? 3 : -3)).toFixed(1), cy: (476 - t * 118).toFixed(1), rx: 2, ry: 3.2, fill: "#a7b4d6", opacity: 0.6 }, dynG); }   // footprints to the basement window
       }
       if (cozy || season === "winter") for (let i = 0; i < 4; i++) {                                                          // chimney smoke
-        const p = sv("circle", { cx: 239, cy: 104, r: 4, fill: "#cfc8e6", opacity: 0 }, dynG);
+        const p = sv("circle", { cx: 302, cy: 108, r: 4, fill: "#cfc8e6", opacity: 0 }, dynG);
         if (!reduce) anim(p, `animation:hkSmoke 4s ease-out -${i}s infinite;`); else p.setAttribute("opacity", 0.25 - i * 0.05);
       }
       if (kind === "rain") for (let i = 0; i < 4; i++) sv("ellipse", { cx: [210, 90, 270, 150][i], cy: 470 + (i % 2) * 2, rx: 18 - i * 2, ry: 2.4, fill: i === 0 ? "#ffd98a" : "#a9bcff", opacity: i === 0 ? 0.22 : 0.12 }, dynG);   // puddles, the porch light in the first
