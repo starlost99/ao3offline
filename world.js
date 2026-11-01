@@ -4884,7 +4884,7 @@ window.__ao3WorldInit = function (core) {
     sv("circle", { cx: 300, cy: 56, r: 32, fill: "url(#hb-glow)", opacity: 0.3 }, moonG);
     sv("path", { d: "M0 252 Q50 222 120 246 T240 238 T360 248 V330 H0 Z", fill: "#2a2147" }, svg);
     sv("path", { d: "M0 276 Q90 254 180 274 T360 264 V340 H0 Z", fill: "#241b3b" }, svg);
-    sv("rect", { x: 0, y: 290, width: W, height: H - 290, fill: "#1b1530" }, svg);
+    sv("rect", { x: 0, y: 290, width: W, height: H - 290, fill: "#1a1a2e" }, svg);
     // the graveyard end of the map is a shade darker
     sv("rect", { x: 0, y: 592, width: W, height: H - 592, fill: "#150f27" }, svg);
 
@@ -4894,6 +4894,19 @@ window.__ao3WorldInit = function (core) {
       const gx = 6 + rnd("tx" + i) * (W - 12), gy = 300 + rnd("ty" + i) * (H - 320);
       if (onRoad(gx, gy)) continue;
       sv("path", { d: `M${gx.toFixed(1)} ${gy.toFixed(1)} l-2 -5 M${gx.toFixed(1)} ${gy.toFixed(1)} l0 -7 M${gx.toFixed(1)} ${gy.toFixed(1)} l2 -5`, stroke: "#3f6552", "stroke-width": 1.3, fill: "none", "stroke-linecap": "round", opacity: 0.65 }, svg);
+    }
+
+    // soft grass patches and wildflowers in the verges
+    for (let i = 0; i < 26; i++) {
+      const px = rnd("gp" + i) * W, py = 300 + rnd("gq" + i) * 270;
+      if (onRoad(px, py)) continue;
+      sv("ellipse", { cx: px.toFixed(1), cy: py.toFixed(1), rx: (14 + rnd("gr" + i) * 16).toFixed(1), ry: (4 + rnd("gs" + i) * 4).toFixed(1), fill: "#20332f", opacity: 0.45 }, svg);
+    }
+    const BLOOM = ["#f4c2d0", "#f6e27a", "#e9e4f5", "#d99ae0", "#f0a07a"];
+    for (let i = 0; i < 70; i++) {
+      const fx = 6 + rnd("fx" + i) * (W - 12), fy = 300 + rnd("fy" + i) * 260;
+      if (onRoad(fx, fy)) continue;
+      sv("circle", { cx: fx.toFixed(1), cy: fy.toFixed(1), r: (0.9 + rnd("fr" + i) * 0.7).toFixed(2), fill: BLOOM[i % BLOOM.length], opacity: 0.8 }, svg);
     }
 
     // the woods, off the left edge (the trail goes in through the hedge)
@@ -4925,22 +4938,42 @@ window.__ao3WorldInit = function (core) {
     sv("rect", { x: 122, y: 252, width: 116, height: 2, fill: "#54456f" }, svg);
     sv("polygon", { points: "112,209 248,209 180,150", fill: "#2f2445" }, svg);                  // gable
     sv("polygon", { points: "112,209 248,209 180,150 180,155 241,206 119,206 180,155", fill: "#3a2d52" }, svg);
-    sv("circle", { cx: 180, cy: 186, r: 11.5, fill: "#1a1228", stroke: "#54456f", "stroke-width": 1.6 }, svg);   // rose window
-    const rose = ["#e7a14f", "#d96f7e", "#7f8be0", "#e7a14f", "#d96f7e", "#7f8be0"];
+    // the big stained-glass window: one tall pointed arch under the gable, with a rose in its head
+    const WIN = "M156 250 V204 Q156 180 180 158 Q204 180 204 204 V250 Z";
+    sv("clipPath", { id: "hb-chapel-clip" }, defs).appendChild(sv("path", { d: WIN }));
+    sv("path", { d: "M152 254 V204 Q152 177 180 152 Q208 177 208 204 V254 Z", fill: "#5a4b6f" }, svg);   // stone surround
+    sv("path", { d: WIN, fill: "#1a1228" }, svg);
+    sv("rect", { x: 150, y: 250, width: 60, height: 5, fill: "#5a4b6f" }, svg);                         // sill
+    const panes = ["#e7a14f", "#d96f7e", "#7f8be0", "#5fb3a8", "#b573d6"];
     lits.push(g => {
-      sv("circle", { cx: 180, cy: 186, r: 22, fill: "url(#hb-glow)", opacity: 0.35 }, g);
-      rose.forEach((c, i) => {
-        const a0 = i * Math.PI / 3, a1 = (i + 1) * Math.PI / 3, r = 9.6;
-        sv("path", { d: `M180 186 L${(180 + r * Math.cos(a0)).toFixed(2)} ${(186 + r * Math.sin(a0)).toFixed(2)} A${r} ${r} 0 0 1 ${(180 + r * Math.cos(a1)).toFixed(2)} ${(186 + r * Math.sin(a1)).toFixed(2)} Z`, fill: c, opacity: 0.85 }, g);
-      });
+      sv("circle", { cx: 180, cy: 205, r: 52, fill: "url(#hb-glow)", opacity: 0.4 }, g);
+      const cg = sv("g", { "clip-path": "url(#hb-chapel-clip)" }, g);
+      for (let r = 0; r < 12; r++) for (let c = 0; c < 6; c++) {
+        sv("rect", { x: 156 + c * 8, y: 158 + r * 8, width: 8, height: 8, fill: panes[Math.floor(rnd("cg" + r + "_" + c) * panes.length)], opacity: 0.88 }, cg);
+      }
+      sv("circle", { cx: 180, cy: 188, r: 10.5, fill: "#2a2040" }, cg);                                  // rose
+      for (let i = 0; i < 8; i++) {
+        const a0 = i * Math.PI / 4, a1 = (i + 1) * Math.PI / 4, r = 8.6;
+        sv("path", { d: `M180 188 L${(180 + r * Math.cos(a0)).toFixed(2)} ${(188 + r * Math.sin(a0)).toFixed(2)} A${r} ${r} 0 0 1 ${(180 + r * Math.cos(a1)).toFixed(2)} ${(188 + r * Math.sin(a1)).toFixed(2)} Z`, fill: i % 2 ? "#d96f7e" : "#ffd98a", stroke: "#2a2040", "stroke-width": 0.8, opacity: 0.95 }, cg);
+      }
+      sv("circle", { cx: 180, cy: 188, r: 2.2, fill: "#ffe7a8" }, cg);
+      let lead = "";                                                                                      // lead lines: grid, diamonds, mullion and transom
+      for (let x = 156; x <= 204; x += 8) lead += `M${x} 158 V250 `;
+      for (let y = 158; y <= 250; y += 8) lead += `M156 ${y} H204 `;
+      sv("path", { d: lead, stroke: "#1a1228", "stroke-width": 0.7, fill: "none", opacity: 0.7 }, cg);
+      sv("path", { d: "M180 158 V250 M156 206 H204", stroke: "#2a2040", "stroke-width": 1.8, fill: "none" }, cg);
+      sv("circle", { cx: 180, cy: 188, r: 10, fill: "none", stroke: "#2a2040", "stroke-width": 1.4 }, cg);
+      sv("path", { d: "M156 250 V204 Q156 180 180 158 Q204 180 204 204 V250 Z", fill: "none", stroke: "#2a2040", "stroke-width": 1.6 }, g);
     });
-    [[134, 0], [214, 0]].forEach(([wx]) => {                                                     // two tall windows each side of the door
-      const d = `M${wx} 266 V250 a7 7 0 0 1 14 0 V266 Z`;
+    [[134, 0], [214, 0]].forEach(([wx]) => {                                                           // a tall narrow window each side
+      const d = `M${wx} 268 V240 a7 7 0 0 1 14 0 V268 Z`;
       sv("path", { d, fill: "#1a1228" }, svg);
       lits.push(g => {
-        sv("circle", { cx: wx + 7, cy: 256, r: 17, fill: "url(#hb-glow)", opacity: 0.4 }, g);
-        sv("path", { d: `M${wx + 1.4} 264.6 V250 a5.6 5.6 0 0 1 11.2 0 V264.6 Z`, fill: "#f0b45a", opacity: 0.8 }, g);
-        sv("path", { d: `M${wx + 7} 244.5 V264.6 M${wx + 1.4} 255 H${wx + 12.6}`, stroke: "#46385f", "stroke-width": 1, fill: "none" }, g);
+        sv("circle", { cx: wx + 7, cy: 250, r: 17, fill: "url(#hb-glow)", opacity: 0.35 }, g);
+        const cp = sv("clipPath", { id: "hb-sw" + wx }, defs); sv("path", { d: `M${wx + 1.4} 266.6 V240 a5.6 5.6 0 0 1 11.2 0 V266.6 Z` }, cp);
+        const sg = sv("g", { "clip-path": `url(#hb-sw${wx})` }, g);
+        for (let r = 0; r < 6; r++) for (let c = 0; c < 2; c++) sv("rect", { x: wx + 1.4 + c * 5.6, y: 233 + r * 6, width: 5.6, height: 6, fill: panes[Math.floor(rnd("sw" + wx + r + c) * panes.length)], opacity: 0.85 }, sg);
+        sv("path", { d: `M${wx + 7} 234 V268`, stroke: "#46385f", "stroke-width": 1, fill: "none" }, g);
       });
     });
     sv("path", { d: "M166 292 V272 a14 14 0 0 1 28 0 V292 Z", fill: "#1a1228" }, svg);          // door
@@ -4961,44 +4994,64 @@ window.__ao3WorldInit = function (core) {
       sv("ellipse", { cx: yx + (yx < 180 ? -3 : 3), cy: 262, rx: 8, ry: 22, fill: "#1d2f38", opacity: 0.8 }, svg);
     });
 
-    // ── village houses ──
+    // ── village houses: timber-framed cottages with warm roofs, window boxes and a lit door ──
     const house = (x, base, w, h, wall, roof, seed, chimney) => {
       const g = sv("g", {}, svg);
       if (chimney) {
         const cx = x + w * 0.7;
-        sv("rect", { x: cx, y: base - h - h * 0.52, width: 6, height: h * 0.44, fill: roof }, g);
+        sv("rect", { x: cx, y: base - h - h * 0.52, width: 6, height: h * 0.44, fill: "#4a3340" }, g);
         [0, 1].forEach(i => {
-          const p = sv("circle", { cx: cx + 3, cy: base - h - h * 0.56, r: 3, fill: "#c8bee6" }, g);
+          const p = sv("circle", { cx: cx + 3, cy: base - h - h * 0.56, r: 3, fill: "#d8cde6" }, g);
           anim(p, `animation:hbSmoke 4.5s ease-out ${i * 2.2}s infinite;transform-box:fill-box;transform-origin:center;opacity:0;`);
         });
       }
       sv("rect", { x, y: base - h, width: w, height: h, fill: wall }, g);
-      sv("polygon", { points: `${x - 4},${base - h} ${x + w + 4},${base - h} ${x + w / 2},${base - h - h * 0.62}`, fill: roof }, g);
-      sv("rect", { x: x + w * 0.44, y: base - 14, width: 8, height: 14, rx: 1, fill: "#1a1228" }, g);
-      [0.12, 0.68].forEach((fx, i) => {
+      sv("path", { d: `M${x + 1} ${base - 1} V${base - h + 1} H${x + w - 1} V${base - 1} M${x + w * 0.5} ${base - h + 1} V${base - 1} M${x + 1} ${base - h * 0.5} H${x + w - 1}`, stroke: "#2f2230", "stroke-width": 1.4, fill: "none", opacity: 0.75 }, g);   // timber frame
+      sv("polygon", { points: `${x - 5},${base - h + 1} ${x + w + 5},${base - h + 1} ${x + w / 2},${base - h - h * 0.66}`, fill: roof }, g);
+      sv("path", { d: `M${x - 5} ${base - h + 1} L${x + w / 2} ${base - h - h * 0.66} L${x + w + 5} ${base - h + 1}`, fill: "none", stroke: "#8a5a60", "stroke-width": 1.2, "stroke-linejoin": "round", opacity: 0.7 }, g);
+      const dx = x + w * 0.44;
+      sv("path", { d: `M${dx} ${base} V${base - 10} a4 4 0 0 1 8 0 V${base} Z`, fill: "#3a2630" }, g);
+      litRect(dx + 1.3, base - 11, 5.4, 11, "#f0b45a", 0.55, 0);
+      [0.1, 0.7].forEach((fx, i) => {
         const wx = x + w * fx, wy = base - h * 0.72;
         sv("rect", { x: wx, y: wy, width: 8, height: 9, fill: "#120d22" }, g);
-        if (rnd(seed + "w" + i) > 0.12) litRect(wx + 0.8, wy + 0.8, 6.4, 7.4, "#f0b45a", 0.8, 14);
+        if (rnd(seed + "w" + i) > 0.12) litRect(wx + 0.8, wy + 0.8, 6.4, 7.4, "#f0b45a", 0.85, 15);
+        sv("rect", { x: wx - 1, y: wy + 9, width: 10, height: 2.6, rx: 0.8, fill: "#4a3326" }, g);      // window box
+        [0, 1, 2, 3].forEach(k => sv("circle", { cx: wx + 1 + k * 2.6, cy: wy + 8.6, r: 1.3, fill: BLOOM[(k + i + seed.length) % BLOOM.length] }, g));
       });
+      sv("path", { d: `M${x - 6} ${base + 6} H${x + w + 6}`, stroke: "#5a4638", "stroke-width": 1.2, "stroke-dasharray": "1.6 2.6", opacity: 0.8 }, g);   // garden picket
     };
-    house(60, 292, 32, 28, "#3b3056", "#33274b", "hsA", false);                                  // left: small one peeking behind a larger one
-    house(14, 300, 52, 36, "#45385f", "#382b52", "hsB", true);
-    house(268, 292, 32, 28, "#3b3056", "#33274b", "hsC", false);                                 // right
-    house(294, 300, 52, 36, "#45385f", "#382b52", "hsD", true);
+    house(60, 292, 32, 28, "#54445f", "#6a4150", "hsA", false);                                  // left: small one peeking behind a larger one
+    house(14, 300, 52, 36, "#5d4a66", "#74464f", "hsB", true);
+    house(268, 292, 32, 28, "#54445f", "#6a4150", "hsC", false);                                 // right
+    house(294, 300, 52, 36, "#5d4a66", "#74464f", "hsD", true);
+
+    // a few round village trees, and a picket fence down each side of the chapel path
+    [[100, 322, 15], [262, 322, 14], [338, 372, 12]].forEach(([tx, ty, tr], i) => {
+      sv("rect", { x: tx - 2, y: ty, width: 4, height: 18, fill: "#2c2028" }, svg);
+      sv("circle", { cx: tx, cy: ty - 4, r: tr, fill: "#1f3a37" }, svg);
+      sv("circle", { cx: tx - 5, cy: ty - 8, r: tr * 0.62, fill: "#27483f" }, svg);
+      sv("circle", { cx: tx + 6, cy: ty - 2, r: tr * 0.5, fill: "#234339" }, svg);
+      lits.push(g => [[-6, -8], [5, -9], [8, 0], [-8, 1], [0, 3]].forEach(([ox, oy], k) => anim(sv("circle", { cx: tx + ox, cy: ty + oy, r: 1.3, fill: "#ffe3a0" }, g), `animation:hbFlicker ${(2 + rnd("tl" + i + k) * 2).toFixed(1)}s ease-in-out infinite;`)));
+    });
+    [153, 207].forEach(fx => {
+      for (let fy = 306; fy <= 384; fy += 5) sv("path", { d: `M${fx} ${fy} v-7`, stroke: "#6a5240", "stroke-width": 1.8, "stroke-linecap": "round", opacity: 0.85 }, svg);
+      sv("path", { d: `M${fx} 301 V384`, stroke: "#4a3a30", "stroke-width": 1.2, opacity: 0.9, fill: "none" }, svg);
+    });
 
     // ── roads ──
-    // north: chapel steps to the crossroads. west: to the hedge, then a trail into the woods. east: tarmac to Hawkins.
+    // north: chapel steps to the crossroads. west: to the hedge, then a trail into the woods. east: a cobbled lane to Hawkins.
     // south: down to Bram's grounds.
     const ROADS = [
       { pts: [[180, 296], [180, 410]], w: 40, kind: "cobble", cap: "butt" },
       { pts: [[180, 410], [100, 410], [52, 410]], w: 38, kind: "cobble" },
       { pts: [[60, 410], [30, 409], [0, 407]], w: 22, kind: "cobble" },
-      { pts: [[180, 410], [260, 410], [360, 410]], w: 40, kind: "tar" },
+      { pts: [[180, 410], [260, 410], [360, 410]], w: 38, kind: "cobble" },
       { pts: [[180, 410], [180, 480], [180, 566], [181, 650], [182, 760]], w: 38, kind: "cobble" },
     ];
     const polyD = pts => pts.map((p, i) => (i ? "L" : "M") + p[0] + " " + p[1]).join(" ");
-    ROADS.forEach(r => sv("path", { d: polyD(r.pts), fill: "none", stroke: "#0f0b1c", "stroke-width": r.w + 14, "stroke-linecap": r.cap || "round", "stroke-linejoin": "round", opacity: 0.5 }, svg));
-    ROADS.forEach(r => sv("path", { d: polyD(r.pts), fill: "none", stroke: r.kind === "tar" ? "#2c2937" : "#473b3d", "stroke-width": r.w, "stroke-linecap": r.cap || "round", "stroke-linejoin": "round", opacity: 0.95 }, svg));
+    ROADS.forEach(r => sv("path", { d: polyD(r.pts), fill: "none", stroke: "#1b2a26", "stroke-width": r.w + 14, "stroke-linecap": r.cap || "round", "stroke-linejoin": "round", opacity: 0.55 }, svg));
+    ROADS.forEach(r => sv("path", { d: polyD(r.pts), fill: "none", stroke: "#4d4040", "stroke-width": r.w, "stroke-linecap": r.cap || "round", "stroke-linejoin": "round", opacity: 0.95 }, svg));
     const STONES = ["#6d6070", "#7a6d7d", "#5f5463", "#857886", "#6a5f5a"];
     ROADS.forEach((r, ri) => {
       if (r.kind !== "cobble") return;
@@ -5012,16 +5065,13 @@ window.__ao3WorldInit = function (core) {
         }
       }
     });
-    sv("path", { d: "M206 410 H360", stroke: "#b8b095", "stroke-width": 1.6, "stroke-dasharray": "9 8", opacity: 0.5, fill: "none" }, svg);
-    // the crossroads: a small round of cobbles with a mossy milestone
-    sv("circle", { cx: 180, cy: 410, r: 25, fill: "#4b3f44", opacity: 0.95 }, svg);
-    sv("circle", { cx: 180, cy: 410, r: 25, fill: "none", stroke: "#2b2233", "stroke-width": 2, opacity: 0.7 }, svg);
-    for (let i = 0; i < 22; i++) {
-      const a = rnd("cr" + i) * Math.PI * 2, rr = Math.sqrt(rnd("cq" + i)) * 21;
-      sv("ellipse", { cx: (180 + rr * Math.cos(a)).toFixed(1), cy: (410 + rr * Math.sin(a)).toFixed(1), rx: (2.2 + rnd("cw" + i) * 2.4).toFixed(1), ry: (1.6 + rnd("ch" + i) * 1.6).toFixed(1), fill: STONES[i % STONES.length], opacity: 0.8 }, svg);
+    // a few tufts of grass pushing up between the cobbles
+    for (let i = 0; i < 26; i++) {
+      const tx = rnd("rt" + i) * W, ty = 396 + rnd("ru" + i) * 28, onV = i % 3 === 0;
+      const x = onV ? 168 + rnd("rv" + i) * 24 : tx, y = onV ? 300 + rnd("rw" + i) * 330 : ty;
+      if (y > 540 && y < 600) continue;
+      sv("path", { d: `M${x.toFixed(1)} ${y.toFixed(1)} l-1.5 -3.5 M${x.toFixed(1)} ${y.toFixed(1)} l0 -4.5 M${x.toFixed(1)} ${y.toFixed(1)} l1.5 -3.5`, stroke: "#4f7a5c", "stroke-width": 1, fill: "none", "stroke-linecap": "round", opacity: 0.6 }, svg);
     }
-    sv("path", { d: "M175.5 413 V405 a4.5 4.5 0 0 1 9 0 V413 Z", fill: "#7a6d7d" }, svg);
-    sv("path", { d: "M176 408 q2 -2 4 0 q2 -2 4 0", stroke: "#4d7a5c", "stroke-width": 1.2, fill: "none" }, svg);
 
     // ── the hedge with a gap in it, and the trail through it into the woods ──
     const HEDGE = ["#1f3a34", "#27473e", "#1a312c"];
@@ -5059,22 +5109,36 @@ window.__ao3WorldInit = function (core) {
     signpost(232, 388, ["Hawkins"], "r", 54);
     signpost(232, 478, ["Cottage &", "graveyard"], "d", 56);
 
-    // ── the bus stop, south side of the Hawkins road ──
-    sv("rect", { x: 284, y: 440, width: 2.4, height: 36, fill: "#3d3a52" }, svg);
-    sv("rect", { x: 334, y: 440, width: 2.4, height: 36, fill: "#3d3a52" }, svg);
-    sv("rect", { x: 287, y: 444, width: 46, height: 30, fill: "#1d1a2b" }, svg);
-    sv("rect", { x: 280, y: 435, width: 60, height: 5, rx: 1.5, fill: "#3d3a52" }, svg);
-    litRect(290, 447, 40, 20, "#cfe7ff", 0.3, 26);
-    sv("rect", { x: 292, y: 464, width: 28, height: 3, fill: "#5b4a40" }, svg);
-    sv("rect", { x: 294, y: 466, width: 2, height: 8, fill: "#3d3a52" }, svg);
-    sv("rect", { x: 316, y: 466, width: 2, height: 8, fill: "#3d3a52" }, svg);
-    sv("rect", { x: 347, y: 444, width: 2.4, height: 32, fill: "#3d3a52" }, svg);               // the stop sign
-    sv("circle", { cx: 348.2, cy: 440, r: 7.5, fill: "#b94a4a" }, svg);
-    const bus = sv("text", { x: 348.2, y: 442, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 5.2, "font-weight": 700, fill: "#fff" }, svg);
+    // ── the bus stop, south side of the Hawkins road: a little wooden shelter with a shingled roof and a lantern ──
+    sv("rect", { x: 286, y: 442, width: 3, height: 34, fill: "#4a3326" }, svg);
+    sv("rect", { x: 331, y: 442, width: 3, height: 34, fill: "#4a3326" }, svg);
+    sv("rect", { x: 289, y: 446, width: 42, height: 30, fill: "#2a2030" }, svg);
+    sv("polygon", { points: "278,444 342,444 310,424", fill: "#6a4150" }, svg);
+    sv("path", { d: "M278 444 L310 424 L342 444", fill: "none", stroke: "#8a5a60", "stroke-width": 1.2, "stroke-linejoin": "round", opacity: 0.7 }, svg);
+    sv("rect", { x: 276, y: 443, width: 68, height: 3.5, rx: 1, fill: "#4a3326" }, svg);
+    litRect(293, 449, 34, 18, "#f0b45a", 0.3, 24);
+    sv("rect", { x: 292, y: 464, width: 28, height: 3.5, rx: 1, fill: "#6a5240" }, svg);
+    sv("rect", { x: 294, y: 467, width: 2.4, height: 9, fill: "#4a3326" }, svg);
+    sv("rect", { x: 316, y: 467, width: 2.4, height: 9, fill: "#4a3326" }, svg);
+    sv("path", { d: "M310 446 v5", stroke: "#2c2438", "stroke-width": 1, fill: "none" }, svg);
+    sv("rect", { x: 307.5, y: 451, width: 5, height: 6, rx: 1.2, fill: "#ffd98a" }, svg);
+    lits.push(g => anim(sv("circle", { cx: 310, cy: 454, r: 14, fill: "url(#hb-glow)" }, g), "animation:hbFlicker 3s ease-in-out infinite;"));
+    sv("rect", { x: 347, y: 444, width: 3, height: 32, fill: "#4a3326" }, svg);                    // the stop sign: a round wooden board
+    sv("circle", { cx: 348.5, cy: 440, r: 7.5, fill: "#a8553f", stroke: "#4a3326", "stroke-width": 1.2 }, svg);
+    const bus = sv("text", { x: 348.5, y: 442, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 5.2, "font-weight": 700, fill: "#f6ead0" }, svg);
     bus.textContent = "BUS";
+    sv("path", { d: "M268 476 q-6 -3 -4 -9 M268 476 q0 -7 3 -9", stroke: "#4f7a5c", "stroke-width": 1.2, fill: "none" }, svg);
+    [[270, 472], [274, 474], [265, 473]].forEach(([fx, fy], i) => sv("circle", { cx: fx, cy: fy, r: 1.8, fill: BLOOM[i] }, svg));
 
-    // ── Bram's grounds: the wall and iron gate, with the cottage outside and the graveyard behind ──
-    house(252, 556, 62, 32, "#3b2f47", "#2c4a3d", "cot", true);                                   // Bram's cottage
+    // bunting strung between the posts and lamps
+    const bunting = (x1, y1, x2, y2, sag, n) => {
+      const pt = t => [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t + Math.sin(t * Math.PI) * sag];
+      sv("path", { d: `M${x1} ${y1} Q${(x1 + x2) / 2} ${(y1 + y2) / 2 + sag * 2} ${x2} ${y2}`, stroke: "#3a2d33", "stroke-width": 0.8, fill: "none" }, svg);
+      for (let i = 1; i < n; i++) { const [px, py] = pt(i / n); sv("polygon", { points: `${(px - 2.8).toFixed(1)},${py.toFixed(1)} ${(px + 2.8).toFixed(1)},${py.toFixed(1)} ${px.toFixed(1)},${(py + 5.5).toFixed(1)}`, fill: BLOOM[(i + 2) % BLOOM.length], opacity: 0.85 }, svg); }
+    };
+    bunting(308, 350, 338, 360, 4, 5);              // a short string from the east lamp to the tree
+
+    // ── Bram's grounds: the wall and iron gate, with the graveyard behind it and Bram's cottage just inside ──
     [[0, 148], [212, 148]].forEach(([wx, ww]) => {
       sv("rect", { x: wx, y: 562, width: ww, height: 30, fill: "#2a2238" }, svg);
       sv("rect", { x: wx, y: 559, width: ww, height: 4, fill: "#3a3047" }, svg);
@@ -5091,12 +5155,31 @@ window.__ao3WorldInit = function (core) {
     // headstones behind the wall (a few with candles)
     for (let i = 0; i < 16; i++) {
       const gx = (i % 2 ? 214 + rnd("gx" + i) * 128 : 18 + rnd("gx" + i) * 128), gy = 618 + Math.floor(i / 2) * 15 + rnd("gy" + i) * 6;
+      if (gx > 246 && gx < 322 && gy > 598 && gy < 668) continue;           // keep clear of Bram's cottage
       sv("path", { d: `M${(gx - 5).toFixed(1)} ${gy.toFixed(1)} V${(gy - 9).toFixed(1)} a5 5 0 0 1 10 0 V${gy.toFixed(1)} Z`, fill: "#6d6577", opacity: 0.8 }, svg);
       if (i % 3 === 0) sv("path", { d: `M${gx.toFixed(1)} ${(gy - 11).toFixed(1)} v6 M${(gx - 2.4).toFixed(1)} ${(gy - 8.5).toFixed(1)} h4.8`, stroke: "#4a4256", "stroke-width": 1, fill: "none" }, svg);
       if (i % 5 === 1) lits.push(g => {
         sv("rect", { x: gx - 0.8, y: gy - 5, width: 1.6, height: 4, fill: "#ffe9b0" }, g);
         anim(sv("circle", { cx: gx, cy: gy - 5, r: 8, fill: "url(#hb-glow)" }, g), `animation:hbFlicker ${(2 + rnd("cd" + i) * 1.6).toFixed(1)}s ease-in-out infinite;`);
       });
+    }
+    // Bram's cottage, inside the grounds. This is the grounds' own drawing (same shapes and colours, the way it looks
+    // before Bram is home: dark windows, no smoke), moved to sit just inside the gate on the right.
+    {
+      const cot = sv("g", { transform: "translate(-51 514)" }, svg);
+      sv("ellipse", { cx: 335, cy: 133, rx: 25, ry: 3.5, fill: "#000", opacity: 0.35 }, cot);
+      sv("rect", { x: 344, y: 92, width: 6, height: 15, fill: "#35283f" }, cot);
+      sv("rect", { x: 315, y: 108, width: 40, height: 24, fill: "#4a3a4f" }, cot);
+      sv("path", { d: "M311 110.5 L335 89 L359 110.5 Z", fill: "#3b2a46" }, cot);
+      sv("path", { d: "M311 110.5 L335 89 L359 110.5", fill: "none", stroke: "#5d4a6d", "stroke-width": 1.2, "stroke-linejoin": "round" }, cot);
+      [[318, 8], [345, 7]].forEach(([wx2, ww]) => {
+        sv("rect", { x: wx2, y: 114, width: ww, height: 8, rx: 0.8, fill: "#241f3a" }, cot);
+        sv("rect", { x: wx2, y: 114, width: ww, height: 8, rx: 0.8, fill: "none", stroke: "#6f5f7d", "stroke-width": 0.9 }, cot);
+      });
+      sv("rect", { x: 329, y: 118, width: 11, height: 14, rx: 1.5, fill: "#2a2033" }, cot);
+      sv("circle", { cx: 338, cy: 125.5, r: 0.8, fill: "#d9c3a0" }, cot);
+      const ct = sv("text", { x: 335, y: 146, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 7.5, "font-style": "italic", fill: "#cbbfe0", opacity: 0.75 }, cot);
+      ct.textContent = "the cottage";
     }
     [[110, 660], [250, 700]].forEach(([mx, my], i) => anim(sv("ellipse", { cx: mx, cy: my, rx: 70, ry: 12, fill: "#c8bee6", opacity: 0.1 }, svg), `animation:hbMist ${10 + i * 3}s ease-in-out infinite;`));
 
