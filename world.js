@@ -7163,7 +7163,23 @@ window.__ao3WorldInit = function (core) {
       ["w", "Mike.", { a: { mood: "smile", blush: true } }],
       ["m", "…Only the chorus. And you can’t look.", { b: { mood: "smile", eyes: "closed", blush: true } }],
       ["w", "I’m not looking.", { a: { mood: "smile", eyes: "closed", blush: true } }],
-      ["n", "Mike sings the chorus very quietly and very slightly off key. Will smiles the whole way through, eyes shut.", Object.assign({ hearts: 3 }, FI_HOLD)]] }
+      ["n", "Mike sings the chorus very quietly and very slightly off key. Will smiles the whole way through, eyes shut.", Object.assign({ hearts: 3 }, FI_HOLD)]] },
+    { name: "the kiss", beats: [
+      ["n", "The flashlight has rolled over to point at the ceiling. Neither of them has noticed. Neither of them is looking at the ceiling.", { a: { mood: "calm", look: 1 }, b: { mood: "calm", look: -1 } }],
+      ["m", "Okay. I’m going to say something, and I’m going to be weird about it.", { b: { mood: "o", blush: true, look: -1 } }],
+      ["w", "You’re already being weird about it.", { a: { mood: "smirk", blush: true, look: 1 } }],
+      ["m", "I know. I’m committing.", { b: { mood: "smirk", blush: true }, jig: true }],
+      ["w", "Mike.", { a: { mood: "smile", eyes: "happy", blush: true }, hearts: 1 }],
+      ["m", "Can I kiss you? I know we— I know. I still like asking.", { b: { mood: "calm", blush: true, look: -1 } }],
+      ["w", "You never have to ask.", { a: { mood: "calm", look: 1, blush: true } }],
+      ["w", "…But I really like that you do.", { a: { mood: "smile", eyes: "happy", blush: true } }],
+      ["n", "Mike leans in slowly. Will meets him the rest of the way. It’s soft, and short, and a little off-center, and neither of them minds at all.", Object.assign({ hearts: 5, front: "a" }, { a: { sx: 12, lean: 8, head: [5, 2, 9], mood: "calm", eyes: "closed", blush: true, R: FI_CL[0] }, b: { sx: -8, lean: -7, head: [-5, 2, -9], mood: "calm", eyes: "closed", blush: true, L: FI_CL[1] } })],
+      ["n", "They stay like that a second longer than they meant to.", { hearts: 2 }],
+      ["w", "…Your nose is freezing.", { a: { sx: 4, lean: 0, head: [2, 1, 5], mood: "grin", eyes: "happy", blush: true, look: 1 }, b: { sx: -2, lean: 0, head: [-2, 2, -5], mood: "o", eyes: "open", blush: true, look: -1 } }],
+      ["m", "Your hand is shaking.", { b: { mood: "grin", blush: true }, jig: true }],
+      ["w", "So is yours.", { a: { mood: "smirk", eyes: "happy", blush: true } }],
+      ["m", "…Yeah. I’m very happy. It’s a shaking kind of happy.", { b: { mood: "smile", eyes: "happy", blush: true }, hearts: 3 }],
+      ["n", "They are both grinning like idiots. The flashlight stays pointed at the ceiling, and nobody goes to fix it.", Object.assign({ hearts: 3 }, FI_HOLD)]] }
   ];
 
   // ── 🏕️ INSIDE THE FORT (stage 2) ──
@@ -7494,9 +7510,10 @@ window.__ao3WorldInit = function (core) {
        ["m", "Will!", { b: { mood: "o", blush: true }, jig: true }],
        ["r", "“Finally, someone with taste. So. There are four kinds. Over.”", {}],
        ["n", "Mike puts his head in his hands. Will has the walkie-talkie now, and he’s taking notes.", { hearts: 1, a: { mood: "grin", eyes: "happy" } }]],
-      [["n", "The walkie-talkie crackles on by itself. Nobody is talking to them. Somebody left their button stuck down.", { a: { mood: "o", look: 1 }, b: { mood: "o", look: 1 } }],
+      [["n", "The walkie-talkie crackles on by itself. Nobody is talking to them. Somebody, somewhere, has left their button stuck down.", { a: { mood: "o", look: 1 }, b: { mood: "o", look: 1 } }],
        ["r", "Faint, close to the mic: “…no, you hang up first.” “You hang up first.” A giggle. “I’m not hanging up.”", { a: { mood: "smirk" }, b: { mood: "o", blush: true } }],
-       ["m", "Is that— Lucas? And Max?", { b: { mood: "o" } }],
+       ["m", "Who is that? That’s not Dustin. That’s not anybody.", { b: { mood: "o" } }],
+       ["w", "Maybe we’ve crossed somebody else’s channel. Somebody in town.", { a: { mood: "smile", look: 1 } }],
        ["r", "“…I like it when you do that thing where you pretend you’re not smiling.” “I’m not smiling.” “You’re so smiling.”", {}],
        ["w", "Mike. We shouldn’t be listening to this.", { a: { mood: "o", blush: true, look: -1 }, b: { blush: true } }],
        ["m", "I’m not listening! I’m just… not turning it off!", { b: { mood: "cheer", blush: true }, jig: true }],
@@ -7504,9 +7521,16 @@ window.__ao3WorldInit = function (core) {
        ["w", "…That’s actually really sweet.", { a: { mood: "smile", blush: true, eyes: "happy" } }],
        ["m", "Yeah. It’s… yeah. It’s a good one.", { b: { mood: "calm", blush: true, look: 1 } }],
        ["n", "Neither of them looks at the other. Neither of them reaches for the off switch. Under the blanket, one hand has found the other.", Object.assign({ hearts: 3 }, FI_HOLD)],
-       ["r", "“…Wait. Is the channel open? Hello? Is anyone— MIKE?! Over.”", { a: { mood: "o", blush: true }, b: { mood: "o", blush: true } }],
-       ["m", "We heard NOTHING! Over and out!", { b: { mood: "cheer", blush: true }, jig: true }],
-       ["w", "That was extremely believable.", { a: { mood: "grin", eyes: "happy", blush: true }, hearts: 2 }]]
+       ["r", "“…Okay, I really have to go. Over.” “Over.” “Over.” “…Over.” A soft click, and then only static. Nobody on the other end ever knew.", { a: { mood: "smile", look: 1 }, b: { mood: "calm", look: -1 } }],
+       ["m", "…I like it when you do that thing where you pretend you’re not smiling.", { b: { mood: "smirk", blush: true, look: 1 } }],
+       ["w", "I’m not smiling.", { a: { mood: "grin", blush: true, eyes: "happy" } }],
+       ["m", "You’re so smiling.", { b: { mood: "grin", blush: true }, jig: true }],
+       ["w", "Say something nice about me.", { a: { mood: "smirk", look: 1 } }],
+       ["m", "…You’re the best person I know. Over.", { b: { mood: "o", blush: true, look: 1 }, hearts: 2 }],
+       ["w", "Aw. Over.", { a: { mood: "smile", eyes: "happy", blush: true } }],
+       ["m", "No, no, you say over.", { b: { mood: "grin" }, jig: true }],
+       ["w", "I did say over.", { a: { mood: "cheer", eyes: "happy", blush: true }, jig: true }],
+       ["n", "They are both laughing too hard to say anything else. Whoever those two were, they’ll never know the whole fort heard them, and that Mike and Will are keeping the best lines.", Object.assign({ hearts: 3 }, FI_HOLD)]]
     ];
     const walkieTalk = () => {
       clearTimeout(tid); playing = false; hideBubble();
