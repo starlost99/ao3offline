@@ -5976,16 +5976,18 @@ window.__ao3WorldInit = function (core) {
     const fig = sv("g", {}, svg);
     fig.style.opacity = 0; fig.style.transition = "opacity .5s";
     const SIL = "#1b1226";
-    const sil = (cx, headY, r, curls, lean) => {            // a head with a bumpy curl outline, and shoulders, leaning a little
-      const g = sv("g", { transform: `rotate(${lean} ${cx} 241)` }, sv("g", {}, fig));
-      sv("path", { d: `M${cx - r * 2.3} 241 Q${cx - r * 2.2} ${headY + r * 2.2} ${cx} ${headY + r * 2.2} Q${cx + r * 2.2} ${headY + r * 2.2} ${cx + r * 2.3} 241 Z`, fill: SIL }, g);
-      sv("rect", { x: cx - r * 0.45, y: headY + r * 0.8, width: r * 0.9, height: r * 1.6, fill: SIL }, g);
-      sv("circle", { cx, cy: headY, r, fill: SIL }, g);
-      curls.forEach(([dx, dy, cr]) => sv("circle", { cx: cx + dx, cy: headY + dy, r: cr, fill: SIL }, g));
-      return g.parentNode;
+    const { silhouette } = bsKit(sv, anim, {});               // the same Will and Mike as the basement, as flat shadows (see bsKit)
+    const winClip = sv("clipPath", { id: "wh-winclip" }, defs);
+    sv("rect", { x: 165, y: 209, width: 32, height: 32 }, winClip);
+    fig.setAttribute("clip-path", "url(#wh-winclip)");        // they rise up from the sill, never below the window
+    const sil = (who, cx, oy, k, lean) => {                   // cx/oy = where the neck base goes, k = scale, lean = a little tip toward the other
+      const w = sv("g", {}, fig);
+      const g = sv("g", { transform: `rotate(${lean} ${cx} 241)` }, w);
+      silhouette(sv("g", { transform: `translate(${cx} ${oy}) scale(${k})` }, g), who, SIL);
+      return w;
     };
-    const willSil = sil(174.5, 226.5, 3.5, [[-3.2, -1.8, 1.6], [0, -3.6, 1.7], [3.2, -1.8, 1.6]], 4);               // Will: a short mop
-    const mikeSil = sil(188, 224.5, 3.9, [[-3.8, -1.6, 1.9], [-1.6, -4, 1.9], [1.6, -4, 1.9], [3.8, -1.6, 1.9], [-4.1, 1.2, 1.5], [4.1, 1.2, 1.5]], -4);   // Mike: taller, fuller curls
+    const willSil = sil("a", 174.5, 233.4, 0.28, 3);
+    const mikeSil = sil("b", 188, 233.2, 0.285, -3);
     [willSil, mikeSil].forEach(n => { n.style.transition = "transform .6s ease-out"; n.style.transform = "translateY(7px)"; });
     let waving = false;
     const wave = () => {
@@ -6378,7 +6380,24 @@ window.__ao3WorldInit = function (core) {
     const headA = (g, p) => drawHead(g, p, "a");
     const headB = (g, p) => drawHead(g, p, "b");
     // To use Mike's reference brown instead of the darker colour, change his three hairFill values to #2c211e, #3a2a23 and #5a3d2e.
-    return { solveArm, drawArm, face, torsoA, torsoB, headA, headB, headShift };
+    // A flat one-colour Will or Mike for the places where we only see a shadow (Mike's window, the fort's sheet). It is built from the
+    // very same pieces as the real figures: the same shoulders, the same short thick neck, the same face ellipse, ears and traced hair,
+    // all in one fill. Drawn in the figure's own local units (origin = the neck base), so the caller just translate()s and scale()s the
+    // group it passes in. Returns { root, head }; head is the neck, face and hair together, so it can be tipped about the neck base.
+    const SIL_SHOULDERS = { a: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", b: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z" };
+    const silhouette = (g, who, fill) => {
+      const H = HEADS[who], root = sv("g", { fill }, g);
+      sv("path", { d: SIL_SHOULDERS[who] }, root);
+      sv("path", { d: who === "a" ? "M-10.6 -4 L-9 -10.4 L9 -10.4 L10.6 -4 Z" : "M-11.2 -4 L-9.4 -9.6 L9.4 -9.6 L11.2 -4 Z" }, root);   // the crew-neck collar, so the neck is as short as the real one
+      const head = sv("g", {}, root);
+      sv("rect", { x: -H.neckW, y: H.neckTop, width: H.neckW * 2, height: -4 - H.neckTop }, head);
+      sv("ellipse", { cx: 0, cy: H.face.cy, rx: H.face.rx, ry: H.face.ry }, head);
+      [-1, 1].forEach(sd => sv("ellipse", { cx: sd * H.ear.x, cy: H.ear.y, rx: H.ear.rx, ry: H.ear.ry }, head));
+      const hair = sv("g", { transform: `translate(${H.hairShift[0]} ${H.hairShift[1]})` }, head);
+      ["base", "mid", "light"].forEach(tone => sv("path", { d: H.hair[tone], "fill-rule": "evenodd", stroke: fill, "stroke-width": 0.25, "stroke-linejoin": "round" }, hair));
+      return { root, head };
+    };
+    return { solveArm, drawArm, face, torsoA, torsoB, headA, headB, headShift, silhouette };
   }
 
   // ── the Wheelers' basement (reached through the window well) ──
@@ -6789,7 +6808,7 @@ window.__ao3WorldInit = function (core) {
     const rugClip = sv("clipPath", { id: "bf-rugclip" }, defs);
     sv("path", { d: "M10 440 Q6 410 40 404 Q90 396 140 402 Q200 396 236 410 Q252 440 240 474 Q222 512 150 514 Q70 518 24 500 Q4 480 10 440 Z" }, rugClip);
     const soft = sv("filter", { id: "bf-soft", x: "-10%", y: "-10%", width: "120%", height: "120%" }, defs);
-    sv("feGaussianBlur", { stdDeviation: 1.2 }, soft);
+    sv("feGaussianBlur", { stdDeviation: 0.7 }, soft);
     const screenClip = sv("clipPath", { id: "bf-screenclip" }, defs);
     sv("rect", { x: 242, y: 262, width: 70, height: 62, rx: 9 }, screenClip);
 
@@ -6881,16 +6900,13 @@ window.__ao3WorldInit = function (core) {
     sv("ellipse", { cx: 100, cy: 356, rx: 140, ry: 140, fill: "url(#bf-gabvig)" }, inner);
     [[50, 414, 17, 10], [148, 416, 15, 9]].forEach(([cx, cy, rx, ry]) => sv("ellipse", { cx, cy, rx, ry, fill: "#f6dcb0", opacity: 0.45 }, inner));        // pillows in there
     sv("path", { d: "M80 250 Q74 340 80 424 M104 230 Q102 340 104 424 M128 250 Q134 340 126 424", stroke: "#a8683a", "stroke-width": 1, fill: "none", opacity: 0.3 }, inner);   // soft folds in the sheet
-    // two shadows, shoulder to shoulder; each head sits on a neck so it can tip toward the other
-    const sil = sv("g", { transform: "translate(-10 0)", filter: "url(#bf-soft)", fill: "#1d0f1a", opacity: 0.82 }, inner);
-    sv("path", { d: "M68 436 Q68 398 78 386 Q86 377 94 376 Q104 377 112 386 Q120 398 120 436 Z" }, sil);
-    sv("path", { d: "M106 436 Q106 396 116 384 Q124 375 131 374 Q142 375 150 384 Q160 396 160 436 Z" }, sil);
-    const headA = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 89, y: 364, width: 10, height: 16 }, headA); sv("circle", { cx: 94, cy: 357, r: 11 }, headA);
-    const headB = sv("g", { style: "transform-box:fill-box;transform-origin:50% 100%;" }, sil);
-    sv("rect", { x: 126, y: 362, width: 10, height: 16 }, headB); sv("circle", { cx: 131, cy: 354, r: 11.6 }, headB);
-    anim(headA, "animation:bfLeanA 11s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;");
-    anim(headB, "animation:bfLeanB 11s ease-in-out -0.4s infinite;transform-box:fill-box;transform-origin:50% 100%;");
+    // two shadows, shoulder to shoulder: the same Will (left) and Mike (right) as everywhere else, just flat (see bsKit); each head sits on its neck so it can tip toward the other
+    const sil = sv("g", { transform: "translate(-10 0)", filter: "url(#bf-soft)", opacity: 0.82 }, inner);
+    const { silhouette } = bsKit(sv, anim, {});
+    const shadow = (who, x, y, k) => silhouette(sv("g", { transform: `translate(${x} ${y}) scale(${k})` }, sil), who, "#1d0f1a");
+    const shA = shadow("a", 94, 379, 0.9), shB = shadow("b", 131, 379, 0.9);
+    anim(shA.head, "animation:bfLeanA 11s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;");
+    anim(shB.head, "animation:bfLeanB 11s ease-in-out -0.4s infinite;transform-box:fill-box;transform-origin:50% 100%;");
     // where the sheet meets the rug it falls into shadow, so the two sit down in it instead of floating
     const flf = sv("linearGradient", { id: "bf-floorfade", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
     sv("stop", { offset: "0%", "stop-color": "#1a0a1e", "stop-opacity": "0" }, flf); sv("stop", { offset: "100%", "stop-color": "#1a0a1e", "stop-opacity": "0.7" }, flf);
