@@ -6291,6 +6291,7 @@ window.__ao3WorldInit = function (core) {
       else if (mood === "smile") sv("path", Object.assign({ d: `M-3.4 ${m - 0.6} Q0 ${m + 3} 3.4 ${m - 0.6}` }, MS), g);
       else if (mood === "smirk") sv("path", Object.assign({ d: `M-3 ${m + 0.2} Q1 ${m + 1.4} 4 ${m - 1.6}` }, MS), g);
       else if (mood === "calm") sv("path", Object.assign({ d: `M-2.4 ${m} Q0 ${m + 1.4} 2.4 ${m}` }, MS), g);
+      else if (mood === "kiss") { /* lips are drawn by drawHead, at the edge where the two faces meet */ }
       else sv("path", Object.assign({ d: `M-2.8 ${m + 0.4} Q0 ${m + 0.9} 2.8 ${m + 0.4}` }, MS), g);
       if (p.blush || o.cheek || mood === "smile" || mood === "grin" || mood === "cheer") [-1, 1].forEach(sd => sv("ellipse", { cx: sd * (o.ex + 2.6), cy: m - 2.4, rx: p.blush ? 3.2 : o.cheek ? 3.1 : 2.4, ry: p.blush ? 2 : o.cheek ? 2 : 1.4, fill: p.blush ? "#e86a7a" : o.cheek ? "#ea8f8f" : "#e8908a", opacity: p.blush ? 0.6 : o.cheek ? 0.62 : 0.3 }, g));
     };
@@ -6373,9 +6374,18 @@ window.__ao3WorldInit = function (core) {
       sv("ellipse", { cx: 0, cy: H.face.cy, rx: H.face.rx, ry: H.face.ry, fill: H.skin }, h);
       const hair = sv("g", { transform: `translate(${H.hairShift[0]} ${H.hairShift[1]})` }, h);
       ["base", "mid", "light"].forEach((tone, i) => sv("path", { d: H.hair[tone], fill: H.hairFill[i], "fill-rule": "evenodd", stroke: H.hairFill[i], "stroke-width": 0.25, "stroke-linejoin": "round" }, hair));
-      [-1, 1].forEach(sd => ear(h, sd, H.ear, H.skin));
-      face(h, p, H.look);
-      if (H.mole) sv("circle", { cx: H.mole[0], cy: H.mole[1], r: 0.65, fill: "#5a3226" }, h);
+      // turn: a three-quarter turn toward the other person (+1 faces right, -1 faces left). The face (eyes, brows, cheeks) slides toward
+      // that side and narrows, the ear on the far side stays, and for a kiss the lips sit right on the facing edge, where the faces meet.
+      const turn = p.turn || 0;
+      [-1, 1].forEach(sd => { if (!turn || sd !== turn) ear(h, sd, H.ear, H.skin); });
+      const fg = turn ? sv("g", { transform: `translate(${(turn * H.face.rx * (p.turnAmt || 0.34)).toFixed(2)} 0) scale(${p.turnW || 0.8} 1)` }, h) : h;
+      face(fg, p, H.look);
+      if (turn && p.mood === "kiss") {
+        const lx = turn * (H.face.rx - 0.2), ly = H.look.my + 0.1;
+        sv("ellipse", { cx: lx, cy: ly, rx: 1.7, ry: 2.3, fill: "#c4525e", stroke: "#8a2f3a", "stroke-width": 0.4 }, h);
+        sv("path", { d: `M${lx - turn * 0.2} ${ly - 1.3} Q${lx + turn * 0.6} ${ly} ${lx - turn * 0.2} ${ly + 1.3}`, stroke: "#8a2f3a", "stroke-width": 0.5, fill: "none", "stroke-linecap": "round" }, h);
+      }
+      if (H.mole && turn !== 1) sv("circle", { cx: H.mole[0], cy: H.mole[1], r: 0.65, fill: "#5a3226" }, h);
     };
     const headA = (g, p) => drawHead(g, p, "a");
     const headB = (g, p) => drawHead(g, p, "b");
@@ -7173,9 +7183,9 @@ window.__ao3WorldInit = function (core) {
       ["m", "Can I kiss you? I know we— I know. I still like asking.", { b: { mood: "calm", blush: true, look: -1 } }],
       ["w", "You never have to ask.", { a: { mood: "calm", look: 1, blush: true } }],
       ["w", "…But I really like that you do.", { a: { mood: "smile", eyes: "happy", blush: true } }],
-      ["n", "Mike leans in slowly. Will meets him the rest of the way. It’s soft, and short, and a little off-center, and neither of them minds at all.", Object.assign({ hearts: 5, front: "a" }, { a: { sx: 12, lean: 8, head: [5, 2, 9], mood: "calm", eyes: "closed", blush: true, R: FI_CL[0] }, b: { sx: -8, lean: -7, head: [-5, 2, -9], mood: "calm", eyes: "closed", blush: true, L: FI_CL[1] } })],
+      ["n", "Mike leans in slowly. Will meets him the rest of the way. It’s soft, and short, and a little off-center, and neither of them minds at all.", Object.assign({ hearts: 5, front: "a" }, { a: { sx: 24, dy: -2, lean: 6, head: [3, 1, 5], turn: 1, mood: "kiss", eyes: "closed", blush: true, R: FI_CL[0] }, b: { sx: 7, dy: 10, lean: -6, head: [-3, 1, -5], turn: -1, mood: "kiss", eyes: "closed", blush: true, L: FI_CL[1] } })],
       ["n", "They stay like that a second longer than they meant to.", { hearts: 2 }],
-      ["w", "…Your nose is freezing.", { a: { sx: 4, lean: 0, head: [2, 1, 5], mood: "grin", eyes: "happy", blush: true, look: 1 }, b: { sx: -2, lean: 0, head: [-2, 2, -5], mood: "o", eyes: "open", blush: true, look: -1 } }],
+      ["w", "…Your nose is freezing.", { a: { sx: 4, dy: 0, lean: 0, head: [2, 1, 5], turn: 0, mood: "grin", eyes: "happy", blush: true, look: 1 }, b: { sx: -2, dy: 0, lean: 0, head: [-2, 2, -5], turn: 0, mood: "o", eyes: "open", blush: true, look: -1 } }],
       ["m", "Your hand is shaking.", { b: { mood: "grin", blush: true }, jig: true }],
       ["w", "So is yours.", { a: { mood: "smirk", eyes: "happy", blush: true } }],
       ["m", "…Yeah. I’m very happy. It’s a shaking kind of happy.", { b: { mood: "smile", eyes: "happy", blush: true }, hearts: 3 }],
