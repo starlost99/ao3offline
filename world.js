@@ -8291,7 +8291,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["mikes-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, bfFade } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
   const openWheelers = (...args) => world.openWheelers(...args);
@@ -8321,7 +8321,9 @@
     const { sv, rnd, anim } = sh.kit;
     const { sub, field, caption, pill, close } = sh;
     const say = t => { caption.textContent = t; };
-    const W = 360, H = 540, hits = [];
+    const W = 360, H = 540, hitsA = [], hitsB = [];
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    let cur = hitsA, view = "A";
     let leaving = false, nSign = 0, nCloset = 0;
     const tm = HK_TIMES[hkTimeGet()];
     sh.box.style.background = "#0f1a2c";
@@ -8341,122 +8343,197 @@
     sv("rect", { width: 14, height: 14, fill: "#e6dcc4" }, grid);
     sv("path", { d: "M0 0 H14 M0 0 V14", stroke: "#b9a888", "stroke-width": 1 }, grid);
 
+    const A = sv("g", {}, svg), B = sv("g", {}, svg);                                                                // the two sides of the room: A = the bed wall, B = the window wall
+    A.style.transition = B.style.transition = reduce ? "none" : "opacity .4s";
+    B.style.opacity = 0;
+    const arrow = (g, x, y, dir) => {                                                                                  // a small pulsing arrow at the edge: there is more of the room that way
+      sv("circle", { cx: x, cy: y, r: 12, fill: "#000", opacity: 0.38, "pointer-events": "none" }, g);
+      anim(sv("path", { d: `M${x - dir * 4} ${y - 8} L${x + dir * 4} ${y} L${x - dir * 4} ${y + 8}`, stroke: "#ffd98a", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round", "pointer-events": "none" }, g), "animation:hkPulse 2.6s ease-in-out infinite;");
+    };
+
     // ── the room shell: ceiling, blue back wall, skirting, dark red carpet ──
-    sv("rect", { x: 0, y: 0, width: W, height: 34, fill: "#0d1628" }, svg);
-    sv("rect", { x: 0, y: 30, width: W, height: 6, fill: "#1b2c48" }, svg);
-    sv("rect", { x: 0, y: 36, width: W, height: 304, fill: "#2c5a86" }, svg);                                          // the blue walls
-    sv("rect", { x: 0, y: 36, width: W, height: 304, fill: "#17304f", opacity: 0.35 }, svg);
-    sv("rect", { x: 0, y: 328, width: W, height: 12, fill: "#d6d0c0", opacity: 0.85 }, svg);                           // cream skirting
-    sv("rect", { x: 0, y: 340, width: W, height: 200, fill: "#4a1f22" }, svg);                                         // the carpet
-    for (let i = 0; i < 70; i++) sv("circle", { cx: (rnd("mrf" + i) * W).toFixed(1), cy: (344 + rnd("mrg" + i) * 190).toFixed(1), r: 1, fill: "#5e2a2c", opacity: 0.6 }, svg);
+    sv("rect", { x: 0, y: 0, width: W, height: 34, fill: "#0d1628" }, A);
+    sv("rect", { x: 0, y: 30, width: W, height: 6, fill: "#1b2c48" }, A);
+    sv("rect", { x: 0, y: 36, width: W, height: 304, fill: "#2c5a86" }, A);                                          // the blue walls
+    sv("rect", { x: 0, y: 36, width: W, height: 304, fill: "#17304f", opacity: 0.35 }, A);
+    sv("rect", { x: 0, y: 328, width: W, height: 12, fill: "#d6d0c0", opacity: 0.85 }, A);                           // cream skirting
+    sv("rect", { x: 0, y: 340, width: W, height: 200, fill: "#4a1f22" }, A);                                         // the carpet
+    for (let i = 0; i < 70; i++) sv("circle", { cx: (rnd("mrf" + i) * W).toFixed(1), cy: (344 + rnd("mrg" + i) * 190).toFixed(1), r: 1, fill: "#5e2a2c", opacity: 0.6 }, A);
     // TODO(figures): Will and Mike sit on the carpet in the lamplight here (same bsKit figures as the basement, about x 180, y 450).
-    sv("ellipse", { cx: MR.spot.x, cy: MR.spot.y, rx: MR.spot.rx, ry: MR.spot.ry, fill: "url(#mr-glow)", opacity: 0.22 }, svg);
+    sv("ellipse", { cx: MR.spot.x, cy: MR.spot.y, rx: MR.spot.rx, ry: MR.spot.ry, fill: "url(#mr-glow)", opacity: 0.22 }, A);
 
     // ── the room door, on the far left: the way down to the basement ──
     const dr = MR.door;
-    sv("rect", { x: dr.x, y: dr.y - 4, width: dr.w + 6, height: dr.h + 4, fill: "#b8b2a2" }, svg);
-    sv("rect", { x: dr.x, y: dr.y, width: dr.w, height: dr.h, fill: "#e4ddcb" }, svg);
-    sv("rect", { x: dr.x + 6, y: dr.y + 12, width: dr.w - 12, height: 100, fill: "none", stroke: "#bdb59f", "stroke-width": 1.4 }, svg);
-    sv("rect", { x: dr.x + 6, y: dr.y + 126, width: dr.w - 12, height: 140, fill: "none", stroke: "#bdb59f", "stroke-width": 1.4 }, svg);
-    sv("circle", { cx: dr.x + dr.w - 8, cy: dr.y + 140, r: 3, fill: "#c9a850" }, svg);
+    sv("rect", { x: dr.x, y: dr.y - 4, width: dr.w + 6, height: dr.h + 4, fill: "#b8b2a2" }, A);
+    sv("rect", { x: dr.x, y: dr.y, width: dr.w, height: dr.h, fill: "#e4ddcb" }, A);
+    sv("rect", { x: dr.x + 6, y: dr.y + 12, width: dr.w - 12, height: 100, fill: "none", stroke: "#bdb59f", "stroke-width": 1.4 }, A);
+    sv("rect", { x: dr.x + 6, y: dr.y + 126, width: dr.w - 12, height: 140, fill: "none", stroke: "#bdb59f", "stroke-width": 1.4 }, A);
+    sv("circle", { cx: dr.x + dr.w - 8, cy: dr.y + 140, r: 3, fill: "#c9a850" }, A);
 
     // ── posters and prints, the wall is covered ──
-    const paper = (pts, fill) => sv("polygon", { points: pts, fill, stroke: "#0f1e33", "stroke-width": 0.6, "stroke-opacity": 0.5 }, svg);
+    const paper = (pts, fill) => sv("polygon", { points: pts, fill, stroke: "#0f1e33", "stroke-width": 0.6, "stroke-opacity": 0.5 }, A);
     // a black-and-white print of a hand holding a glass sphere (top left)
     paper("62,66 98,64 100,122 63,124", "#d8d2c4");
-    sv("circle", { cx: 81, cy: 88, r: 12, fill: "#8a8a96", stroke: "#2a2a36", "stroke-width": 1.2 }, svg);
-    sv("path", { d: "M72 84 Q81 74 90 84 M70 92 Q81 100 92 92", stroke: "#2a2a36", "stroke-width": 1, fill: "none" }, svg);
-    sv("path", { d: "M68 122 Q74 106 81 102 Q88 106 94 122 Z", fill: "#3a3a46" }, svg);
+    sv("circle", { cx: 81, cy: 88, r: 12, fill: "#8a8a96", stroke: "#2a2a36", "stroke-width": 1.2 }, A);
+    sv("path", { d: "M72 84 Q81 74 90 84 M70 92 Q81 100 92 92", stroke: "#2a2a36", "stroke-width": 1, fill: "none" }, A);
+    sv("path", { d: "M68 122 Q74 106 81 102 Q88 106 94 122 Z", fill: "#3a3a46" }, A);
     // an action-movie poster: a warrior silhouette against orange, no lettering
     paper("108,84 134,82 136,148 109,150", "#1d1417");
-    sv("rect", { x: 111, y: 87, width: 22, height: 26, fill: "#c9482e" }, svg);
-    sv("path", { d: "M117 128 L119 108 L123 100 L127 108 L129 128 M119 108 L113 98 M127 108 L135 92", stroke: "#f0b45a", "stroke-width": 2.4, fill: "none", "stroke-linecap": "round" }, svg);
-    sv("rect", { x: 112, y: 134, width: 22, height: 3, fill: "#e0a032", opacity: 0.8 }, svg);
+    sv("rect", { x: 111, y: 87, width: 22, height: 26, fill: "#c9482e" }, A);
+    sv("path", { d: "M117 128 L119 108 L123 100 L127 108 L129 128 M119 108 L113 98 M127 108 L135 92", stroke: "#f0b45a", "stroke-width": 2.4, fill: "none", "stroke-linecap": "round" }, A);
+    sv("rect", { x: 112, y: 134, width: 22, height: 3, fill: "#e0a032", opacity: 0.8 }, A);
     // the corkboard, crowded
-    sv("rect", { x: 142, y: 104, width: 44, height: 34, fill: "#b8803c", stroke: "#8a5a28", "stroke-width": 2.4 }, svg);
-    [[146, 108, 12, 9, "#efe8d6"], [160, 108, 9, 9, "#c9482e"], [171, 109, 11, 8, "#e0a032"], [147, 120, 10, 8, "#9ac6e0"], [159, 119, 13, 9, "#e6dcc4"], [174, 120, 8, 10, "#efe8d6"], [150, 129, 12, 6, "#c9482e"], [166, 129, 14, 6, "#3f7fd0"]].forEach(([x, y, w, h, c]) => sv("rect", { x, y, width: w, height: h, fill: c, opacity: 0.92 }, svg));
+    sv("rect", { x: 142, y: 104, width: 44, height: 34, fill: "#b8803c", stroke: "#8a5a28", "stroke-width": 2.4 }, A);
+    [[146, 108, 12, 9, "#efe8d6"], [160, 108, 9, 9, "#c9482e"], [171, 109, 11, 8, "#e0a032"], [147, 120, 10, 8, "#9ac6e0"], [159, 119, 13, 9, "#e6dcc4"], [174, 120, 8, 10, "#efe8d6"], [150, 129, 12, 6, "#c9482e"], [166, 129, 14, 6, "#3f7fd0"]].forEach(([x, y, w, h, c]) => sv("rect", { x, y, width: w, height: h, fill: c, opacity: 0.92 }, A));
     // the big monster poster over the headboard: colour blocks and a green beast
     const mp = { x: 190, y: 82, w: 46, h: 90 };
-    sv("rect", { x: mp.x, y: mp.y, width: mp.w, height: mp.h, fill: "#efe8d6" }, svg);
-    [["#c9482e", 0], ["#e0a032", 1], ["#2c5a86", 2], ["#e0a032", 3]].forEach(([c, i]) => sv("rect", { x: mp.x + 2, y: mp.y + 2 + i * 21.5, width: mp.w - 4, height: 20.5, fill: c, opacity: 0.92 }, svg));
-    const mg = sv("g", { transform: "translate(-8 0)" }, svg);
+    sv("rect", { x: mp.x, y: mp.y, width: mp.w, height: mp.h, fill: "#efe8d6" }, A);
+    [["#c9482e", 0], ["#e0a032", 1], ["#2c5a86", 2], ["#e0a032", 3]].forEach(([c, i]) => sv("rect", { x: mp.x + 2, y: mp.y + 2 + i * 21.5, width: mp.w - 4, height: 20.5, fill: c, opacity: 0.92 }, A));
+    const mg = sv("g", { transform: "translate(-8 0)" }, A);
     sv("path", { d: "M210 118 L216 100 L222 108 L228 100 L234 118 L238 148 L222 162 L208 148 Z", fill: "#3f8a4a", stroke: "#1f4a2a", "stroke-width": 1 }, mg);
     sv("path", { d: "M212 104 L206 94 M234 104 L240 94", stroke: "#e6dcf5", "stroke-width": 2, "stroke-linecap": "round" }, mg);
     sv("circle", { cx: 219, cy: 117, r: 1.6, fill: "#ffd98a" }, mg); sv("circle", { cx: 227, cy: 117, r: 1.6, fill: "#ffd98a" }, mg);
     sv("path", { d: "M212 156 q10 8 20 0", stroke: "#7ad6ff", "stroke-width": 3, fill: "none" }, mg);
     // an optical-illusion print of stairs, small, by the closet
     paper("242,118 262,116 263,148 243,150", "#d8d2c4");
-    sv("path", { d: "M246 145 V130 H251 V136 H256 V124 H260 M248 145 H259", stroke: "#2a2a36", "stroke-width": 1.2, fill: "none" }, svg);
+    sv("path", { d: "M246 145 V130 H251 V136 H256 V124 H260 M248 145 H259", stroke: "#2a2a36", "stroke-width": 1.2, fill: "none" }, A);
 
     // ── the guitar on the wall, behind the lamp, and the nightstand with the lamp (red base, glowing shade) ──
-    sv("ellipse", { cx: 70, cy: 262, rx: 7, ry: 9, fill: "#8a5a34" }, svg);
-    sv("rect", { x: 68.5, y: 220, width: 3, height: 40, fill: "#4a3326" }, svg);
-    sv("rect", { x: 66, y: 214, width: 8, height: 9, rx: 1, fill: "#3a2418" }, svg);
-    sv("circle", { cx: 70, cy: 262, r: 2.4, fill: "#2a1a10" }, svg);
-    sv("rect", { x: 52, y: 292, width: 54, height: 6, fill: "#5a3a26" }, svg);
-    sv("rect", { x: 56, y: 298, width: 46, height: 42, fill: "#4a2f1e" }, svg);
-    sv("rect", { x: 60, y: 306, width: 38, height: 14, fill: "#5a3a26", stroke: "#3a2418", "stroke-width": 1 }, svg);
-    sv("circle", { cx: 79, cy: 313, r: 1.6, fill: "#d9c3a0" }, svg);
-    sv("rect", { x: 56, y: 276, width: 14, height: 16, fill: "#c9b08a" }, svg);                                          // a little radio or a box of tissues
-    anim(sv("circle", { cx: 86, cy: 258, r: 60, fill: "url(#mr-glow)", opacity: 0.62 }, svg), "animation:hkFlicker 4s ease-in-out infinite;");
-    sv("ellipse", { cx: 86, cy: 289, rx: 11, ry: 4, fill: "#c9482e" }, svg);
-    sv("rect", { x: 83, y: 272, width: 6, height: 17, fill: "#c9482e" }, svg);
-    sv("polygon", { points: "72,272 100,272 95,240 77,240", fill: "#ffe7ac" }, svg);
-    sv("path", { d: "M77 240 H95", stroke: "#f0b45a", "stroke-width": 1.2 }, svg);
+    sv("ellipse", { cx: 70, cy: 262, rx: 7, ry: 9, fill: "#8a5a34" }, A);
+    sv("rect", { x: 68.5, y: 220, width: 3, height: 40, fill: "#4a3326" }, A);
+    sv("rect", { x: 66, y: 214, width: 8, height: 9, rx: 1, fill: "#3a2418" }, A);
+    sv("circle", { cx: 70, cy: 262, r: 2.4, fill: "#2a1a10" }, A);
+    sv("rect", { x: 52, y: 292, width: 54, height: 6, fill: "#5a3a26" }, A);
+    sv("rect", { x: 56, y: 298, width: 46, height: 42, fill: "#4a2f1e" }, A);
+    sv("rect", { x: 60, y: 306, width: 38, height: 14, fill: "#5a3a26", stroke: "#3a2418", "stroke-width": 1 }, A);
+    sv("circle", { cx: 79, cy: 313, r: 1.6, fill: "#d9c3a0" }, A);
+    sv("rect", { x: 56, y: 276, width: 14, height: 16, fill: "#c9b08a" }, A);                                          // a little radio or a box of tissues
+    anim(sv("circle", { cx: 86, cy: 258, r: 60, fill: "url(#mr-glow)", opacity: 0.62 }, A), "animation:hkFlicker 4s ease-in-out infinite;");
+    sv("ellipse", { cx: 86, cy: 289, rx: 11, ry: 4, fill: "#c9482e" }, A);
+    sv("rect", { x: 83, y: 272, width: 6, height: 17, fill: "#c9482e" }, A);
+    sv("polygon", { points: "72,272 100,272 95,240 77,240", fill: "#ffe7ac" }, A);
+    sv("path", { d: "M77 240 H95", stroke: "#f0b45a", "stroke-width": 1.2 }, A);
 
     // ── the closet, on the right: a cream door with a full-length mirror, ties on the rail ──
     const cl = MR.closet;
-    sv("rect", { x: cl.x - 4, y: cl.y - 4, width: cl.w + 8, height: cl.h + 4, fill: "#b8b2a2" }, svg);
-    sv("rect", { x: cl.x, y: cl.y, width: cl.w, height: cl.h, fill: "#e4ddcb" }, svg);
-    sv("rect", { x: cl.x + 12, y: cl.y + 20, width: 40, height: 4, fill: "#8a6a3a" }, svg);                              // a peg rail
-    [[cl.x + 20, "#2c8aa6", 60], [cl.x + 30, "#7a2f3a", 52], [cl.x + 40, "#3a4a7a", 46]].forEach(([tx, tc, tl]) => { sv("path", { d: `M${tx} ${cl.y + 24} l5 ${tl} l-3.4 8 l-4.6 -8 Z`, fill: tc }, svg); });   // ties
-    sv("rect", { x: cl.x + 14, y: cl.y + 104, width: 46, height: 164, fill: "#14202f" }, svg);                             // the mirror, in a dark frame
-    sv("rect", { x: cl.x + 18, y: cl.y + 108, width: 38, height: 156, fill: "#3c6a8e" }, svg);
-    sv("rect", { x: cl.x + 20, y: cl.y + 112, width: 12, height: 22, fill: "#d9c3a0", opacity: 0.8 }, svg);              // a bit of curtain reflected
-    sv("polygon", { points: `${cl.x + 18},${cl.y + 108} ${cl.x + 40},${cl.y + 108} ${cl.x + 18},${cl.y + 170}`, fill: "#e8f2ff", opacity: 0.16 }, svg);
-    sv("rect", { x: cl.x + 66, y: cl.y + 150, width: 5, height: 28, rx: 1, fill: "#c9a850" }, svg);                      // handle
+    sv("rect", { x: cl.x - 4, y: cl.y - 4, width: cl.w + 8, height: cl.h + 4, fill: "#b8b2a2" }, A);
+    sv("rect", { x: cl.x, y: cl.y, width: cl.w, height: cl.h, fill: "#e4ddcb" }, A);
+    sv("rect", { x: cl.x + 12, y: cl.y + 20, width: 40, height: 4, fill: "#8a6a3a" }, A);                              // a peg rail
+    [[cl.x + 20, "#2c8aa6", 60], [cl.x + 30, "#7a2f3a", 52], [cl.x + 40, "#3a4a7a", 46]].forEach(([tx, tc, tl]) => { sv("path", { d: `M${tx} ${cl.y + 24} l5 ${tl} l-3.4 8 l-4.6 -8 Z`, fill: tc }, A); });   // ties
+    sv("rect", { x: cl.x + 14, y: cl.y + 104, width: 46, height: 164, fill: "#14202f" }, A);                             // the mirror, in a dark frame
+    sv("rect", { x: cl.x + 18, y: cl.y + 108, width: 38, height: 156, fill: "#3c6a8e" }, A);
+    sv("rect", { x: cl.x + 20, y: cl.y + 112, width: 12, height: 22, fill: "#d9c3a0", opacity: 0.8 }, A);              // a bit of curtain reflected
+    sv("polygon", { points: `${cl.x + 18},${cl.y + 108} ${cl.x + 40},${cl.y + 108} ${cl.x + 18},${cl.y + 170}`, fill: "#e8f2ff", opacity: 0.16 }, A);
+    sv("rect", { x: cl.x + 66, y: cl.y + 150, width: 5, height: 28, rx: 1, fill: "#c9a850" }, A);                      // handle
     // the ONE WAY sign, on the wall just left of the closet (it stops at the door frame)
     const sg = { x: 156, y: 44, w: 104, h: 26 };
-    sv("rect", { x: sg.x, y: sg.y, width: sg.w, height: sg.h, rx: 3, fill: "#2a4a7a", stroke: "#e8e8ee", "stroke-width": 1.6 }, svg);
-    const st = sv("text", { x: sg.x + 36, y: sg.y + 18, "text-anchor": "middle", "font-family": "Arial Black,Arial,Helvetica,sans-serif", "font-weight": 900, "font-size": 15, fill: "#f4f4f8" }, svg); st.textContent = "ONE WAY";
-    sv("path", { d: `M${sg.x + 70} ${sg.y + 13} H${sg.x + 92} M${sg.x + 86} ${sg.y + 6} L${sg.x + 98} ${sg.y + 13} L${sg.x + 86} ${sg.y + 20} Z`, stroke: "#f4f4f8", "stroke-width": 5, fill: "#f4f4f8", "stroke-linejoin": "round" }, svg);
+    sv("rect", { x: sg.x, y: sg.y, width: sg.w, height: sg.h, rx: 3, fill: "#2a4a7a", stroke: "#e8e8ee", "stroke-width": 1.6 }, A);
+    const st = sv("text", { x: sg.x + 36, y: sg.y + 18, "text-anchor": "middle", "font-family": "Arial Black,Arial,Helvetica,sans-serif", "font-weight": 900, "font-size": 15, fill: "#f4f4f8" }, A); st.textContent = "ONE WAY";
+    sv("path", { d: `M${sg.x + 70} ${sg.y + 13} H${sg.x + 92} M${sg.x + 86} ${sg.y + 6} L${sg.x + 98} ${sg.y + 13} L${sg.x + 86} ${sg.y + 20} Z`, stroke: "#f4f4f8", "stroke-width": 5, fill: "#f4f4f8", "stroke-linejoin": "round" }, A);
 
     // ── the bed: turned 3/4 so the whole top shows. Red arched headboard at the wall, pillows, a blue sheet, a checked comforter folded
     //    down, the striped knit blanket over the foot-left corner. The top is big enough for two to sit or lie on (see MR.bedTop). ──
     const bd = MR.bed;
-    sv("ellipse", { cx: 190, cy: 430, rx: 112, ry: 10, fill: "#000", opacity: 0.3 }, svg);                               // shadow on the carpet
-    sv("path", { d: "M120 300 V232 Q190 208 260 232 V300", stroke: "#c9482e", "stroke-width": 6, fill: "none", "stroke-linecap": "round" }, svg);      // arched headboard
-    sv("path", { d: "M120 262 Q190 240 260 262", stroke: "#c9482e", "stroke-width": 4, fill: "none" }, svg);
-    for (let x = 134; x < 256; x += 16) sv("rect", { x, y: 246 + Math.abs(x - 190) * 0.12, width: 3, height: 54 - Math.abs(x - 190) * 0.12, fill: "#c9482e" }, svg);
-    sv("polygon", { points: "118,296 262,296 282,376 98,376", fill: "#2c4f9a" }, svg);                                   // the mattress top, a blue sheet
-    sv("rect", { x: 132, y: 291, width: 58, height: 22, rx: 9, fill: "#e8dfc8", stroke: "#b9a888", "stroke-width": 0.8 }, svg);   // two pillows
-    sv("rect", { x: 196, y: 291, width: 58, height: 22, rx: 9, fill: "#efe8d6", stroke: "#b9a888", "stroke-width": 0.8 }, svg);
-    sv("polygon", { points: "111.5,322 268.5,322 282,376 98,376", fill: "url(#mr-grid)" }, svg);                         // the checked comforter, folded down
-    sv("polygon", { points: "111.5,322 268.5,322 272.6,340 107.4,340", fill: "#c9b48a", opacity: 0.85 }, svg);           // the gingham fold-over
-    sv("path", { d: "M130 352 Q190 346 250 354 M116 366 Q190 360 270 368", stroke: "#a89870", "stroke-width": 0.9, fill: "none", opacity: 0.7 }, svg);   // creases
-    sv("polygon", { points: "98,376 282,376 280,414 100,416", fill: "url(#mr-grid)" }, svg);                             // the foot of the bed, drooping comforter
-    sv("polygon", { points: "98,376 282,376 280,414 100,416", fill: "#2a2236", opacity: 0.28 }, svg);
-    sv("path", { d: "M98 376 H282", stroke: "#a89870", "stroke-width": 1.2 }, svg);
-    sv("rect", { x: 98, y: 412, width: 6, height: 24, fill: "#c9482e" }, svg); sv("rect", { x: 276, y: 412, width: 6, height: 24, fill: "#c9482e" }, svg);   // the legs
+    sv("ellipse", { cx: 190, cy: 430, rx: 112, ry: 10, fill: "#000", opacity: 0.3 }, A);                               // shadow on the carpet
+    sv("path", { d: "M120 300 V232 Q190 208 260 232 V300", stroke: "#c9482e", "stroke-width": 6, fill: "none", "stroke-linecap": "round" }, A);      // arched headboard
+    sv("path", { d: "M120 262 Q190 240 260 262", stroke: "#c9482e", "stroke-width": 4, fill: "none" }, A);
+    for (let x = 134; x < 256; x += 16) sv("rect", { x, y: 246 + Math.abs(x - 190) * 0.12, width: 3, height: 54 - Math.abs(x - 190) * 0.12, fill: "#c9482e" }, A);
+    sv("polygon", { points: "118,296 262,296 282,376 98,376", fill: "#2c4f9a" }, A);                                   // the mattress top, a blue sheet
+    sv("rect", { x: 132, y: 291, width: 58, height: 22, rx: 9, fill: "#e8dfc8", stroke: "#b9a888", "stroke-width": 0.8 }, A);   // two pillows
+    sv("rect", { x: 196, y: 291, width: 58, height: 22, rx: 9, fill: "#efe8d6", stroke: "#b9a888", "stroke-width": 0.8 }, A);
+    sv("polygon", { points: "111.5,322 268.5,322 282,376 98,376", fill: "url(#mr-grid)" }, A);                         // the checked comforter, folded down
+    sv("polygon", { points: "111.5,322 268.5,322 272.6,340 107.4,340", fill: "#c9b48a", opacity: 0.85 }, A);           // the gingham fold-over
+    sv("path", { d: "M130 352 Q190 346 250 354 M116 366 Q190 360 270 368", stroke: "#a89870", "stroke-width": 0.9, fill: "none", opacity: 0.7 }, A);   // creases
+    sv("polygon", { points: "98,376 282,376 280,414 100,416", fill: "url(#mr-grid)" }, A);                             // the foot of the bed, drooping comforter
+    sv("polygon", { points: "98,376 282,376 280,414 100,416", fill: "#2a2236", opacity: 0.28 }, A);
+    sv("path", { d: "M98 376 H282", stroke: "#a89870", "stroke-width": 1.2 }, A);
+    sv("rect", { x: 98, y: 412, width: 6, height: 24, fill: "#c9482e" }, A); sv("rect", { x: 276, y: 412, width: 6, height: 24, fill: "#c9482e" }, A);   // the legs
     // the striped knit blanket, draped over the foot-left corner and hanging down the front
-    sv("polygon", { points: "108,346 178,344 190,376 98,376", fill: "#e8dfc8" }, svg);
-    [["#c9482e", 352], ["#2a3f8a", 362]].forEach(([c, y]) => sv("polygon", { points: `${108 - (y - 346) * 0.5},${y} ${178 + (y - 346) * 0.7},${y - 2} ${180 + (y - 346) * 0.7},${y + 6} ${104 - (y - 346) * 0.5},${y + 8}`, fill: c }, svg));
-    const bl = sv("g", {}, svg);
+    sv("polygon", { points: "108,346 178,344 190,376 98,376", fill: "#e8dfc8" }, A);
+    [["#c9482e", 352], ["#2a3f8a", 362]].forEach(([c, y]) => sv("polygon", { points: `${108 - (y - 346) * 0.5},${y} ${178 + (y - 346) * 0.7},${y - 2} ${180 + (y - 346) * 0.7},${y + 6} ${104 - (y - 346) * 0.5},${y + 8}`, fill: c }, A));
+    const bl = sv("g", {}, A);
     sv("polygon", { points: "98,376 190,376 186,432 100,434", fill: "#e8dfc8" }, bl);
     [["#c9482e", 388], ["#2a3f8a", 408], ["#c9482e", 426]].forEach(([c, y]) => sv("polygon", { points: `98,${y - 6} 188,${y - 12} 188,${y + 2} 98,${y + 8}`, fill: c }, bl));
-    sv("path", { d: "M100 434 L186 432", stroke: "#e8dfc8", "stroke-width": 3, fill: "none" }, svg);
-    for (let k = 0; k < 9; k++) sv("path", { d: `M${104 + k * 10} 434 v6`, stroke: "#e8dfc8", "stroke-width": 1.6 }, svg);   // fringe
+    sv("path", { d: "M100 434 L186 432", stroke: "#e8dfc8", "stroke-width": 3, fill: "none" }, A);
+    for (let k = 0; k < 9; k++) sv("path", { d: `M${104 + k * 10} 434 v6`, stroke: "#e8dfc8", "stroke-width": 1.6 }, A);   // fringe
     // TODO(figures): Will and Mike sit and lie on the bed's top (the polygon in MR.bedTop), propped on the pillows, reading comics.
 
     // ── on the carpet: a heap of clothes at the foot of the bed and a pair of shoes by the closet, each with a shadow so it sits on the floor ──
-    sv("ellipse", { cx: 238, cy: 494, rx: 36, ry: 6, fill: "#000", opacity: 0.3 }, svg);
-    sv("path", { d: "M206 492 Q208 474 224 472 Q232 462 246 470 Q262 470 268 486 Q270 494 262 496 H210 Z", fill: "#d8c9b0" }, svg);
-    sv("path", { d: "M224 492 Q228 480 240 484 Q250 482 256 492 Z", fill: "#2c2a3a", opacity: 0.85 }, svg);
-    sv("path", { d: "M214 486 Q226 480 236 488", stroke: "#b9a888", "stroke-width": 1, fill: "none" }, svg);
+    sv("ellipse", { cx: 238, cy: 494, rx: 36, ry: 6, fill: "#000", opacity: 0.3 }, A);
+    sv("path", { d: "M206 492 Q208 474 224 472 Q232 462 246 470 Q262 470 268 486 Q270 494 262 496 H210 Z", fill: "#d8c9b0" }, A);
+    sv("path", { d: "M224 492 Q228 480 240 484 Q250 482 256 492 Z", fill: "#2c2a3a", opacity: 0.85 }, A);
+    sv("path", { d: "M214 486 Q226 480 236 488", stroke: "#b9a888", "stroke-width": 1, fill: "none" }, A);
     [[286, 458, 0], [308, 462, 8]].forEach(([x, y, r]) => {
-      sv("ellipse", { cx: x + 8, cy: y + 8, rx: 14, ry: 3.4, fill: "#000", opacity: 0.3 }, svg);
-      sv("path", { d: `M${x - 4} ${y + 4} Q${x - 4} ${y - 4} ${x + 6} ${y - 4} L${x + 12} ${y} Q${x + 20} ${y} ${x + 20} ${y + 6} V${y + 8} H${x - 4} Z`, fill: "#b89c76", transform: `rotate(${r} ${x} ${y})` }, svg);
+      sv("ellipse", { cx: x + 8, cy: y + 8, rx: 14, ry: 3.4, fill: "#000", opacity: 0.3 }, A);
+      sv("path", { d: `M${x - 4} ${y + 4} Q${x - 4} ${y - 4} ${x + 6} ${y - 4} L${x + 12} ${y} Q${x + 20} ${y} ${x + 20} ${y + 6} V${y + 8} H${x - 4} Z`, fill: "#b89c76", transform: `rotate(${r} ${x} ${y})` }, A);
     });
+
+    arrow(A, 344, 478, 1);                                                                                             // on the bed wall: the arrow to the window wall
+
+    // ═══ the other side of the room: the window wall, with the desk and chair (view B) ═══
+    // The lit window you see from the lawn, strung with fairy lights, curtains, and a desk under it with a chair pulled out.
+    // The window is the way back out to the lawn. The small arrow on the left turns back to the bed wall.
+    const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
+    const strand = (g, x0, y0, x1, y1, d, n, seed) => {                                                                // a drooping string of little lights
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 + d * 2;
+      sv("path", { d: `M${x0} ${y0} Q${cx} ${cy} ${x1} ${y1}`, stroke: "#14202f", "stroke-width": 0.9, fill: "none" }, g);
+      for (let i = 0; i < n; i++) {
+        const t = n === 1 ? 0.5 : i / (n - 1), u = 1 - t, col = BULB[(i + seed) % BULB.length];
+        const bx = (u * u * x0 + 2 * u * t * cx + t * t * x1).toFixed(1), by = (u * u * y0 + 2 * u * t * cy + t * t * y1 + 1).toFixed(1);
+        sv("circle", { cx: bx, cy: by, r: 5, fill: col, opacity: 0.22 }, g);
+        anim(sv("circle", { cx: bx, cy: by, r: 1.9, fill: col }, g), `animation:hkTwinkle ${(1.6 + rnd("mrw" + seed + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("mrz" + seed + i) * 3).toFixed(1)}s infinite;`);
+      }
+    };
+    sv("rect", { x: 0, y: 0, width: W, height: 34, fill: "#0d1628" }, B);
+    sv("rect", { x: 0, y: 30, width: W, height: 6, fill: "#1b2c48" }, B);
+    sv("rect", { x: 0, y: 36, width: W, height: 304, fill: "#2c5a86" }, B);
+    sv("rect", { x: 0, y: 36, width: W, height: 304, fill: "#17304f", opacity: 0.35 }, B);
+    sv("rect", { x: 0, y: 328, width: W, height: 12, fill: "#d6d0c0", opacity: 0.85 }, B);
+    sv("rect", { x: 0, y: 340, width: W, height: 200, fill: "#4a1f22" }, B);
+    for (let i = 0; i < 70; i++) sv("circle", { cx: (rnd("mrh" + i) * W).toFixed(1), cy: (344 + rnd("mri" + i) * 190).toFixed(1), r: 1, fill: "#5e2a2c", opacity: 0.6 }, B);
+    // posters either side of the window
+    sv("polygon", { points: "50,92 96,90 98,168 51,170", fill: "#1d2238", stroke: "#0f1e33", "stroke-width": 0.6 }, B);                // a night-sky poster
+    sv("circle", { cx: 74, cy: 124, r: 13, fill: "#d9a860" }, B); sv("ellipse", { cx: 74, cy: 124, rx: 22, ry: 4.4, fill: "none", stroke: "#efe8d6", "stroke-width": 1.4 }, B);
+    for (let i = 0; i < 8; i++) sv("circle", { cx: (56 + rnd("mrp" + i) * 36).toFixed(1), cy: (96 + rnd("mrq" + i) * 68).toFixed(1), r: 0.8, fill: "#fff" }, B);
+    sv("polygon", { points: "266,106 318,102 320,170 267,172", fill: "#efe8d6", stroke: "#0f1e33", "stroke-width": 0.6 }, B);               // a comic-cover poster
+    sv("rect", { x: 270, y: 110, width: 46, height: 28, fill: "#c9482e" }, B);
+    sv("path", { d: "M276 134 L286 118 L296 130 L304 114 L312 134 Z", fill: "#f0b45a" }, B);
+    sv("rect", { x: 272, y: 144, width: 42, height: 3, fill: "#2a3f8a" }, B); sv("rect", { x: 272, y: 152, width: 30, height: 3, fill: "#2a3f8a" }, B);
+    // the window, with the sky outside, curtains, and fairy lights
+    const sky = { night: "#18203a", dusk: "#8a4a62", dawn: "#6e75b0" }[tm.name], wd = { x: 126, y: 66, w: 108, h: 112 };
+    sv("rect", { x: wd.x - 6, y: wd.y - 6, width: wd.w + 12, height: wd.h + 12, fill: "#e4ddcb" }, B);
+    sv("rect", { x: wd.x, y: wd.y, width: wd.w, height: wd.h, fill: sky }, B);
+    if (tm.name !== "dawn") for (let i = 0; i < 12; i++) sv("circle", { cx: (wd.x + 5 + rnd("mrx" + i) * (wd.w - 10)).toFixed(1), cy: (wd.y + 5 + rnd("mry" + i) * (wd.h * 0.6)).toFixed(1), r: 0.9, fill: "#fff", opacity: 0.7 }, B);
+    if (HK_WX[hkWxGet()][0] === "snow") for (let i = 0; i < 22; i++) sv("circle", { cx: (wd.x + 4 + rnd("mrr" + i) * (wd.w - 8)).toFixed(1), cy: (wd.y + 4 + rnd("mrt" + i) * (wd.h - 8)).toFixed(1), r: 1.3, fill: "#fff" }, B);
+    sv("path", { d: `M${wd.x + wd.w / 2} ${wd.y} V${wd.y + wd.h} M${wd.x} ${wd.y + wd.h / 2} H${wd.x + wd.w}`, stroke: "#e4ddcb", "stroke-width": 2.6 }, B);
+    sv("path", { d: `M${wd.x} ${wd.y} H${wd.x + 16} Q${wd.x + 10} ${wd.y + wd.h / 2} ${wd.x + 14} ${wd.y + wd.h} H${wd.x} Z M${wd.x + wd.w} ${wd.y} H${wd.x + wd.w - 16} Q${wd.x + wd.w - 10} ${wd.y + wd.h / 2} ${wd.x + wd.w - 14} ${wd.y + wd.h} H${wd.x + wd.w}`, fill: "#b9772a", opacity: 0.85 }, B);   // amber curtains
+    sv("circle", { cx: 180, cy: 122, r: 90, fill: "url(#mr-glow)", opacity: 0.22 }, B);
+    strand(B, wd.x + 2, wd.y + 6, wd.x + wd.w - 2, wd.y + 6, 6, 9, 1);                                                  // two swags across the glass, as seen from outside
+    strand(B, wd.x + 2, wd.y + 30, wd.x + wd.w - 2, wd.y + 30, 5, 8, 3);
+    strand(B, 14, 48, 346, 48, 10, 15, 2);                                                                              // and a long string along the top of the wall
+    // the desk under the window: top, drawers on the right, a lamp, a stack of comics, the walkie-talkie
+    sv("rect", { x: 84, y: 232, width: 192, height: 10, fill: "#6b4630" }, B);
+    sv("rect", { x: 90, y: 242, width: 180, height: 5, fill: "#4a2f1e" }, B);
+    sv("rect", { x: 90, y: 247, width: 8, height: 93, fill: "#4a2f1e" }, B);
+    sv("rect", { x: 262, y: 247, width: 8, height: 93, fill: "#4a2f1e" }, B);
+    sv("rect", { x: 208, y: 247, width: 54, height: 80, fill: "#5a3a26", stroke: "#3a2418", "stroke-width": 1 }, B);
+    sv("path", { d: "M208 274 H262 M208 300 H262", stroke: "#3a2418", "stroke-width": 1 }, B);
+    [[235, 260], [235, 287], [235, 313]].forEach(([hx, hy]) => sv("circle", { cx: hx, cy: hy, r: 1.8, fill: "#d9c3a0" }, B));
+    sv("rect", { x: 98, y: 214, width: 28, height: 18, fill: "#6a4a30" }, B);                                           // comics, stacked
+    sv("rect", { x: 100, y: 208, width: 24, height: 6, fill: "#c9482e" }, B);
+    sv("rect", { x: 99, y: 202, width: 24, height: 6, fill: "#3f7fd0" }, B);
+    sv("path", { d: "M236 232 V212 L224 198", stroke: "#2a2a36", "stroke-width": 2.6, fill: "none", "stroke-linecap": "round" }, B);   // the desk lamp
+    sv("polygon", { points: "216,196 232,192 236,204 222,206", fill: "#3a2a1a" }, B);
+    anim(sv("circle", { cx: 226, cy: 206, r: 38, fill: "url(#mr-glow)", opacity: 0.6 }, B), "animation:hkFlicker 4s ease-in-out infinite;");
+    sv("rect", { x: 246, y: 214, width: 12, height: 18, rx: 2, fill: "#2a2a36", stroke: "#4a4a5a", "stroke-width": 0.8 }, B);   // the walkie-talkie
+    sv("path", { d: "M249 214 V202", stroke: "#4a4a5a", "stroke-width": 1.4 }, B);
+    // the chair, pulled out from the desk
+    sv("ellipse", { cx: 160, cy: 346, rx: 34, ry: 6, fill: "#000", opacity: 0.3 }, B);
+    sv("rect", { x: 132, y: 256, width: 56, height: 40, rx: 8, fill: "#34447a", stroke: "#1f2a52", "stroke-width": 1 }, B);   // the back
+    sv("rect", { x: 128, y: 298, width: 64, height: 18, rx: 7, fill: "#2b3862" }, B);                                        // the seat
+    sv("rect", { x: 157, y: 316, width: 6, height: 22, fill: "#2a2a36" }, B);                                                 // the stem and the base
+    sv("path", { d: "M136 342 H184 M160 338 L138 346 M160 338 L182 346", stroke: "#2a2a36", "stroke-width": 3, "stroke-linecap": "round" }, B);
+    arrow(B, 18, 478, -1);                                                                                             // on the window wall: the arrow back to the bed wall
 
     // ── the night's tint, cold light from the right, a soft vignette ──
     sv("rect", { x: 0, y: 0, width: W, height: H, fill: tm.tint[0], opacity: tm.tint[1], "pointer-events": "none" }, svg);
@@ -8466,7 +8543,9 @@
     // ── the ways out, and the tappable furniture ──
     const goDown = () => { if (leaving) return; leaving = true; say("Down the stairs, one creaky step at a time…"); bfFade(sh, () => openBasement()); };
     const goOutside = () => { if (leaving) return; leaving = true; say("Down the stairs, past the kitchen, and out the front door…"); bfFade(sh, () => openWheelers()); };
-    const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
+    const hit = (x, y, w, h, label, fn) => cur.push([x, y, w, h, label, fn]);
+    const goWindow = () => { if (leaving) return; leaving = true; say("You lean out of the window. The lawn is a long way down, and so is the bike on it."); bfFade(sh, () => openWheelers()); };
+    hit(318, 452, 38, 52, "Turn to the window wall", () => setView("B"));
     hit(MR.door.x, MR.door.y - 4, MR.door.w + 6, MR.door.h + 4, "The door, and the way down to the basement", goDown);
     hit(60, 62, 44, 64, "The black-and-white print", () => say("A black-and-white print of a hand holding a glass ball. Everything in it is upside down."));
     hit(106, 80, 32, 72, "The action poster", () => say("A warrior poster, a bit curled at the corners. It has been read to death."));
@@ -8480,12 +8559,32 @@
     hit(MR.closet.x - 4, MR.closet.y + 8, MR.closet.w + 8, MR.closet.h - 8, "The closet", () => say(["A closet door with a mirror on it and ties hanging from the rail. One of them is very teal.", "In the mirror: a room that looks a lot like this one, but tidier."][nCloset++ % 2]));
     hit(200, 462, 70, 36, "The pile of clothes", () => say("A heap of clothes at the foot of the bed. Clean or dirty is anyone’s guess."));
     hit(120, 440, 150, 80, "The carpet", () => say("The carpet in the lamplight. The best spot in the room."));
-    const hitG = sv("g", {}, svg);
-    hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
+    cur = hitsB;
+    hit(2, 452, 38, 52, "Turn to the bed wall", () => setView("A"));
+    hit(120, 60, 120, 124, "The window, and the way out to the lawn", goWindow);
+    hit(50, 88, 50, 84, "The night-sky poster", () => say("A poster of a ringed planet over a field of stars. Somebody has circled one star in pencil."));
+    hit(264, 100, 58, 74, "The comic poster", () => say("A comic-book cover pinned up crooked. The hero is mid-leap and slightly cross-eyed."));
+    hit(84, 196, 190, 56, "The desk", () => say("The desk under the window. A lamp, a stack of comics and a walkie-talkie, and a lot of eraser crumbs."));
+    hit(96, 196, 36, 38, "The comics", () => say("A stack of comics, dog-eared and soft from being read. Nobody lends these out."));
+    hit(244, 198, 18, 36, "The walkie-talkie", () => say("The walkie-talkie, switched on, waiting for somebody to say something."));
+    hit(126, 250, 70, 100, "The desk chair", () => say("The chair is pulled out at an angle, like somebody stood up in a hurry."));
+    hit(204, 244, 62, 90, "The desk drawers", () => say("The drawers are stuck shut. A rubber band is sticking out of the top one."));
+    const mkHits = list => { const g = sv("g", {}, svg); list.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, g); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); }); return g; };
+    const gA = mkHits(hitsA), gB = mkHits(hitsB);
+    gB.style.display = "none";
     field.appendChild(svg);
 
     sub.textContent = "hawkins · mike’s room";
     say("Mike’s room: blue walls, a lamp left on, and a ONE WAY sign over the closet.");
+    const turnBtn = pill("\u2194 window wall", "Turn to look at the other side of the room", () => setView(view === "A" ? "B" : "A"));
+    const setView = v => {
+      view = v;
+      A.style.opacity = v === "A" ? 1 : 0; B.style.opacity = v === "B" ? 1 : 0;
+      gA.style.display = v === "A" ? "" : "none"; gB.style.display = v === "B" ? "" : "none";
+      turnBtn.textContent = v === "A" ? "\u2194 window wall" : "\u2194 bed wall";
+      sub.textContent = v === "A" ? "hawkins \u00B7 mike\u2019s room" : "hawkins \u00B7 mike\u2019s room \u00B7 the window";
+      say(v === "A" ? "Back to the bed, the lamp and the closet." : "The window wall. Fairy lights, the desk, and a chair pushed out in a hurry.");
+    };
     pill("\u{1FA9C} downstairs", "Down the stairs to the basement", goDown);
     pill("\u{1F3E1} outside", "Out the front door to the lawn", goOutside);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
