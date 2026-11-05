@@ -8293,13 +8293,15 @@
   'use strict';
   const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
+  const { bsKit } = ctx.lib["figures"];
   const world = ctx.world;
   const openWheelers = (...args) => world.openWheelers(...args);
   const openBasement = (...args) => world.openBasement(...args);
   const openHawkins = (...args) => world.openHawkins(...args);
 
   // ── Mike's room (reached through his window from the front lawn, or up the stairs from the basement) ──
-  // LAYOUT ONLY for now: the room, its furniture and the ways in and out. No Will and Mike yet, no moments, no small props.
+  // The room, its furniture and the ways in and out, and now Will and Mike in the bed (see "in the bed" below): the same figures as at
+  // the basement table, propped on the pillows under the comforter, with a handful of sweet little "moments" that play by themselves.
   // Styled after the room in the show: deep blue walls covered in posters, a red metal bed with a checked comforter and a striped knit
   // blanket, a lamp with a red base on the nightstand (a guitar on the wall behind it), a corkboard, a ONE WAY street sign over a
   // closet with a mirrored door (ties hanging off it), dark red carpet, and cold blue light coming in from the right.
@@ -8316,15 +8318,75 @@
     closet: { x: 270, y: 66, w: 78, h: 274 }
   };
 
+  // ── the moments in the bed ──
+  // Each moment: beats [who, text, patch?]. who: "w" Will, "m" Mike, "n" the caption only. A patch changes the pose from that beat on:
+  // { a: Will's, b: Mike's } (mood, eyes, head [dx, dy, tilt], turn, sx, lean, blush, look, L / R hands as [x, y] on the picture, or "lap" for hidden),
+  // hearts: n (a puff of hearts), jig: true (a happy wiggle), comic: true / false (the open comic on the covers). Everything is gentle and innocent.
+  const MR_CL = [[187, 338], [196, 337]];                 // where their two hands meet, on top of the comforter
+  const MR_HOLD = { a: { R: MR_CL[0] }, b: { L: MR_CL[1] } };
+  const MR_BASE = { a: { sx: 3, head: [2, 1, 4], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: -3, head: [-2, 1, -4], mood: "smile", look: -1, L: "lap", R: "lap" } };
+  const MR_KEY = "ao3-mr-moment";                          // the last moment played (the only thing saved here), so it is never the same one twice running
+  const MR_MOMENTS = [
+    { name: "the comic", beats: [
+      ["n", "Mike has a comic open across both their knees. Will is looking at it. Mostly.", { comic: true, a: { R: [178, 340], look: 1 }, b: { L: [206, 339], mood: "calm", look: 0 } }],
+      ["m", "Okay, this is the good part. Watch the next page.", { b: { mood: "grin" } }],
+      ["w", "I’m watching.", { a: { mood: "smirk" } }],
+      ["m", "You’re watching me.", { b: { mood: "o", blush: true, look: -1 } }],
+      ["w", "…The page isn’t going anywhere.", { a: { eyes: "happy", blush: true, mood: "grin" }, jig: true }],
+      ["m", "Neither am I.", { b: { mood: "smile", eyes: "happy", blush: true }, hearts: 2 }],
+      ["n", "Page fourteen stays open for a very long time.", { hearts: 2 }]] },
+    { name: "heavy head", beats: [
+      ["n", "It’s late. Will’s eyes have been closing, one slow blink at a time, for about five minutes.", { a: { mood: "calm", eyes: "closed" } }],
+      ["m", "Hey. You’re falling asleep.", { b: { mood: "smile", look: -1 } }],
+      ["w", "Am not.", { a: { mood: "smirk", lean: 6, head: [5, 2, 9] } }],
+      ["m", "You’re on my shoulder.", { b: { lean: -3, mood: "o", blush: true } }],
+      ["w", "It’s a good shoulder.", { a: { lean: 10, head: [6, 3, 11], blush: true, mood: "smile" }, hearts: 2 }],
+      ["m", "…Okay. You can stay there.", { b: { mood: "smile", eyes: "happy", L: [181, 313], blush: true } }],
+      ["n", "Mike doesn’t move, not even when his arm goes to sleep. He thinks it’s worth it.", { hearts: 3 }]] },
+    { name: "cold hands", beats: [
+      ["n", "Two hands find each other on top of the comforter. Nobody planned it.", Object.assign({ hearts: 1 }, MR_HOLD)],
+      ["w", "Your hand is freezing.", { a: { mood: "o" } }],
+      ["m", "It’s a very warm hand. It’s just had a rough day.", { b: { mood: "smirk" } }],
+      ["w", "That’s not how hands work.", { a: { mood: "grin", eyes: "happy" } }],
+      ["m", "You’re still holding it, though.", { b: { mood: "grin", blush: true }, jig: true }],
+      ["w", "…Yeah. I am.", { a: { mood: "smile", blush: true, look: 1 } }],
+      ["n", "A thumb goes back and forth, slowly. It’s a small, serious gesture.", { hearts: 3 }]] },
+    { name: "foreheads", beats: [
+      ["n", "They’ve both gone quiet. Will looks over. Mike looks back. Nobody looks away.", { a: { look: 1, mood: "calm", blush: true }, b: { look: -1, mood: "calm", blush: true } }],
+      ["m", "What?", { b: { mood: "o" } }],
+      ["w", "Nothing. You just have a very… Mike face.", { a: { mood: "smirk" } }],
+      ["m", "That’s a terrible compliment.", { b: { mood: "grin", blush: true } }],
+      ["w", "It’s the best one I’ve got.", { a: { mood: "smile", eyes: "happy" } }],
+      ["n", "Mike leans in until their foreheads touch. They both close their eyes, and neither says a word.", { hearts: 4, a: { lean: 5, head: [4, 2, 8], turn: 1, eyes: "closed", mood: "smile", blush: true }, b: { lean: -5, head: [-4, 2, -8], turn: -1, eyes: "closed", mood: "smile", blush: true } }],
+      ["n", "The lamp hums. The house ticks. It’s quiet in the good way.", { hearts: 2 }]] },
+    { name: "ticklish", beats: [
+      ["n", "Mike has discovered that Will is ticklish. Mike has not been able to think about anything else since.", { a: { mood: "o" }, b: { mood: "smirk", look: -1 } }],
+      ["m", "Truce? Or…", { b: { L: [172, 331] } }],
+      ["w", "Don’t you dare—", { a: { mood: "o", lean: -4 } }],
+      ["m", "Last chance.", { b: { mood: "grin" } }],
+      ["w", "AH— MIKE— okay! Okay! Truce!", { a: { mood: "cheer", eyes: "happy", blush: true }, jig: true, hearts: 2 }],
+      ["m", "Truce accepted.", { b: { mood: "smile", L: "lap", blush: true } }],
+      ["n", "Will is wheezing into the pillow. He’s still smiling, though, and he doesn’t move away.", { a: { lean: 5, head: [3, 2, 6] }, hearts: 3 }]] },
+    { name: "the lamp", beats: [
+      ["n", "The lamp on the nightstand is still on, glowing amber over the covers.", { a: { mood: "calm" }, b: { mood: "calm" } }],
+      ["w", "Mike. The lamp.", { a: { mood: "smirk" } }],
+      ["m", "It’s a nightlight now.", { b: { mood: "smirk" } }],
+      ["w", "It’s a very bright nightlight.", { a: { mood: "grin" } }],
+      ["m", "Okay, you’re closer. You get it.", { b: { mood: "grin" } }],
+      ["w", "I’m not leaving the blanket.", { a: { mood: "smile", eyes: "happy", blush: true } }],
+      ["m", "…Then it stays on.", { b: { mood: "smile", blush: true }, hearts: 2 }],
+      ["n", "The lamp stays on. Neither of them minds, and neither of them gets up.", Object.assign({ hearts: 3, a: { lean: 4, head: [3, 2, 6] }, b: { lean: -4, head: [-3, 2, -6] } }, MR_HOLD)]] }
+  ];
+
   function openMikesRoom() {
     const sh = hkShell("ao3-mikes-room", "\u{1F6CF}️ Mike’s room");
-    const { sv, rnd, anim } = sh.kit;
-    const { sub, field, caption, pill, close } = sh;
+    const { sv, rnd, anim, el } = sh.kit;
+    const { sub, field, caption, pill, close, later } = sh;
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hitsA = [], hitsB = [];
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     let cur = hitsA, view = "A";
-    let leaving = false, nSign = 0, nCloset = 0;
+    let leaving = false, nSign = 0, nCloset = 0, nHand = 0, tid = 0;
     const tm = HK_TIMES[hkTimeGet()];
     sh.box.style.background = "#0f1a2c";
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
@@ -8342,6 +8404,11 @@
     const grid = sv("pattern", { id: "mr-grid", width: 14, height: 14, patternUnits: "userSpaceOnUse" }, defs);   // the checked comforter
     sv("rect", { width: 14, height: 14, fill: "#e6dcc4" }, grid);
     sv("path", { d: "M0 0 H14 M0 0 V14", stroke: "#b9a888", "stroke-width": 1 }, grid);
+    const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);       // Will's striped sweater (bsKit asks for this id)
+    sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
+    const knit = sv("pattern", { id: "bs-knit", width: 30, height: 30, patternUnits: "userSpaceOnUse" }, defs);        // Mike's chunky patterned sweater
+    sv("rect", { width: 30, height: 30, fill: "#272d41" }, knit); sv("rect", { x: 2, y: 3, width: 13, height: 10, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 15, width: 11, height: 12, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 2, width: 9, height: 9, fill: "#1c2030" }, knit); sv("rect", { x: 3, y: 18, width: 10, height: 8, fill: "#1c2030" }, knit);
+    sv("path", { d: "M0 14.5 H30 M15.5 0 V30", stroke: "#74703f", "stroke-width": 0.7, "stroke-dasharray": "2 1.2", opacity: 0.5 }, knit); sv("path", { d: "M4 6 h3 M20 20 h3 M9 22 h2 M22 5 h2", stroke: "#8a4050", "stroke-width": 0.6, opacity: 0.6 }, knit);
 
     const A = sv("g", {}, svg), B = sv("g", {}, svg);                                                                // the two sides of the room: A = the bed wall, B = the window wall
     A.style.transition = B.style.transition = reduce ? "none" : "opacity .4s";
@@ -8441,9 +8508,17 @@
     sv("polygon", { points: "118,296 262,296 282,376 98,376", fill: "#2c4f9a" }, A);                                   // the mattress top, a blue sheet
     sv("rect", { x: 132, y: 291, width: 58, height: 22, rx: 9, fill: "#e8dfc8", stroke: "#b9a888", "stroke-width": 0.8 }, A);   // two pillows
     sv("rect", { x: 196, y: 291, width: 58, height: 22, rx: 9, fill: "#efe8d6", stroke: "#b9a888", "stroke-width": 0.8 }, A);
+    const bodyL = sv("g", {}, A);                                                                                       // Will and Mike's bodies sit here: on the pillows, under the comforter (their arms come later, on top of it)
     sv("polygon", { points: "111.5,322 268.5,322 282,376 98,376", fill: "url(#mr-grid)" }, A);                         // the checked comforter, folded down
     sv("polygon", { points: "111.5,322 268.5,322 272.6,340 107.4,340", fill: "#c9b48a", opacity: 0.85 }, A);           // the gingham fold-over
     sv("path", { d: "M130 352 Q190 346 250 354 M116 366 Q190 360 270 368", stroke: "#a89870", "stroke-width": 0.9, fill: "none", opacity: 0.7 }, A);   // creases
+    const armL = sv("g", {}, A);                                                                                        // their arms and hands, on top of the comforter
+    const comicG = sv("g", { display: "none" }, A);                                                                     // the comic they read, open on the covers
+    sv("polygon", { points: "174,334 194,331 194,351 174,354", fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, comicG);
+    sv("polygon", { points: "194,331 214,334 214,354 194,351", fill: "#e8dfc8", stroke: "#b8ad92", "stroke-width": 0.6 }, comicG);
+    sv("rect", { x: 177, y: 337, width: 14, height: 8, fill: "#c9482e", opacity: 0.85 }, comicG); sv("rect", { x: 197, y: 336, width: 14, height: 6, fill: "#3f7fd0", opacity: 0.85 }, comicG); sv("rect", { x: 198, y: 344, width: 12, height: 5, fill: "#e0a032", opacity: 0.85 }, comicG);
+    sv("path", { d: "M194 331 V351", stroke: "#8a7a5a", "stroke-width": 0.8 }, comicG);
+    const heartsG = sv("g", { "pointer-events": "none" }, A);                                                           // hearts rising from between them
     sv("polygon", { points: "98,376 282,376 280,414 100,416", fill: "url(#mr-grid)" }, A);                             // the foot of the bed, drooping comforter
     sv("polygon", { points: "98,376 282,376 280,414 100,416", fill: "#2a2236", opacity: 0.28 }, A);
     sv("path", { d: "M98 376 H282", stroke: "#a89870", "stroke-width": 1.2 }, A);
@@ -8456,7 +8531,35 @@
     [["#c9482e", 388], ["#2a3f8a", 408], ["#c9482e", 426]].forEach(([c, y]) => sv("polygon", { points: `98,${y - 6} 188,${y - 12} 188,${y + 2} 98,${y + 8}`, fill: c }, bl));
     sv("path", { d: "M100 434 L186 432", stroke: "#e8dfc8", "stroke-width": 3, fill: "none" }, A);
     for (let k = 0; k < 9; k++) sv("path", { d: `M${104 + k * 10} 434 v6`, stroke: "#e8dfc8", "stroke-width": 1.6 }, A);   // fringe
-    // TODO(figures): Will and Mike sit and lie on the bed's top (the polygon in MR.bedTop), propped on the pillows, reading comics.
+    // ── in the bed: Will (left, the lamp side) and Mike (right), the very same figures as at the basement table (see bsKit), propped on the pillows
+    //    under the comforter. Each moment in MR_MOMENTS plays line by line in speech bubbles, with the stage directions in the caption. It starts by
+    //    itself when you walk in; tap either of them to hear the next line sooner, and when a moment ends tap them again for the next one. ──
+    const FIG = { a: { cx: 160, sy: 302, s: 1.1, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 222, sy: 299, s: 1.1, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
+    const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
+    const { drawArm, torsoA, torsoB, headA, headB, headShift } = bsKit(sv, anim, FIG);
+    [["a", 4.2], ["b", 4.8]].forEach(([key, br]) => {
+      const F = FIG[key];
+      F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL); F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
+      F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`);
+    });
+    const drawFig = (key, p) => {
+      const F = FIG[key], isA = key === "a";
+      clear(F.b1); clear(F.b2);
+      const tr = `translate(${(F.cx + (p.sx || 0)).toFixed(1)} ${(F.sy + (p.dy || 0)).toFixed(1)}) scale(${F.s})`;
+      F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr);
+      // leaning: the whole upper body (torso, neck, head) tips about the hips, so the head stays on its neck; the arms' shoulders follow
+      const lean = p.lean || 0, la = lean * Math.PI / 180, lc = Math.cos(la), ls = Math.sin(la);
+      const tg = sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1);
+      const shoulder = left => { const S = left ? F.sl : F.sr, rx = S[0], ry = S[1] - 58; return [rx * lc - ry * ls, rx * ls + ry * lc + 58]; };
+      (isA ? torsoA : torsoB)(tg);
+      const cx = F.cx + (p.sx || 0), cy = F.sy + (p.dy || 0), toLocal = t => [(t[0] - cx) / F.s, (t[1] - cy) / F.s];
+      const hand = (left, t) => {
+        if (t === "lap") { drawArm(F.b1, key, left, [left ? -17 : 17, 50], 0, 0, 0, shoulder(left)); return; }   // down by their side, under the comforter
+        drawArm(F.b2, key, left, toLocal(t), 0, 0, 0, shoulder(left));
+      };
+      hand(false, p.R || "lap"); hand(true, p.L || "lap");
+      (isA ? headA : headB)(tg, p);
+    };
 
     // ── on the carpet: a heap of clothes at the foot of the bed and a pair of shoes by the closet, each with a shadow so it sits on the floor ──
     sv("ellipse", { cx: 238, cy: 494, rx: 36, ry: 6, fill: "#000", opacity: 0.3 }, A);
@@ -8559,6 +8662,8 @@
     hit(MR.closet.x - 4, MR.closet.y + 8, MR.closet.w + 8, MR.closet.h - 8, "The closet", () => say(["A closet door with a mirror on it and ties hanging from the rail. One of them is very teal.", "In the mirror: a room that looks a lot like this one, but tidier."][nCloset++ % 2]));
     hit(200, 462, 70, 36, "The pile of clothes", () => say("A heap of clothes at the foot of the bed. Clean or dirty is anyone’s guess."));
     hit(120, 440, 150, 80, "The carpet", () => say("The carpet in the lamplight. The best spot in the room."));
+    hit(128, 244, 62, 82, "Will", () => next()); hit(190, 240, 72, 86, "Mike", () => next());
+    hit(170, 324, 40, 30, "Their hands", () => { say(MR_SAY[nHand++ % MR_SAY.length]); puff(3); });
     cur = hitsB;
     hit(2, 452, 38, 52, "Turn to the bed wall", () => setView("A"));
     hit(120, 60, 120, 124, "The window, and the way out to the lawn", goWindow);
@@ -8572,18 +8677,69 @@
     const mkHits = list => { const g = sv("g", {}, svg); list.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, g); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); }); return g; };
     const gA = mkHits(hitsA), gB = mkHits(hitsB);
     gB.style.display = "none";
-    field.appendChild(svg);
+    const wrap = el("div", "position:relative;");
+    const ov = el("div", "position:absolute;inset:0;pointer-events:none;overflow:hidden;");
+    wrap.appendChild(svg); wrap.appendChild(ov); field.appendChild(wrap);
+
+
+    // ── the director: hearts, the speech bubble (one at a time, above whoever is speaking), and the moments ──
+    const MR_SAY = ["Two hands, one comforter. Nobody is looking at them. Everybody is looking at them.", "A thumb moves, very slightly, back and forth. It is a small, serious gesture."];
+    const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z", HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
+    if (!document.getElementById("ao3-bf-css")) { const st = document.createElement("style"); st.id = "ao3-bf-css"; st.textContent = "@keyframes bfHeart{0%{opacity:0;transform:translate(0,0) scale(.4)}15%{opacity:.95}70%{opacity:.8}100%{opacity:0;transform:translate(var(--dx,0px),-92px) scale(1.15)}}@keyframes bfPop{0%{opacity:0;transform:translate(-50%,-100%) scale(.85)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}"; (document.head || document.documentElement).appendChild(st); }
+    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(192 + (Math.random() - 0.5) * 46).toFixed(1)} ${(256 + Math.random() * 16).toFixed(1)}) scale(${(1.1 + Math.random() * 0.6).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
+    const HEADX = { w: 162, m: 220 };
+    let bub = null;
+    const hideBubble = () => { if (bub) { bub.remove(); bub = null; } };
+    const speak = (who, text) => {
+      hideBubble();
+      const anchor = who === "w" ? 32 : 68, headPct = HEADX[who] / W * 100, cw = wrap.clientWidth || 360;
+      bub = el("div", `position:absolute;left:${anchor}%;top:${(238 / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.45);${reduce ? "" : "animation:bfPop .22s ease-out both;"}`, text);
+      const tail = el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((headPct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`);
+      bub.appendChild(tail); ov.appendChild(bub);
+    };
+    const P = { a: null, b: null };
+    const setPose = patch => {
+      ["a", "b"].forEach(k => { if (patch[k]) P[k] = Object.assign({}, P[k], patch[k]); });
+      if ("comic" in patch) comicG.setAttribute("display", patch.comic ? "" : "none");
+      ["a", "b"].forEach(k => { if (patch[k]) drawFig(k, P[k]); });
+      if (patch.jig && !reduce) ["a", "b"].forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-3px)" }, { transform: "translateY(0)" }, { transform: "translateY(-1.5px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
+      if (patch.hearts) puff(patch.hearts);
+    };
+    const start = () => { P.a = Object.assign({}, MR_BASE.a); P.b = Object.assign({}, MR_BASE.b); comicG.setAttribute("display", "none"); drawFig("a", P.a); drawFig("b", P.b); };
+    let mi = 0, bi = 0, playing = false;
+    const readTime = t => 2600 + t.length * 48;
+    const step = () => {
+      clearTimeout(tid);
+      if (view !== "A") return;
+      const M = MR_MOMENTS[mi];
+      if (bi >= M.beats.length) { playing = false; hideBubble(); say("The moment settles. Tap either of them for another."); return; }
+      const [who, text, patch] = M.beats[bi++];
+      setPose(patch || {});
+      if (who === "n") { hideBubble(); say(text); } else speak(who, text);
+      tid = setTimeout(step, readTime(text));
+    };
+    const play = i => { clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(MR_KEY, String(mi)); } catch {} say("Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const another = () => { let n = Math.floor(Math.random() * (MR_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
+    const next = () => { if (leaving || view !== "A") return; if (playing) step(); else another(); };
+    sh.onClose = () => { clearTimeout(tid); hideBubble(); };
+    start();                                                                                                           // they are in the bed from the moment you walk in
+    let first = Math.floor(Math.random() * MR_MOMENTS.length);
+    try { const last = parseInt(localStorage.getItem(MR_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < MR_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (MR_MOMENTS.length - 1))) % MR_MOMENTS.length; } catch {}
+    tid = setTimeout(() => play(first), reduce ? 400 : 1800);
 
     sub.textContent = "hawkins · mike’s room";
     say("Mike’s room: blue walls, a lamp left on, and a ONE WAY sign over the closet.");
     const turnBtn = pill("\u2194 window wall", "Turn to look at the other side of the room", () => setView(view === "A" ? "B" : "A"));
     const setView = v => {
       view = v;
+      if (v === "B") { clearTimeout(tid); hideBubble(); playing = false; }
+      else if (!leaving) { clearTimeout(tid); tid = setTimeout(another, reduce ? 300 : 900); }
       A.style.opacity = v === "A" ? 1 : 0; B.style.opacity = v === "B" ? 1 : 0;
       gA.style.display = v === "A" ? "" : "none"; gB.style.display = v === "B" ? "" : "none";
       turnBtn.textContent = v === "A" ? "\u2194 window wall" : "\u2194 bed wall";
       sub.textContent = v === "A" ? "hawkins \u00B7 mike\u2019s room" : "hawkins \u00B7 mike\u2019s room \u00B7 the window";
-      say(v === "A" ? "Back to the bed, the lamp and the closet." : "The window wall. Fairy lights, the desk, and a chair pushed out in a hurry.");
+      if (v === "A") say("Back to the bed, the lamp and the closet.");
+      else say("The window wall. Fairy lights, the desk, and a chair pushed out in a hurry.");
     };
     pill("\u{1FA9C} downstairs", "Down the stairs to the basement", goDown);
     pill("\u{1F3E1} outside", "Out the front door to the lawn", goOutside);
