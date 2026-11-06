@@ -396,7 +396,7 @@
   // opts.owner: the scene's outer element; if it is ever removed without closing, the sound stops by itself.
   function hkAmbience(opts) {
     const muffled = !!(opts && opts.muffled), owner = opts && opts.owner;
-    let ac = null, master = null, lowp = null, grp = null, want = null, closed = false, waiting = false, noise = null;
+    let ac = null, master = null, lowp = null, grp = null, want = null, closed = false, waiting = false, noise = null, quiet = false, duckF = 1;
     const rand = (lo, hi) => lo + Math.random() * (hi - lo);
     const noiseBuf = () => {
       if (noise && noise.sampleRate === ac.sampleRate) return noise;
@@ -472,7 +472,7 @@
       setTimeout(() => { gp.nodes.forEach(n => { try { n.stop(); } catch {} try { n.disconnect(); } catch {} }); try { gp.out.disconnect(); } catch {} }, secs * 1000 + 150);
     }
     function apply() {
-      if (closed || !want) return;
+      if (closed || !want || quiet) return;
       if (bellMuted()) { if (grp) { dispose(grp, 0.4); grp = null; } return; }
       ac = bellUnlock();
       if (!ac) return;
@@ -484,7 +484,7 @@
       if (grp && grp.key === key) return;
       try {
         if (!master) {
-          master = ac.createGain(); master.gain.value = muffled ? 1.3 : 1;
+          master = ac.createGain(); master.gain.value = (muffled ? 1.3 : 1) * duckF;
           if (muffled) { lowp = ac.createBiquadFilter(); lowp.type = "lowpass"; lowp.frequency.value = 650; lowp.Q.value = 0.6; master.connect(lowp); lowp.connect(ac.destination); }
           else master.connect(ac.destination);
         }
@@ -496,7 +496,13 @@
     const api = {
       set(kind, tm) { want = { kind, tm }; apply(); },                                      // the weather or time changed (also starts it)
       poke() { apply(); setTimeout(apply, 150); },                                          // call on a tap: wakes it if the browser was holding audio back
-      refresh() { apply(); },                                                               // the sound setting changed
+      refresh() { quiet = false; apply(); },                                                // the sound setting changed (also brings back a faded-out bed)
+      resume() { quiet = false; apply(); },                                                 // bring the bed back after fadeOut
+      fadeOut(secs) { quiet = true; if (grp) { dispose(grp, secs); grp = null; } },          // a sleep timer: fade the bed away and keep it away until resume()
+      duck(f, secs) {                                                                       // turn the bed down to f (0 to 1) of its level, e.g. under a sleep sound
+        duckF = f;
+        if (master && ac) { try { const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.linearRampToValueAtTime((muffled ? 1.3 : 1) * f, t + (secs || 1.5)); } catch {} }
+      },
       stop() { closed = true; dispose(grp, 0.5); grp = null; setTimeout(() => { try { if (master) master.disconnect(); if (lowp) lowp.disconnect(); } catch {} }, 900); }
     };
     return api;
@@ -539,6 +545,132 @@
     } catch {}
   }
 
+  // ── sleep sounds: one steady sound for the night (Mike's room, while Will and Mike sleep) ──
+  // "rain" (muffled, on the window), "fan" (a box fan on low), "snore" (one soft snore per breath: the scene calls breath() on each exhale, so it keeps
+  // time with the covers and the z's), "crickets" (the window cracked open). set(kind) fades the old one out and the new one in, set(null) stops it,
+  // fadeOut(secs, done) is for the sleep timer. It obeys the bell tower's sound setting, and starts on the first tap if the browser is holding audio back.
+  // opts.owner: the scene's outer element; if it is ever removed without closing, the sound stops by itself.
+  function hkSleepSound(opts) {
+    const owner = opts && opts.owner;
+    let ac = null, master = null, soft = null, grp = null, kind = null, closed = false, waiting = false, noise = null, fadeT = 0;
+    const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+    const noiseBuf = () => {
+      if (noise && noise.sampleRate === ac.sampleRate) return noise;
+      noise = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate);
+      const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      return noise;
+    };
+    function make(k) {
+      const out = ac.createGain(); out.gain.value = 0.0001; out.connect(master);
+      const gp = { out, nodes: [], timers: new Set(), alive: true, breath: null };
+      const later = (fn, ms) => { const t = setTimeout(() => { gp.timers.delete(t); if (gp.alive) fn(); }, ms); gp.timers.add(t); };
+      const every = (fn, lo, hi) => { const go = () => { fn(); later(go, rand(lo, hi)); }; later(go, rand(lo, hi)); };
+      const bed = (type, f, q, vol, lfoHz, depth) => {                                       // looping noise through one filter, with a slow swell if asked
+        const s = ac.createBufferSource(); s.buffer = noiseBuf(); s.loop = true; s.loopStart = Math.random() * 2;
+        const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+        const v = ac.createGain(); v.gain.value = vol;
+        s.connect(fl); fl.connect(v); v.connect(out); s.start(); gp.nodes.push(s);
+        if (lfoHz) { const l = ac.createOscillator(), ld = ac.createGain(); l.frequency.value = lfoHz; ld.gain.value = depth; l.connect(ld); ld.connect(v.gain); l.start(); gp.nodes.push(l); }
+      };
+      const tone = (f, vol, lfoHz, depth) => {                                               // a steady hum, with a flutter if asked
+        const o = ac.createOscillator(), v = ac.createGain(); o.frequency.value = f; v.gain.value = vol; o.connect(v); v.connect(out); o.start(); gp.nodes.push(o);
+        if (lfoHz) { const l = ac.createOscillator(), ld = ac.createGain(); l.frequency.value = lfoHz; ld.gain.value = depth; l.connect(ld); ld.connect(v.gain); l.start(); gp.nodes.push(l); }
+      };
+      const blip = (f0, f1, dur, vol) => {
+        const t = ac.currentTime + 0.02, o = ac.createOscillator(), g = ac.createGain();
+        o.type = "sine"; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + dur * 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.02);
+      };
+      const cricket = (f, period, vol) => {                                                  // four quick pulses, a pause, again
+        const o = ac.createOscillator(), v = ac.createGain(); o.frequency.value = f; v.gain.value = 0; o.connect(v); v.connect(out); o.start(); gp.nodes.push(o);
+        const run = () => {
+          const t0 = ac.currentTime + 0.05;
+          for (let i = 0; i < 4; i++) { const t = t0 + i * 0.075; v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(vol, t + 0.02); v.gain.linearRampToValueAtTime(0, t + 0.06); }
+          later(run, period * 1000 * rand(0.85, 1.15));
+        };
+        later(run, rand(0, 1000));
+      };
+      if (k === "rain") {
+        bed("bandpass", 1400, 0.5, 0.11, 0.17, 0.02);                                         // rain on the glass
+        bed("lowpass", 420, 0.7, 0.07);                                                       // the low patter on the roof
+        bed("highpass", 3000, 0.5, 0.008, 0.11, 0.004);                                       // a little sparkle in it
+        every(() => blip(rand(700, 1100), 450, 0.07, 0.022), 1800, 5200);                     // a drip, now and then
+      } else if (k === "fan") {
+        bed("bandpass", 650, 0.45, 0.13, 0.09, 0.03);                                         // the air, swelling a little as the head turns
+        bed("lowpass", 240, 0.7, 0.12);                                                       // the motor
+        bed("highpass", 2800, 0.5, 0.012);                                                    // a faint hiss
+        tone(100, 0.025, 5.5, 0.004); tone(200, 0.012);                                       // the hum, with the blades fluttering in it
+      } else if (k === "crickets") {
+        cricket(4300, 1.1, 0.016); cricket(4800, 1.45, 0.012); cricket(3900, 1.9, 0.01);
+        bed("lowpass", 320, 0.6, 0.02, 0.06, 0.008);                                          // a faint night breeze
+      } else if (k === "snore") {
+        bed("lowpass", 180, 0.7, 0.015);                                                      // the quiet of the room
+        gp.breath = () => {                                                                   // one soft snore on the exhale
+          if (!gp.alive || Math.random() < 0.15) return;                                      // now and then a quiet breath
+          const t = ac.currentTime + 0.03, dur = rand(1.9, 2.5), pk = rand(0.45, 0.6);
+          const env = ac.createGain(); env.connect(out);
+          env.gain.setValueAtTime(0.0001, t); env.gain.linearRampToValueAtTime(pk, t + 0.7); env.gain.linearRampToValueAtTime(pk * 0.8, t + 1.4); env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          const flutter = ac.createGain(); flutter.gain.value = 0.55; flutter.connect(env);   // the rattle: a fast wobble in the volume
+          const lfo = ac.createOscillator(), ld = ac.createGain(); lfo.frequency.value = rand(23, 31); ld.gain.value = 0.45; lfo.connect(ld); ld.connect(flutter.gain);
+          const src = ac.createBufferSource(); src.buffer = noiseBuf(); src.loop = true; src.loopStart = Math.random() * 2;
+          const b1 = ac.createBiquadFilter(); b1.type = "bandpass"; b1.frequency.value = rand(190, 260); b1.Q.value = 1.1;
+          const b2 = ac.createBiquadFilter(); b2.type = "bandpass"; b2.frequency.value = rand(480, 620); b2.Q.value = 1.4; const g2 = ac.createGain(); g2.gain.value = 0.8;
+          const saw = ac.createOscillator(); saw.type = "sawtooth"; saw.frequency.value = rand(46, 60);
+          const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 260; const g3 = ac.createGain(); g3.gain.value = 0.06;
+          src.connect(b1); b1.connect(flutter); src.connect(b2); b2.connect(g2); g2.connect(flutter); saw.connect(lp); lp.connect(g3); g3.connect(flutter);
+          [src, lfo, saw].forEach(n => { n.start(t); n.stop(t + dur + 0.1); });
+        };
+      }
+      const watch = () => { if (owner && !owner.isConnected) api.stop(); else later(watch, 5000); };   // the scene vanished without closing
+      if (owner) later(watch, 5000);
+      return gp;
+    }
+    function dispose(gp, secs) {
+      if (!gp) return;
+      gp.alive = false; gp.timers.forEach(clearTimeout); gp.timers.clear();
+      try { const t = ac.currentTime; gp.out.gain.cancelScheduledValues(t); gp.out.gain.setValueAtTime(gp.out.gain.value, t); gp.out.gain.linearRampToValueAtTime(0.0001, t + secs); } catch {}
+      setTimeout(() => { gp.nodes.forEach(n => { try { n.stop(); } catch {} try { n.disconnect(); } catch {} }); try { gp.out.disconnect(); } catch {} }, secs * 1000 + 150);
+    }
+    function apply() {
+      if (closed || !kind) return;
+      if (bellMuted()) { if (grp) { dispose(grp, 0.4); grp = null; } return; }
+      ac = bellUnlock();
+      if (!ac) return;
+      if (ac.state !== "running") {
+        if (!waiting) { waiting = true; try { ac.addEventListener("statechange", function once() { if (ac.state === "running") { ac.removeEventListener("statechange", once); waiting = false; apply(); } }); } catch { waiting = false; } }
+        return;
+      }
+      if (grp && grp.key === kind) return;
+      try {
+        if (!master) { master = ac.createGain(); soft = ac.createBiquadFilter(); soft.type = "lowpass"; soft.frequency.value = 5200; master.connect(soft); soft.connect(ac.destination); }
+        const old = grp; grp = make(kind); grp.key = kind;
+        const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(1, t);
+        grp.out.gain.setValueAtTime(0.0001, t); grp.out.gain.linearRampToValueAtTime(1, t + 3);
+        dispose(old, 1.5);
+      } catch {}
+    }
+    const api = {
+      set(k) {                                                                              // pick a sound (or null for none)
+        clearTimeout(fadeT); kind = k || null;
+        if (master && ac) { try { const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(1, t); } catch {} }
+        if (!kind) { dispose(grp, 1.5); grp = null; return; }
+        apply();
+      },
+      breath() { if (grp && grp.breath) grp.breath(); },                                    // call on every exhale (only the snore uses it)
+      poke() { apply(); setTimeout(apply, 150); },                                          // call on a tap: wakes it if the browser was holding audio back
+      refresh() { apply(); },                                                               // the sound setting changed
+      fadeOut(secs, done) {                                                                 // the sleep timer: fade everything away over secs, then stop and call done
+        clearTimeout(fadeT);
+        if (!grp) { kind = null; if (done) done(); return; }
+        try { const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.linearRampToValueAtTime(0.0001, t + secs); } catch {}
+        fadeT = setTimeout(() => { dispose(grp, 0.1); grp = null; kind = null; if (done) done(); }, secs * 1000);
+      },
+      stop() { closed = true; clearTimeout(fadeT); dispose(grp, 0.5); grp = null; setTimeout(() => { try { if (master) master.disconnect(); if (soft) soft.disconnect(); } catch {} }, 900); }
+    };
+    return api;
+  }
+
   // Will and Mike asleep: set when the bedside lamp in Mike's room goes out (second tap), cleared when it is tapped again. While it is set the
   // basement, the fort and the lit window on the lawn are empty and their scenes stay stopped. Saved under "ao3-hk-asleep" so it holds across scenes.
   const SLEEP_KEY = "ao3-hk-asleep";
@@ -547,7 +679,7 @@
     set: on => { try { if (on) localStorage.setItem(SLEEP_KEY, "1"); else localStorage.removeItem(SLEEP_KEY); } catch {} }
   };
 
-  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep };
+  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound };
 };
 
 // ════════ lib/figures.js ════════
@@ -8488,9 +8620,11 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["mikes-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkSeason } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const { bsKit } = ctx.lib["figures"];
+  const { gyHash } = ctx.shared;
+  const core = ctx.core || {};                                                                                       // the tracker (read log, fics): only used to shape the goodnight
   const world = ctx.world;
   const openBasement = (...args) => world.openBasement(...args);
   const openWheelers = (...args) => world.openWheelers(...args);
@@ -8523,9 +8657,121 @@
   const MR_BASE = { a: { sx: 3, head: [2, 1, 4], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: -3, head: [-2, 1, -4], mood: "smile", look: -1, L: "lap", R: "lap" } };
   // Going to sleep (the lamp's second tap): Will and Mike cuddle up, say goodnight and sleep, and every Hawkins scene with them in it stands empty
   // and stopped (the flag lives in hkSleep, see hawkins-kit.js) until the lamp is tapped again.
+  // While they sleep (wind-down): one slow breath paces the covers, their hands and the z's; a ☾ sleep sound pill (rain, fan, snoring, crickets; saved as
+  // "ao3-mr-sleepsnd", starts by itself next bedtime) and a ◷ timer pill (15, 30, 60 min) that fades the sound and the weather bed out over 30 s. Both pills show only asleep.
   const MR_CUDDLE = { a: { sx: 0, head: [4, 3, 9], lean: 7, mood: "smile", eyes: "happy", blush: true, look: 0, R: MR_CL[0] }, b: { sx: 0, head: [-3, 3, -8], lean: -6, mood: "smile", eyes: "happy", blush: true, look: 0, L: MR_CL[1] } };
   const MR_SLEEP = { a: { sx: 0, dy: 15, head: [4, 6, 10], lean: 8, mood: "calm", eyes: "closed", blush: true, look: 0, L: "lap", R: MR_CL[0] }, b: { sx: 0, dy: 13, head: [-3, 6, -9], lean: -6, mood: "calm", eyes: "closed", blush: true, look: 0, L: MR_CL[1], R: "lap" } };
-  const MR_ASLEEP_SAY = ["Fast asleep. Will’s breathing is slow and even, and Mike has not let go of his hand.", "Mike mumbles something about dragons and burrows a little closer. Best to leave them be.", "The room is dark and the covers rise and fall. Tap the lamp when you want them awake."];
+  // A different goodnight each night. Each is a short exchange ([who, line]: "w" Will, "m" Mike). One is picked per day (the same all day, never the same
+  // as the day before) from what the day was like: a fic finished today (the "done" lines), a long day (a lot of chapters read, or it is past midnight:
+  // the "soft" lines, said low), or else the weather, the season or the plain lines. The tail is a line for the caption: the weather, the season, or the fic.
+  const MR_GN = {
+    plain: [
+      [["w", "Goodnight, Mike."], ["m", "Goodnight, Will."]],
+      [["w", "Night, Mike. Don’t steal the blanket."], ["m", "No promises. Goodnight, Will."]],
+      [["w", "Mike? Are you still awake?"], ["m", "Barely. What?"], ["w", "Nothing. Goodnight."], ["m", "Goodnight, Will."]],
+      [["m", "Same time tomorrow?"], ["w", "Same time tomorrow. Goodnight, Mike."]],
+      [["w", "Think we’ll remember this in the morning?"], ["m", "The good parts. Goodnight, Will."]],
+      [["m", "Okay. For real this time. Goodnight."], ["w", "You said that twenty minutes ago."], ["m", "…Goodnight, Will."]],
+      [["w", "Whose turn is it to pick the dream?"], ["m", "Yours. Make it one with a dragon."], ["w", "Goodnight, Mike."]]],
+    rain: [
+      [["w", "It’s really coming down out there."], ["m", "Best sleeping weather there is. Goodnight, Will."]],
+      [["m", "Can you hear it on the roof?"], ["w", "Mm-hm. I could listen to that all night."], ["m", "That’s the plan. Goodnight."]],
+      [["w", "Do you think the bikes will be okay in the rain?"], ["m", "They’re bikes, Will. Goodnight."], ["w", "Goodnight, Mike."]]],
+    storm: [
+      [["w", "That one was close."], ["m", "I know. I’ve got you. It’s only thunder."], ["w", "I know. Goodnight, Mike."], ["m", "Goodnight. I’ll count the seconds for you."]],
+      [["m", "Count with me. One… two… three…"], ["w", "…and there’s the rumble. Four seconds."], ["m", "Four seconds away. We’re fine. Goodnight, Will."]],
+      [["w", "Don’t let go."], ["m", "Not a chance. Goodnight, Will."]]],
+    fog: [
+      [["w", "I can’t even see the street."], ["m", "Good. Then nobody can see us. Goodnight, Will."]],
+      [["m", "Fog’s thick tonight."], ["w", "Like the whole town got wrapped in cotton."], ["m", "Goodnight, Will."], ["w", "Goodnight, Mike."]]],
+    snow: [
+      [["w", "Do you think it’ll snow enough for a day off?"], ["m", "I’m betting on it. Goodnight, Will."]],
+      [["m", "It’s snowing again."], ["w", "Quiet snow. My favorite."], ["m", "Mine too. Goodnight."]]],
+    leaves: [
+      [["w", "The leaves are loud tonight."], ["m", "That’s just the trees saying goodnight. Goodnight, Will."]],
+      [["m", "Wind’s picking up. Leaves everywhere."], ["w", "We’ll have to rake in the morning."], ["m", "We’ll pretend we didn’t hear that. Goodnight."]]],
+    clear: [
+      [["w", "Not a cloud out there."], ["m", "Lots of stars. Make a wish. Goodnight, Will."]],
+      [["m", "Clear night. You can see everything."], ["w", "Even the dumb constellation you like."], ["m", "Especially that one. Goodnight."]]],
+    halloween: [
+      [["w", "Do you think the monsters stay out on spooky nights?"], ["m", "Not in this room. It’s guarded. Goodnight, Will."]],
+      [["m", "Costume plans tomorrow. Don’t forget."], ["w", "As if I could. Goodnight, Mike."]]],
+    winter: [
+      [["w", "Your feet are freezing!"], ["m", "That’s what you’re for. Goodnight, Will."]],
+      [["m", "Radiator’s doing its best."], ["w", "Its best is not great. Come closer."], ["m", "Already there. Goodnight."]]],
+    spring: [
+      [["w", "Window’s open a crack."], ["m", "It smells like rain and dirt. Spring. Goodnight, Will."]],
+      [["m", "Almost summer."], ["w", "Almost summer. Goodnight, Mike."]]],
+    summer: [
+      [["w", "Too hot for the comforter."], ["m", "Just the sheet, then. Goodnight, Will."]],
+      [["m", "No school for weeks."], ["w", "Weeks and weeks. Goodnight, Mike."]]],
+    autumn: [
+      [["w", "First night cold enough for the knit blanket."], ["m", "Best night of the year. Goodnight, Will."]],
+      [["m", "Smell that? Somebody’s burning leaves."], ["w", "It smells like fall."], ["m", "Goodnight, Will."]]],
+    soft: [
+      [["w", "Long day."], ["m", "Really long day. Come here."], ["w", "Mm. Goodnight, Mike…"]],
+      [["m", "You did a lot today. You can stop now."], ["w", "Okay. Okay… goodnight."], ["m", "Goodnight, Will."]],
+      [["w", "I’m so tired I forgot what I was going to say."], ["m", "That’s fine. It’ll keep. Goodnight."]],
+      [["m", "Shh. There’s nothing left to do tonight."], ["w", "Nothing at all… goodnight."]]],
+    done: [
+      [["w", "Somebody finished a story today."], ["m", "Then they get to sleep knowing how it ends. Goodnight, Will."]],
+      [["m", "That ending, though."], ["w", "I know. I’m going to be thinking about it all night."], ["m", "Think quietly. Goodnight, Will."]],
+      [["w", "Is it weird that I’m a little sad it’s over?"], ["m", "No. That means it was good. Goodnight, Will."]]]
+  };
+  const MR_GN_TAIL = {
+    rain: "Rain ticks against the window, and the room gets quieter around it.",
+    storm: "Far-off thunder rolls past. Mike’s hand tightens, just a little, and stays that way.",
+    fog: "Fog presses up against the glass, soft and white. Nothing out there needs them tonight.",
+    snow: "Snow falls past the window without a sound, as if it knows they’re sleeping.",
+    leaves: "Leaves tap at the glass and skitter across the lawn, and then it is still.",
+    clear: "A clear night, and a few stars in the window.",
+    halloween: "Somewhere down the street a jack-o’-lantern burns itself out.",
+    winter: "The radiator ticks. Under the comforter it is warm, and everywhere else it is not.",
+    spring: "The window is open a crack, and the air smells like wet earth.",
+    summer: "A box fan hums down the hall. The sheets are thin and nobody minds.",
+    autumn: "Woodsmoke drifts in under the window, the first cold-night smell of the year."
+  };
+  const MR_GN_SOFT = [
+    "It has been a very long day, and neither of them has anything left to say about it.",
+    "Tonight there are no jokes. Mike just pulls the comforter over Will’s shoulder and leaves his hand there."];
+  const MR_GN_LATE = "It is far too late to be awake, and they both know it. Everything comes out in whispers.";
+  const MR_GN_KEY = "ao3-mr-goodnight";
+  const mrPad = n => (n < 10 ? "0" : "") + n;
+  const mrDay = d => d.getFullYear() + "-" + mrPad(d.getMonth() + 1) + "-" + mrPad(d.getDate());
+  // today, from the reading log: chapters read, and the fics finished today (finished, and their last logged chapter is today's)
+  function mrToday() {
+    const day = mrDay(new Date()), out = { chapters: 0, done: [] };
+    try {
+      const raw = core.READ_LOG_KEY ? JSON.parse(localStorage.getItem(core.READ_LOG_KEY) || "[]") : [];
+      const log = Array.isArray(raw) ? raw.filter(e => e && e.date) : [], dayOf = e => { const s = String(e.date); if (s.length <= 10) return s; const d = new Date(s); return isNaN(d) ? s.slice(0, 10) : mrDay(d); };
+      const last = new Map(), seen = new Set();
+      log.forEach(e => { const id = String(e.key || "").split("::")[0], d = dayOf(e); if (id && (!last.has(id) || d > last.get(id))) last.set(id, d); if (d === day) seen.add(String(e.key)); });
+      out.chapters = seen.size;
+      const fics = core.getTracked ? core.getTracked() : [];
+      out.done = fics.filter(f => f && f.finished && last.get(String(f.workId)) === day).map(f => String(f.title || "").trim() || "a story");
+    } catch {}
+    return out;
+  }
+  // tonight's goodnight: { lines: [[who, text]...], lead: caption before it or "", tail: caption after it, soft: bool }
+  function mrGoodnight(wxKind) {
+    const now = new Date(), day = mrDay(now), t = mrToday(), season = hkSeason();
+    const late = now.getHours() < 5, soft = t.chapters >= 6 || late;                                                 // a long day: a lot of chapters, or it is past midnight
+    let rec = {}; try { rec = JSON.parse(localStorage.getItem(MR_GN_KEY) || "{}") || {}; } catch {}
+    const prev = rec.day === day ? rec.prev : rec.id;                                                                  // never the same as the day before
+    let pool = t.done.length ? "done" : soft ? "soft" : ["rain", "storm", "fog", "snow", "leaves", "clear"].includes(wxKind) && gyHash(day + "cat") % 10 < 4 ? wxKind : gyHash(day + "cat") % 10 < 7 && MR_GN[season] ? season : "plain";
+    if (!MR_GN[pool]) pool = "plain";
+    let i = gyHash(day + pool) % MR_GN[pool].length;
+    if (pool + ":" + i === prev) i = (i + 1) % MR_GN[pool].length;
+    if (pool + ":" + i === prev) { pool = "plain"; i = gyHash(day + "p") % MR_GN.plain.length; if (pool + ":" + i === prev) i = (i + 1) % MR_GN.plain.length; }
+    try { localStorage.setItem(MR_GN_KEY, JSON.stringify({ day, id: pool + ":" + i, prev: prev || "" })); } catch {}
+    const ficTail = () => { const n = t.done.length, ttl = t.done[0].length > 44 ? t.done[0].slice(0, 43) + "…" : t.done[0]; return (n > 1 ? n + " stories ended today" : t.done[0] === "a story" ? "A story ended today" : "“" + ttl + "” ended today") + ", and the room feels like the last page of something: finished, and warm."; };
+    return {
+      lines: MR_GN[pool][i], soft,
+      lead: soft ? (late ? MR_GN_LATE : MR_GN_SOFT[gyHash(day + "lead") % MR_GN_SOFT.length]) : "",
+      tail: t.done.length ? ficTail() : (wxKind !== "clear" && MR_GN_TAIL[wxKind]) || MR_GN_TAIL[season] || MR_GN_TAIL.clear
+    };
+  }
+  const MR_ASLEEP_SAY = ["Fast asleep. Will’s breathing is slow and even, and Mike has not let go of his hand.", "Mike mumbles something about dragons and burrows a little closer. Best to leave them be.", "The room is dark and the covers rise and fall, slow as a tide. Tap the lamp when you want them awake.", "Somebody under the comforter lets out a very small, very soft snore. Nobody mentions it."];
   const MR_KEY = "ao3-mr-moment";                          // the last moment played (the only thing saved here), so it is never the same one twice running
   const MR_MOMENTS = [
     { name: "the comic", beats: [
@@ -8586,6 +8832,8 @@
     const amb = hkAmbience({ muffled: true, owner: sh.back });                                              // the weather, heard through the walls (the blanket fort stays silent)
     amb.set(HK_WX[hkWxGet()][0], HK_TIMES[hkTimeGet()].name);
     sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
+    const snd = hkSleepSound({ owner: sh.back });                                                           // the sleep sound (rain, fan, snoring, crickets), only while they sleep
+    sh.back.addEventListener("pointerdown", () => snd.poke(), { passive: true });
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hitsA = [], hitsB = [];
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -8711,9 +8959,10 @@
     sv("rect", { x: 132, y: 291, width: 58, height: 22, rx: 9, fill: "#e8dfc8", stroke: "#b9a888", "stroke-width": 0.8 }, A);   // two pillows
     sv("rect", { x: 196, y: 291, width: 58, height: 22, rx: 9, fill: "#efe8d6", stroke: "#b9a888", "stroke-width": 0.8 }, A);
     const bodyL = sv("g", {}, A);                                                                                       // Will and Mike's bodies sit here: on the pillows, under the comforter (their arms come later, on top of it)
-    sv("polygon", { points: "111.5,322 268.5,322 282,376 98,376", fill: "url(#mr-grid)" }, A);                         // the checked comforter, folded down
-    sv("polygon", { points: "111.5,322 268.5,322 272.6,340 107.4,340", fill: "#c9b48a", opacity: 0.85 }, A);           // the gingham fold-over
-    sv("path", { d: "M130 352 Q190 346 250 354 M116 366 Q190 360 270 368", stroke: "#a89870", "stroke-width": 0.9, fill: "none", opacity: 0.7 }, A);   // creases
+    const coverG = anim(sv("g", {}, A), "transform-box:fill-box;transform-origin:50% 100%;");                             // the comforter: it rises and falls with their breathing while they sleep (see breathe)
+    sv("polygon", { points: "111.5,322 268.5,322 282,376 98,376", fill: "url(#mr-grid)" }, coverG);                     // the checked comforter, folded down
+    sv("polygon", { points: "111.5,322 268.5,322 272.6,340 107.4,340", fill: "#c9b48a", opacity: 0.85 }, coverG);       // the gingham fold-over
+    sv("path", { d: "M130 352 Q190 346 250 354 M116 366 Q190 360 270 368", stroke: "#a89870", "stroke-width": 0.9, fill: "none", opacity: 0.7 }, coverG);   // creases
     const armL = sv("g", {}, A);                                                                                        // their arms and hands, on top of the comforter
     const comicG = sv("g", { display: "none" }, A);                                                                     // the comic they read, open on the covers
     sv("polygon", { points: "174,334 194,331 194,351 174,354", fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, comicG);
@@ -8740,7 +8989,7 @@
     const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
     const { drawArm, torsoA, torsoB, headA, headB, headShift } = bsKit(sv, anim, FIG);
     [["a", 4.2], ["b", 4.8]].forEach(([key, br]) => {
-      const F = FIG[key];
+      const F = FIG[key]; F.brT = br;
       F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL); F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
       F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`);
     });
@@ -8847,7 +9096,7 @@
     const darkEl = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#050a1c", opacity: 0, "pointer-events": "none" }, svg);
     if (!reduce) darkEl.style.transition = "opacity 1.4s";
     const zzG = sv("g", { "pointer-events": "none" }, A);
-    if (!document.getElementById("ao3-mr-css")) { const st = document.createElement("style"); st.id = "ao3-mr-css"; st.textContent = "@keyframes mrZz{0%{opacity:0;transform:translate(0,0) scale(.6)}20%{opacity:.95}100%{opacity:0;transform:translate(16px,-44px) scale(1.25)}}"; document.head.appendChild(st); }
+    if (!document.getElementById("ao3-mr-css")) { const st = document.createElement("style"); st.id = "ao3-mr-css"; st.textContent = "@keyframes mrZz{0%{opacity:0;transform:translate(0,0) scale(.6)}20%{opacity:.95}100%{opacity:0;transform:translate(16px,-44px) scale(1.25)}}@keyframes mrBreath{0%,100%{transform:translateY(0)}42%{transform:translateY(calc(var(--amp,1) * -1px))}}@keyframes mrCover{0%,100%{transform:scaleY(1)}42%{transform:scaleY(1.034)}}"; document.head.appendChild(st); }
 
     // ── the night's tint, cold light from the right, a soft vignette ──
     sv("rect", { x: 0, y: 0, width: W, height: H, fill: tm.tint[0], opacity: tm.tint[1], "pointer-events": "none" }, svg);
@@ -8875,16 +9124,28 @@
     const lampScene = color => {
       asleep = true; hkSleep.set(true); nLamp = 1;
       const COL = color === "blue" ? "blue" : color === "yellow" ? "yellow" : "amber";
+      const gn = mrGoodnightBeats(HK_WX[hkWxGet()][0]);                                                               // tonight's goodnight (see MR_GN)
       runBeats([
         ["n", `Will reaches past Mike and clicks the lamp off. The ${COL} glow folds up into the dark.`, { reset: true, lamp: "off", a: { L: [118, 306], look: -1, mood: "calm" } }],
         ["w", "Okay. Lights out.", { a: { L: "lap", look: 1, mood: "smile" } }],
         ["m", "Come here. You’re cold.", Object.assign({ hearts: 3 }, MR_CUDDLE)],
         ["n", "They shuffle together until there’s no space left between them. A head on a shoulder, two hands on the comforter.", {}],
-        ["w", "Goodnight, Mike.", { a: { eyes: "closed", mood: "smile" } }],
-        ["m", "Goodnight, Will.", { b: { eyes: "closed", mood: "smile" }, hearts: 2 }],
-        ["n", "They slide down under the comforter, bit by bit, until only their faces show. Their breathing slows.", { a: MR_SLEEP.a, b: MR_SLEEP.b, zz: true }],
+        ...gn.beats,
+        ["n", "They slide down under the comforter, bit by bit, until only their faces show. Their breathing slows, long and even, and the covers begin to rise and fall.", { a: MR_SLEEP.a, b: MR_SLEEP.b, zz: true }],
         ["n", "Asleep. The house ticks and the window glows faintly blue. They’ll stay like this until somebody taps the lamp.", { hearts: 1 }]
       ], null);
+    };
+    const mrGoodnightBeats = wx => {                                                                                   // the goodnight as beats: eyes close on each one's last line, hearts on the very last, a caption line before (a long day) and after
+      const g = mrGoodnight(wx), L = g.lines, n = L.length, beats = [];
+      if (g.lead) beats.push(["n", g.lead, {}]);
+      L.forEach(([who, text], k) => {
+        const key = who === "w" ? "a" : "b", lastOfOne = !L.slice(k + 1).some(x => x[0] === who), patch = {};
+        if (lastOfOne) patch[key] = { eyes: "closed", mood: "smile" };
+        if (k === n - 1) patch.hearts = g.soft ? 3 : 2;
+        beats.push([who, text, patch]);
+      });
+      beats.push(["n", g.tail, {}]);
+      return { beats };
     };
     const wakeUp = () => {
       asleep = false; hkSleep.set(false); nLamp = 0;
@@ -9002,23 +9263,75 @@
       };
       go();
     };
-    // little z's rising over the bed while they sleep
-    let zzOn = false;
-    const zzOne = still => {
-      const t = sv("text", { x: (156 + Math.random() * 78).toFixed(0), y: 262 - (still ? Math.random() * 20 : 0), "font-family": "Georgia,'Times New Roman',serif", "font-style": "italic", "font-weight": 700, "font-size": (13 + Math.random() * 5).toFixed(0), fill: "#cfe0ff" }, zzG);
+    // ── wind-down, while they sleep: one slow breath (BREATH seconds) paces the covers, their hands, their bodies and the z's, a sleep sound can play
+    //    (rain, a fan, soft snoring, crickets: remembered for next bedtime, and the snore keeps time with the breaths), and a sleep timer fades the sound out ──
+    const BREATH = 6.4, FADE = 30, TIMES = [15, 30, 60], SND_KEY = "ao3-mr-sleepsnd";
+    const SLEEP_SNDS = [["rain", "rain", "Rain on the window, muffled by the glass."], ["fan", "fan", "A box fan on low, turning its head slowly."], ["snore", "snoring", "A soft snore on every breath. Mike’s, probably."], ["crickets", "crickets", "The window cracked open, and crickets outside."]];
+    let zzOn = false, zzSide = 0, sndKind = null, sndPref = null, tmEnd = 0, tmLen = 0, tmTick = 0, tmDone = 0, fading = false, sndBtn = null, tmBtn = null;
+    try { const k = localStorage.getItem(SND_KEY); if (SLEEP_SNDS.some(s => s[0] === k)) sndPref = k; } catch {}
+    const zzOne = (still, side) => {                                                                                    // one z: from Will's side ("a"), Mike's ("b"), or anywhere
+      const x0 = side === "a" ? 146 : side === "b" ? 210 : 156, span = side ? 26 : 78;
+      const t = sv("text", { x: (x0 + Math.random() * span).toFixed(0), y: 262 - (still ? Math.random() * 20 : 0), "font-family": "Georgia,'Times New Roman',serif", "font-style": "italic", "font-weight": 700, "font-size": (13 + Math.random() * 5).toFixed(0), fill: "#cfe0ff" }, zzG);
       t.textContent = "z";
       if (still) return;
-      anim(t, "transform-box:fill-box;transform-origin:center;animation:mrZz 3.4s ease-out both;");
-      later(() => t.remove(), 3600);
+      anim(t, `transform-box:fill-box;transform-origin:center;animation:mrZz ${(BREATH * 0.85).toFixed(1)}s ease-out both;`);
+      later(() => t.remove(), BREATH * 870);
     };
-    const zzLoop = () => { if (!zzOn) return; zzOne(false); later(zzLoop, 1500 + Math.random() * 800); };
+    const breathe = on => {                                                                                             // the covers, hands and bodies share one slow pace asleep; the usual gentle breathing awake
+      const go = (n, amp, awakeT) => {
+        if (on) { n.style.setProperty("--amp", amp); n.style.animation = `mrBreath ${BREATH}s ease-in-out infinite`; }
+        else { n.style.removeProperty("--amp"); n.style.animation = `hkBreathe ${awakeT}s ease-in-out infinite`; }
+      };
+      ["a", "b"].forEach(k => { go(FIG[k].b1, 1.6, FIG[k].brT); go(FIG[k].b2, 1.3, FIG[k].brT); });
+      coverG.style.animation = on ? `mrCover ${BREATH}s ease-in-out infinite` : "none";
+    };
+    const onBreath = () => { if (zzOn) later(() => { if (!zzOn) return; if (!reduce) zzOne(false, zzSide++ % 2 ? "b" : "a"); snd.breath(); }, BREATH * 400); };   // on the exhale: a z, and a snore if that is the sound
+    coverG.addEventListener("animationiteration", e => { if (e.target === coverG) onBreath(); });                       // once per breath, so the z's and snores never drift from the covers
+    const sndLabel = () => { if (!sndBtn) return; const s = SLEEP_SNDS.find(x => x[0] === sndKind); sndBtn.textContent = s ? "☾ " + s[1] : "☾ sleep sound"; };
+    const timerLabel = () => {
+      if (!tmBtn) return;
+      if (fading) tmBtn.textContent = "◷ fading…";
+      else if (tmEnd) { const mins = Math.ceil((tmEnd - Date.now()) / 60000); tmBtn.textContent = mins <= 1 ? "◷ <1 min" : "◷ " + mins + " min"; }
+      else tmBtn.textContent = "◷ timer";
+    };
+    const useSound = (k, save) => {
+      sndKind = k; snd.set(k); sndLabel();
+      amb.duck(k ? 0.4 : 1, 2);                                                                                         // the weather through the walls sits lower under a sleep sound
+      if (save) { sndPref = k; try { if (k) localStorage.setItem(SND_KEY, k); else localStorage.removeItem(SND_KEY); } catch {} }
+    };
+    const timerDone = () => {                                                                                           // the sleep timer ran out: sound and weather fade away together
+      tmEnd = 0; fading = true; timerLabel();
+      say("The sound drifts out, a little at a time, until it is only the two of them breathing.");
+      amb.fadeOut(FADE); snd.fadeOut(FADE, () => { sndKind = null; sndLabel(); });
+      tmDone = setTimeout(() => { fading = false; amb.duck(1, 0.1); timerLabel(); }, FADE * 1000 + 300);
+    };
+    const tick = () => { clearTimeout(tmTick); if (!tmEnd) return; const rem = tmEnd - Date.now(); if (rem <= 0) { timerDone(); return; } timerLabel(); tmTick = setTimeout(tick, Math.min(15000, rem)); };
+    const tapTimer = () => {                                                                                            // off, 15, 30, 60 minutes, off
+      if (fading) { say("The sound is already on its way out."); return; }
+      const nx = tmEnd ? TIMES[TIMES.indexOf(tmLen) + 1] : TIMES[0];
+      if (nx) { tmLen = nx; tmEnd = Date.now() + nx * 60000; say("The sound will fade away in " + nx + " minutes."); tick(); }
+      else { tmEnd = 0; clearTimeout(tmTick); say("No timer. The sound stays as it is."); timerLabel(); }
+    };
+    const tapSound = () => {                                                                                            // off, rain, fan, snoring, crickets, off
+      const i = SLEEP_SNDS.findIndex(s => s[0] === sndKind), nx = SLEEP_SNDS[i + 1] || null;
+      amb.resume(); useSound(nx ? nx[0] : null, true);
+      say(nx ? nx[2] : "Back to the quiet of the room.");
+    };
+    const showSleep = on => {                                                                                           // the sleep pills and sound live only while they sleep
+      if (sndBtn) { sndBtn.style.display = tmBtn.style.display = on ? "" : "none"; }
+      if (on) { useSound(sndPref, false); timerLabel(); return; }
+      tmEnd = 0; fading = false; clearTimeout(tmTick); clearTimeout(tmDone);
+      useSound(null, false); amb.resume(); amb.duck(1, 1.5); timerLabel();
+    };
     const setZz = on => {
       if (on === zzOn) return;
       zzOn = on;
+      breathe(on); showSleep(on);
       if (!on) { clear(zzG); return; }
-      if (reduce) { zzOne(true); zzOne(true); zzOne(true); } else zzLoop();
+      if (reduce) { zzOne(true); zzOne(true); zzOne(true); const t = () => { if (!zzOn) return; snd.breath(); later(t, BREATH * 1000); }; later(t, BREATH * 400); }   // no motion: still z's, and the snores keep their own time
+      else onBreath();                                                                                                  // the first z, on the first exhale
     };
-    sh.onClose = () => { clearTimeout(tid); hideBubble(); amb.stop(); };
+    sh.onClose = () => { clearTimeout(tid); clearTimeout(tmTick); clearTimeout(tmDone); hideBubble(); amb.stop(); snd.stop(); };
     if (asleep) { P.a = Object.assign({}, MR_BASE.a, MR_SLEEP.a); P.b = Object.assign({}, MR_BASE.b, MR_SLEEP.b); drawFig("a", P.a); drawFig("b", P.b); setLamp("off"); setZz(true); }   // still asleep from last time: lamp out, z's rising
     else start();                                                                                                      // otherwise they are in the bed from the moment you walk in
     let first = Math.floor(Math.random() * MR_MOMENTS.length);
@@ -9028,6 +9341,9 @@
     sub.textContent = "hawkins · mike’s room";
     say(asleep ? "Mike’s room in the dark. The lamp is off, and the two of them are fast asleep." : "Mike’s room: blue walls, a lamp left on, and a ONE WAY sign over the closet.");
     const turnBtn = pill("\u2194 window wall", "Turn to look at the other side of the room", () => setView(view === "A" ? "B" : "A"));
+    sndBtn = pill("☾ sleep sound", "A sound for the night: rain, a fan, soft snoring or crickets", tapSound);                // these two only show while they sleep
+    tmBtn = pill("◷ timer", "Sleep timer: fades the sound out after 15, 30 or 60 minutes", tapTimer);
+    sndBtn.style.display = tmBtn.style.display = zzOn ? "" : "none"; sndLabel(); timerLabel();
     const setView = v => {
       if (scene) { say("They’re settling in. Give them a moment."); return; }
       view = v;
@@ -9042,7 +9358,7 @@
     };
     pill("\u{1FA9C} downstairs", "Down the stairs to the basement", goDown);
     pill("\u{1F3E1} outside", "Out the front door to the lawn", goOutside);
-    hkSoundPill(pill, amb);
+    hkSoundPill(pill, { refresh: () => { amb.refresh(); snd.refresh(); } });
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     document.body.appendChild(sh.back);
   }
