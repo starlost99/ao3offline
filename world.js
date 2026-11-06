@@ -161,7 +161,7 @@
 };
 
 // ════════ lib/hawkins-kit.js ════════
-// lib/hawkins-kit.js — shared Hawkins scaffolding: live time of day and hourly weather, season, the shell, sound effects, the fade-to-black.
+// lib/hawkins-kit.js — shared Hawkins scaffolding: live time of day and hourly weather, season, the shell, sound effects (knock, radio, thunder, weather ambience, bikes), the fade-to-black.
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/hawkins-kit"] = function (ctx) {
   'use strict';
@@ -388,7 +388,132 @@
     } catch {}
   }
 
-  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder };
+  // ── the sound of the evening: a quiet bed that follows the weather and the time of day (used by the lawn) ──
+  // rain and storm: steady rain on the roof with the odd drip; fog and snow: hushed wind; leaves: gusts and rustle;
+  // clear: birds by day and dawn, crickets at dusk and night. Everything sits low and fades in and out when the weather turns.
+  // It obeys the bell tower's sound setting, and starts on the first tap if the browser is still holding audio back.
+  function hkAmbience() {
+    let ac = null, master = null, grp = null, want = null, closed = false, waiting = false, noise = null;
+    const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+    const noiseBuf = () => {
+      if (noise && noise.sampleRate === ac.sampleRate) return noise;
+      noise = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate);
+      const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      return noise;
+    };
+    function make(kind, tm) {
+      const out = ac.createGain(); out.gain.value = 0.0001; out.connect(master);
+      const gp = { out, nodes: [], timers: new Set(), alive: true };
+      const later = (fn, ms) => { const t = setTimeout(() => { gp.timers.delete(t); if (gp.alive) fn(); }, ms); gp.timers.add(t); };
+      const every = (fn, lo, hi) => { const go = () => { fn(); later(go, rand(lo, hi)); }; later(go, rand(lo, hi)); };
+      // looping noise through one filter, with a slow swell if asked (lfoHz, depth: how much the volume rises and falls)
+      const bed = (type, f, q, vol, lfoHz, depth) => {
+        const s = ac.createBufferSource(); s.buffer = noiseBuf(); s.loop = true; s.loopStart = Math.random() * 2;
+        const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+        const v = ac.createGain(); v.gain.value = vol;
+        s.connect(fl); fl.connect(v); v.connect(out); s.start(); gp.nodes.push(s);
+        if (lfoHz) { const l = ac.createOscillator(), ld = ac.createGain(); l.frequency.value = lfoHz; ld.gain.value = depth; l.connect(ld); ld.connect(v.gain); l.start(); gp.nodes.push(l); }
+      };
+      // one short pitched note, sliding from f0 to f1
+      const blip = (f0, f1, dur, vol, delay) => {
+        const t = ac.currentTime + 0.02 + (delay || 0), o = ac.createOscillator(), g = ac.createGain();
+        o.type = "sine"; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + dur * 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.02);
+      };
+      const cricket = (f, period, vol) => {                                                    // four quick pulses, a pause, again
+        const o = ac.createOscillator(), v = ac.createGain(); o.frequency.value = f; v.gain.value = 0; o.connect(v); v.connect(out); o.start(); gp.nodes.push(o);
+        const run = () => {
+          const t0 = ac.currentTime + 0.05;
+          for (let i = 0; i < 4; i++) { const t = t0 + i * 0.075; v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(vol, t + 0.02); v.gain.linearRampToValueAtTime(0, t + 0.06); }
+          later(run, period * 1000 * rand(0.85, 1.15));
+        };
+        later(run, rand(0, 1000));
+      };
+      const bird = (dawn) => {                                                                // two to four quick notes
+        const base = rand(2300, 4200), n = 2 + Math.floor(Math.random() * (dawn ? 3 : 2)), up = Math.random() < 0.5;
+        for (let i = 0; i < n; i++) blip(base * (up ? 1 + i * 0.12 : 1 - i * 0.08), base * (up ? 1.25 + i * 0.12 : 0.8 - i * 0.08), 0.09, 0.03, i * 0.13);
+      };
+      if (kind === "rain" || kind === "storm") {
+        const heavy = kind === "storm";
+        bed("bandpass", 2400, 0.4, heavy ? 0.16 : 0.09, 0.2, heavy ? 0.03 : 0.015);          // the rain itself
+        bed("lowpass", 500, 0.7, heavy ? 0.12 : 0.05);                                        // the low patter on the roof
+        if (heavy) bed("bandpass", 350, 0.8, 0.05, 0.11, 0.04);                               // wind in the gusts
+        every(() => blip(rand(900, 1600), 600, 0.05, 0.04), 700, 2600);                       // a drip somewhere
+      } else if (kind === "fog") {
+        bed("lowpass", 260, 0.7, 0.04, 0.07, 0.015);
+      } else if (kind === "snow") {
+        bed("lowpass", 220, 0.6, 0.025, 0.05, 0.01);                                          // snow muffles everything
+      } else {
+        if (kind === "leaves") { bed("bandpass", 450, 0.7, 0.05, 0.13, 0.045); bed("highpass", 3500, 0.5, 0.012, 0.13, 0.011); }   // gusts, and the rustle in them
+        else bed("lowpass", 380, 0.6, 0.012, 0.06, 0.006);                                    // a faint breeze
+        if (tm === "day" || tm === "dawn") every(() => bird(tm === "dawn"), tm === "dawn" ? 900 : 1800, tm === "dawn" ? 3200 : 6000);
+        else { cricket(4300, 1.1, 0.012); cricket(4700, 1.4, 0.009); if (tm === "night") cricket(3900, 1.8, 0.008); }
+      }
+      return gp;
+    }
+    function dispose(gp, secs) {
+      if (!gp) return;
+      gp.alive = false; gp.timers.forEach(clearTimeout); gp.timers.clear();
+      try { const t = ac.currentTime; gp.out.gain.cancelScheduledValues(t); gp.out.gain.setValueAtTime(gp.out.gain.value, t); gp.out.gain.linearRampToValueAtTime(0.0001, t + secs); } catch {}
+      setTimeout(() => { gp.nodes.forEach(n => { try { n.stop(); } catch {} try { n.disconnect(); } catch {} }); try { gp.out.disconnect(); } catch {} }, secs * 1000 + 150);
+    }
+    function apply() {
+      if (closed || !want) return;
+      if (bellMuted()) { if (grp) { dispose(grp, 0.4); grp = null; } return; }
+      ac = bellUnlock();
+      if (!ac) return;
+      if (ac.state !== "running") {
+        if (!waiting) { waiting = true; try { ac.addEventListener("statechange", function once() { if (ac.state === "running") { ac.removeEventListener("statechange", once); waiting = false; apply(); } }); } catch { waiting = false; } }
+        return;
+      }
+      const key = want.kind + "|" + (want.kind === "clear" || want.kind === "leaves" ? want.tm : "");
+      if (grp && grp.key === key) return;
+      try {
+        if (!master) { master = ac.createGain(); master.gain.value = 1; master.connect(ac.destination); }
+        const old = grp; grp = make(want.kind, want.tm); grp.key = key;
+        const t = ac.currentTime; grp.out.gain.setValueAtTime(0.0001, t); grp.out.gain.linearRampToValueAtTime(1, t + 1.6);
+        dispose(old, 1.2);
+      } catch {}
+    }
+    return {
+      set(kind, tm) { want = { kind, tm }; apply(); },                                      // the weather or time changed (also starts it)
+      poke() { apply(); setTimeout(apply, 150); },                                          // call on a tap: wakes it if the browser was holding audio back
+      refresh() { apply(); },                                                               // the sound setting changed
+      stop() { closed = true; dispose(grp, 0.5); grp = null; }
+    };
+  }
+
+  // bike sounds: "bell" (ting-ting), "chain" (the freewheel ticking to a stop), "pass" (a bike whirring by, left to right, with a ting)
+  function hkBike(what) {
+    const ac = bellUnlock();
+    if (!ac || ac.state !== "running" || bellMuted()) return;
+    try {
+      const t0 = ac.currentTime + 0.02;
+      let dest = ac.destination;
+      if (what === "pass" && ac.createStereoPanner) { const pn = ac.createStereoPanner(); pn.pan.setValueAtTime(-0.85, t0); pn.pan.linearRampToValueAtTime(0.85, t0 + 2.6); pn.connect(ac.destination); dest = pn; }
+      const click = (t, vol) => {                                                         // one tick of the freewheel
+        const o = ac.createOscillator(), g = ac.createGain(), hp = ac.createBiquadFilter();
+        o.type = "square"; o.frequency.value = 1500 + Math.random() * 500; hp.type = "highpass"; hp.frequency.value = 900;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.012);
+        o.connect(hp); hp.connect(g); g.connect(dest); o.start(t); o.stop(t + 0.02);
+      };
+      const ting = (t, vol) => [[2093, 1], [2093 * 2.32, 0.5], [2093 * 3.9, 0.25], [2110, 0.6]].forEach(([f, a]) => {   // a small bell: a few inharmonic partials, the last one detuned so it shimmers
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = "sine"; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol * a, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+        o.connect(g); g.connect(dest); o.start(t); o.stop(t + 0.75);
+      });
+      if (what === "bell") { ting(t0, 0.06); ting(t0 + 0.16, 0.05); }
+      else if (what === "chain") { let t = t0, gap = 0.04; for (let i = 0; i < 16; i++) { click(t, 0.06); t += gap; gap *= 1.16; } }                       // slowing down
+      else if (what === "pass") {
+        let t = t0; const end = t0 + 2.6;
+        while (t < end) { const x = (t - t0) / 2.6, near = Math.sin(Math.PI * x); click(t, 0.006 + 0.045 * near); t += 0.05 + 0.03 * (1 - near); }    // louder in the middle
+        ting(t0 + 1.2, 0.035);
+      }
+    } catch {}
+  }
+
+  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike };
 };
 
 // ════════ lib/figures.js ════════
@@ -6637,8 +6762,9 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["wheelers"] = function (ctx) {
   'use strict';
   const {
-    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder
+    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder, hkAmbience, hkBike
   } = ctx.lib["hawkins-kit"];
+  const { bellMuted, setBellMuted } = ctx.lib["bell-audio"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -6662,7 +6788,9 @@
     const say = t => { caption.textContent = t; };
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     let tI = hkTimeGet(), wxI = hkWxGet(), nKnock = 0, nWin = 0, nBike = 0, nBox = 0, entering = false, gone = false;
-    sh.onClose = () => { gone = true; };
+    const amb = hkAmbience();                                                                              // the sound of the weather and the evening
+    sh.onClose = () => { gone = true; amb.stop(); };
+    sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
     const W = 360, H = 540;
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
     svg.style.cssText = "width:100%;height:auto;display:block;";
@@ -6905,7 +7033,7 @@
       try { if (porch.animate) porch.animate([{ opacity: 1 }, { opacity: 0.15 }, { opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 700 }); } catch {}
     });
     hit(264, 400, 48, 62, "The mailbox", () => say(["The mailbox. A flyer from a pizza place and nothing else.", "Still just the flyer."][nBox++ % 2]));
-    hit(0, 396, 92, 60, "Two bikes, dropped on the lawn", () => say(["Two bikes, dropped mid-argument, leaning on each other like they are holding each other up.", "One bell, one rattly chain. Both of them wet from the grass."][nBike++ % 2]));
+    hit(0, 396, 92, 60, "Two bikes, dropped on the lawn", () => { hkBike(nBike % 2 ? "chain" : "bell"); say(["Two bikes, dropped mid-argument, leaning on each other like they are holding each other up.", "One bell, one rattly chain. Both of them wet from the grass."][nBike++ % 2]); });
     hit(126, 316, 60, 52, "Climb in through the basement window", () => goIn());
     const hitG = sv("g", {}, svg);
     hits.forEach(([x, y, w, h, label, fn]) => {
@@ -7007,11 +7135,15 @@
       lit.setAttribute("opacity", Math.min(1, t.lit + (cozy ? 0.12 : 0)));
       tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.name === "day" ? 0.16 : t.tint[1]);   // daylight washes the whole scene a little paler
       timeBtn.textContent = t.label; wxBtn.textContent = wxLabel();
+      amb.set(kind, t.name);
       sub.textContent = "hawkins \u00B7 " + t.name + " \u00B7 " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
       if (announce) say(cozy ? COZY[t.name] : kind === "clear" || kind === "leaves" ? t.say.house : wxLine());
     };
     const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
     const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
+    const sndBtn = pill("", "Sound on or off (shared with the bell tower)", () => { setBellMuted(!bellMuted()); sndLabel(); amb.refresh(); });
+    const sndLabel = () => { sndBtn.textContent = bellMuted() ? "\u{1F507} sound" : "\u{1F50A} sound"; };
+    sndLabel();
     pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
 
@@ -7041,12 +7173,19 @@
     // the live values roll over by themselves if you stay (a new hour, or the override running out)
     const syncEnv = () => {
       if (gone) return;
+      if (!sh.back.isConnected) { gone = true; amb.stop(); return; }                                         // the scene was removed without closing: stop the sound
       const t = hkTimeGet(), w = hkWxGet();
       if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); }
       later(syncEnv, 60000);
     };
     later(syncEnv, 60000);
     sched(() => { hkCrackle(); ring(); say(pick(RADIO)); }, 20000, 42000);
+    // somewhere down the street a bike whirs past (not at night, and not in rain, storm or snow)
+    sched(() => {
+      const k = HK_WX[wxI][0];
+      if (entering || HK_TIMES[tI].name === "night" || k === "rain" || k === "storm" || k === "snow" || bellMuted()) return;
+      hkBike("pass"); later(() => { if (!entering && !gone) say("A bike whirs past down the street, bell ringing. Somebody is late for dinner."); }, 1200);
+    }, 30000, 70000);
 
     // the basement window is the way in: crouch, the latch gives, and the screen fades to the basement
     const veil = el("div", `position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:30;transition:opacity ${reduce ? 0 : 0.7}s;`);
