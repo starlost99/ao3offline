@@ -166,7 +166,7 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/hawkins-kit"] = function (ctx) {
   'use strict';
   const { gyHash } = ctx.shared;
-  const { bellUnlock, bellMuted } = ctx.lib["bell-audio"];
+  const { bellUnlock, bellMuted, setBellMuted } = ctx.lib["bell-audio"];
 
   const HK_TIMES = [
     { label: "\u{1F319} night", name: "night", map: "#18203a", sky: "linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%)", stars: 1, orb: "#efe6bd", dy: 0, lit: 1, tint: ["#000000", 0],
@@ -392,8 +392,11 @@
   // rain and storm: steady rain on the roof with the odd drip; fog and snow: hushed wind; leaves: gusts and rustle;
   // clear: birds by day and dawn, crickets at dusk and night. Everything sits low and fades in and out when the weather turns.
   // It obeys the bell tower's sound setting, and starts on the first tap if the browser is still holding audio back.
-  function hkAmbience() {
-    let ac = null, master = null, grp = null, want = null, closed = false, waiting = false, noise = null;
+  // opts.muffled: heard through the walls (the basement, Mike's room): a dull rain wash, a hushed wind, the odd far-off rumble in a storm, no birds or crickets.
+  // opts.owner: the scene's outer element; if it is ever removed without closing, the sound stops by itself.
+  function hkAmbience(opts) {
+    const muffled = !!(opts && opts.muffled), owner = opts && opts.owner;
+    let ac = null, master = null, lowp = null, grp = null, want = null, closed = false, waiting = false, noise = null;
     const rand = (lo, hi) => lo + Math.random() * (hi - lo);
     const noiseBuf = () => {
       if (noise && noise.sampleRate === ac.sampleRate) return noise;
@@ -430,6 +433,12 @@
         };
         later(run, rand(0, 1000));
       };
+      const rumble = () => {                                                                 // thunder far off, through the walls
+        const t = ac.currentTime + 0.02, s = ac.createBufferSource(), lp = ac.createBiquadFilter(), g = ac.createGain();
+        s.buffer = noiseBuf(); lp.type = "lowpass"; lp.frequency.setValueAtTime(220, t); lp.frequency.exponentialRampToValueAtTime(60, t + 2.6);
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.3, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.8);
+        s.connect(lp); lp.connect(g); g.connect(out); s.start(t); s.stop(t + 3);
+      };
       const bird = (dawn) => {                                                                // two to four quick notes
         const base = rand(2300, 4200), n = 2 + Math.floor(Math.random() * (dawn ? 3 : 2)), up = Math.random() < 0.5;
         for (let i = 0; i < n; i++) blip(base * (up ? 1 + i * 0.12 : 1 - i * 0.08), base * (up ? 1.25 + i * 0.12 : 0.8 - i * 0.08), 0.09, 0.03, i * 0.13);
@@ -440,6 +449,7 @@
         bed("lowpass", 500, 0.7, heavy ? 0.12 : 0.05);                                        // the low patter on the roof
         if (heavy) bed("bandpass", 350, 0.8, 0.05, 0.11, 0.04);                               // wind in the gusts
         every(() => blip(rand(900, 1600), 600, 0.05, 0.04), 700, 2600);                       // a drip somewhere
+        if (heavy && muffled) every(rumble, 9000, 26000);
       } else if (kind === "fog") {
         bed("lowpass", 260, 0.7, 0.04, 0.07, 0.015);
       } else if (kind === "snow") {
@@ -447,9 +457,12 @@
       } else {
         if (kind === "leaves") { bed("bandpass", 450, 0.7, 0.05, 0.13, 0.045); bed("highpass", 3500, 0.5, 0.012, 0.13, 0.011); }   // gusts, and the rustle in them
         else bed("lowpass", 380, 0.6, 0.012, 0.06, 0.006);                                    // a faint breeze
-        if (tm === "day" || tm === "dawn") every(() => bird(tm === "dawn"), tm === "dawn" ? 900 : 1800, tm === "dawn" ? 3200 : 6000);
+        if (muffled) { /* birds and crickets do not carry through the walls */ }
+        else if (tm === "day" || tm === "dawn") every(() => bird(tm === "dawn"), tm === "dawn" ? 900 : 1800, tm === "dawn" ? 3200 : 6000);
         else { cricket(4300, 1.1, 0.012); cricket(4700, 1.4, 0.009); if (tm === "night") cricket(3900, 1.8, 0.008); }
       }
+      const watch = () => { if (owner && !owner.isConnected) api.stop(); else later(watch, 5000); };   // the scene vanished without closing
+      if (owner) later(watch, 5000);
       return gp;
     }
     function dispose(gp, secs) {
@@ -470,18 +483,31 @@
       const key = want.kind + "|" + (want.kind === "clear" || want.kind === "leaves" ? want.tm : "");
       if (grp && grp.key === key) return;
       try {
-        if (!master) { master = ac.createGain(); master.gain.value = 1; master.connect(ac.destination); }
+        if (!master) {
+          master = ac.createGain(); master.gain.value = muffled ? 1.3 : 1;
+          if (muffled) { lowp = ac.createBiquadFilter(); lowp.type = "lowpass"; lowp.frequency.value = 650; lowp.Q.value = 0.6; master.connect(lowp); lowp.connect(ac.destination); }
+          else master.connect(ac.destination);
+        }
         const old = grp; grp = make(want.kind, want.tm); grp.key = key;
         const t = ac.currentTime; grp.out.gain.setValueAtTime(0.0001, t); grp.out.gain.linearRampToValueAtTime(1, t + 1.6);
         dispose(old, 1.2);
       } catch {}
     }
-    return {
+    const api = {
       set(kind, tm) { want = { kind, tm }; apply(); },                                      // the weather or time changed (also starts it)
       poke() { apply(); setTimeout(apply, 150); },                                          // call on a tap: wakes it if the browser was holding audio back
       refresh() { apply(); },                                                               // the sound setting changed
-      stop() { closed = true; dispose(grp, 0.5); grp = null; }
+      stop() { closed = true; dispose(grp, 0.5); grp = null; setTimeout(() => { try { if (master) master.disconnect(); if (lowp) lowp.disconnect(); } catch {} }, 900); }
     };
+    return api;
+  }
+
+  // the 🔊 sound pill for a scene's button row: switches the bell tower's sound setting (one setting for the whole world) and tells the scene's ambience
+  function hkSoundPill(pill, amb) {
+    const lab = () => { b.textContent = bellMuted() ? "\u{1F507} sound" : "\u{1F50A} sound"; };
+    const b = pill("", "Sound on or off (shared with the bell tower)", () => { setBellMuted(!bellMuted()); lab(); amb.refresh(); });
+    lab();
+    return b;
   }
 
   // bike sounds: "bell" (ting-ting), "chain" (the freewheel ticking to a stop), "pass" (a bike whirring by, left to right, with a ting)
@@ -513,7 +539,7 @@
     } catch {}
   }
 
-  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike };
+  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill };
 };
 
 // ════════ lib/figures.js ════════
@@ -6762,9 +6788,9 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["wheelers"] = function (ctx) {
   'use strict';
   const {
-    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder, hkAmbience, hkBike
+    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder, hkAmbience, hkBike, hkSoundPill
   } = ctx.lib["hawkins-kit"];
-  const { bellMuted, setBellMuted } = ctx.lib["bell-audio"];
+  const { bellMuted } = ctx.lib["bell-audio"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -6788,7 +6814,7 @@
     const say = t => { caption.textContent = t; };
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     let tI = hkTimeGet(), wxI = hkWxGet(), nKnock = 0, nWin = 0, nBike = 0, nBox = 0, entering = false, gone = false;
-    const amb = hkAmbience();                                                                              // the sound of the weather and the evening
+    const amb = hkAmbience({ owner: sh.back });                                                                              // the sound of the weather and the evening
     sh.onClose = () => { gone = true; amb.stop(); };
     sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
     const W = 360, H = 540;
@@ -7141,9 +7167,7 @@
     };
     const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
     const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
-    const sndBtn = pill("", "Sound on or off (shared with the bell tower)", () => { setBellMuted(!bellMuted()); sndLabel(); amb.refresh(); });
-    const sndLabel = () => { sndBtn.textContent = bellMuted() ? "\u{1F507} sound" : "\u{1F50A} sound"; };
-    sndLabel();
+    hkSoundPill(pill, amb);
     pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
 
@@ -7173,7 +7197,6 @@
     // the live values roll over by themselves if you stay (a new hour, or the override running out)
     const syncEnv = () => {
       if (gone) return;
-      if (!sh.back.isConnected) { gone = true; amb.stop(); return; }                                         // the scene was removed without closing: stop the sound
       const t = hkTimeGet(), w = hkWxGet();
       if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); }
       later(syncEnv, 60000);
@@ -7221,7 +7244,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["basement"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade, hkWindowSky } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade, hkWindowSky, hkAmbience, hkSoundPill } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -7278,6 +7301,10 @@
     const sh = hkShell("ao3-basement", "\u{1F3B2} The basement");
     const { sv, rnd, anim } = sh.kit;
     const { sub, field, caption, pill, close, later } = sh;
+    const amb = hkAmbience({ muffled: true, owner: sh.back });                                              // the weather, heard through the walls (the blanket fort stays silent)
+    amb.set(HK_WX[hkWxGet()][0], HK_TIMES[hkTimeGet()].name);
+    sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
+    sh.onClose = () => amb.stop();
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hits = [];
@@ -7565,6 +7592,7 @@
     pill("\u25C0 fort", "Follow the popcorn trail to the blanket fort", goFort);
     pill("\u{1FA9C} upstairs", "Up the stairs to Mike\u2019s room", goUp);
     pill("\u{1F3E1} outside", "Climb back out to the front lawn", () => { close(); openWheelers(); });
+    hkSoundPill(pill, amb);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     document.body.appendChild(sh.back);
   }
@@ -8428,7 +8456,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["mikes-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const { bsKit } = ctx.lib["figures"];
   const world = ctx.world;
@@ -8518,6 +8546,9 @@
     const sh = hkShell("ao3-mikes-room", "\u{1F6CF}️ Mike’s room");
     const { sv, rnd, anim, el } = sh.kit;
     const { sub, field, caption, pill, close, later } = sh;
+    const amb = hkAmbience({ muffled: true, owner: sh.back });                                              // the weather, heard through the walls (the blanket fort stays silent)
+    amb.set(HK_WX[hkWxGet()][0], HK_TIMES[hkTimeGet()].name);
+    sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hitsA = [], hitsB = [];
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -8846,7 +8877,7 @@
     const play = i => { clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(MR_KEY, String(mi)); } catch {} say("Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
     const another = () => { let n = Math.floor(Math.random() * (MR_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
     const next = () => { if (leaving || view !== "A") return; if (playing) step(); else another(); };
-    sh.onClose = () => { clearTimeout(tid); hideBubble(); };
+    sh.onClose = () => { clearTimeout(tid); hideBubble(); amb.stop(); };
     start();                                                                                                           // they are in the bed from the moment you walk in
     let first = Math.floor(Math.random() * MR_MOMENTS.length);
     try { const last = parseInt(localStorage.getItem(MR_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < MR_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (MR_MOMENTS.length - 1))) % MR_MOMENTS.length; } catch {}
@@ -8868,6 +8899,7 @@
     };
     pill("\u{1FA9C} downstairs", "Down the stairs to the basement", goDown);
     pill("\u{1F3E1} outside", "Out the front door to the lawn", goOutside);
+    hkSoundPill(pill, amb);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     document.body.appendChild(sh.back);
   }
