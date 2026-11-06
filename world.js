@@ -161,7 +161,7 @@
 };
 
 // ════════ lib/hawkins-kit.js ════════
-// lib/hawkins-kit.js — shared Hawkins scaffolding: time/weather/season prefs, the shell, sound effects, the fade-to-black.
+// lib/hawkins-kit.js — shared Hawkins scaffolding: live time of day and hourly weather, season, the shell, sound effects, the fade-to-black.
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/hawkins-kit"] = function (ctx) {
   'use strict';
@@ -174,10 +174,22 @@
     { label: "\u{1F307} dusk", name: "dusk", map: "#2c2a4a", sky: "linear-gradient(180deg,#2b1b4a 0%,#6a3566 35%,#a85a52 55%,#33203c 100%)", stars: 0.3, orb: "#ffb067", dy: 34, lit: 0.9, tint: ["#ff8a5c", 0.1],
       say: { map: "Dusk. The streetlights are making up their minds.", house: "Dusk. Dinner smells drift out across the lawn." } },
     { label: "\u{1F305} dawn", name: "dawn", map: "#2f3a5e", sky: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, lit: 0.6, tint: ["#ffc9c9", 0.09],
-      say: { map: "Dawn. The paper boys are out already.", house: "Dawn. One window is still lit from last night." } }
+      say: { map: "Dawn. The paper boys are out already.", house: "Dawn. One window is still lit from last night." } },
+    { label: "\u2600\uFE0F day", name: "day", map: "#3d5078", sky: "linear-gradient(180deg,#5fa8e8 0%,#9cccf2 30%,#d6ebf7 50%,#2a3030 58%,#2a3030 100%)", stars: 0, orb: "#fff3b0", dy: 10, lit: 0.2, tint: ["#e6f2ff", 0.1],
+      say: { map: "Daytime. Bikes everywhere, and nobody is where they should be.", house: "Daytime. The porch light is off for once." } }
   ];
-  const hkTimeGet = () => { try { const p = JSON.parse(localStorage.getItem("ao3-gg-prefs") || "{}") || {}; return Math.max(0, Math.min(2, p.tm | 0)); } catch { return 0; } };
-  const hkTimeSet = i => { try { const p = JSON.parse(localStorage.getItem("ao3-gg-prefs") || "{}") || {}; p.tm = i; localStorage.setItem("ao3-gg-prefs", JSON.stringify(p)); } catch {} };
+  // ── the live environment: real time of day, and weather that rolls once an hour ──
+  // Every Hawkins scene reads these, so all the windows agree. Time of day follows the clock (dawn 5-8, day 8-17, dusk 17-20, night after).
+  // Weather is picked from the date and hour, so it holds for about an hour and is the same in every scene, and it leans on the season.
+  // The buttons set an override that lasts an hour, then the live values take over again. Kept in one small key, ao3-hk-env.
+  const ENV_KEY = "ao3-hk-env", HOUR = 3600000;
+  const hkEnvRead = () => { try { return JSON.parse(localStorage.getItem(ENV_KEY) || "{}") || {}; } catch { return {}; } };
+  const hkEnvWrite = patch => { try { localStorage.setItem(ENV_KEY, JSON.stringify(Object.assign(hkEnvRead(), patch))); } catch {} };
+  const hkLiveTime = () => { const h = new Date().getHours(); return h >= 5 && h < 8 ? 2 : h >= 8 && h < 17 ? 3 : h >= 17 && h < 20 ? 1 : 0; };
+  const hkTimeGet = () => { const e = hkEnvRead(); return (e.tmUntil > Date.now() && e.tm >= 0 && e.tm < HK_TIMES.length) ? e.tm | 0 : hkLiveTime(); };
+  const hkTimeSet = i => hkEnvWrite({ tm: i, tmUntil: Date.now() + HOUR });
+  const HK_TIME_ORDER = [0, 2, 3, 1];                                                  // night, dawn, day, dusk: the order the button goes round
+  const hkTimeNext = i => HK_TIME_ORDER[(HK_TIME_ORDER.indexOf(i) + 1) % HK_TIME_ORDER.length];
 
   function hkKit() {
     const el = (tag, css, text) => {
@@ -289,9 +301,19 @@
     try { const s = JSON.parse(localStorage.getItem("ao3_gg_sync_v1") || "null"); if (s && typeof s === "object" && "hw" in s) p.hw = s.hw; } catch {}
     return p;
   }
-  const HK_WX = [["clear", "\u2600\uFE0F clear"], ["rain", "\u{1F327}\uFE0F rain"], ["fog", "\u{1F32B}\uFE0F fog"], ["snow", "\u2744\uFE0F snow"]];
-  const hkWxGet = () => Math.max(0, Math.min(HK_WX.length - 1, hkPrefs().wx | 0));
-  const hkWxSet = i => { try { const p = JSON.parse(localStorage.getItem("ao3-gg-prefs") || "{}") || {}; p.wx = i; localStorage.setItem("ao3-gg-prefs", JSON.stringify(p)); } catch {} };
+  const HK_WX = [["clear", "\u2600\uFE0F clear"], ["rain", "\u{1F327}\uFE0F rain"], ["fog", "\u{1F32B}\uFE0F fog"], ["snow", "\u2744\uFE0F snow"], ["leaves", "\u{1F342} leaves"], ["storm", "\u26C8\uFE0F storm"]];
+  //                               clear rain fog snow leaves storm
+  const WX_WEIGHTS = { winter: [30, 10, 14, 36, 0, 2], spring: [40, 30, 10, 0, 6, 12], summer: [58, 16, 4, 0, 0, 14], autumn: [30, 22, 14, 3, 25, 6], halloween: [24, 14, 26, 0, 28, 8] };
+  function hkLiveWx() {
+    const d = new Date(), key = `hkwx|${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+    const x = Math.sin(gyHash(key) * 12.9898) * 43758.5453, r = x - Math.floor(x);
+    const w = WX_WEIGHTS[hkSeason()] || WX_WEIGHTS.autumn, tot = w.reduce((a, c) => a + c, 0);
+    let t = r * tot;
+    for (let i = 0; i < w.length; i++) { t -= w[i]; if (t < 0) return i; }
+    return 0;
+  }
+  const hkWxGet = () => { const e = hkEnvRead(); return (e.wxUntil > Date.now() && e.wx >= 0 && e.wx < HK_WX.length) ? e.wx | 0 : hkLiveWx(); };
+  const hkWxSet = i => hkEnvWrite({ wx: i, wxUntil: Date.now() + HOUR });
   const HK_SEASON_TAG = { halloween: "\u{1F383} spooky season", winter: "\u2744\uFE0F winter", spring: "\u{1F338} spring", summer: "\u2600\uFE0F summer", autumn: "\u{1F342} autumn" };
   function hkSeason() {
     const m = new Date().getMonth(), p = hkPrefs();
@@ -330,7 +352,43 @@
     sh.later(() => { sh.close(); fn(); }, reduce ? 60 : 480);
   }
 
-  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade };
+  // a small window onto the live sky: colour by time of day, a sun by day, stars at night, and whatever the weather is doing
+  // (sv, rnd: from the scene's kit; g: the group to draw into; x, y, w, h: the glass; tm: HK_TIMES[...]; kind: HK_WX[...][0])
+  const SKY = { night: "#18203a", dusk: "#8a4a62", dawn: "#6e75b0", day: "#8fc3f0" };
+  function hkWindowSky(sv, rnd, g, x, y, w, h, tm, kind) {
+    let fill = SKY[tm.name] || SKY.night;
+    if (tm.name === "day" && kind !== "clear" && kind !== "leaves") fill = kind === "snow" ? "#c9d4e2" : "#8c9db3";
+    sv("rect", { x, y, width: w, height: h, fill }, g);
+    const clearish = kind === "clear" || kind === "leaves";
+    if (clearish && (tm.name === "night" || tm.name === "dusk")) for (let i = 0; i < Math.round(w * h / 1000); i++) sv("circle", { cx: (x + 4 + rnd("wsx" + i) * (w - 8)).toFixed(1), cy: (y + 4 + rnd("wsy" + i) * h * 0.55).toFixed(1), r: 0.9, fill: "#fff", opacity: 0.7 }, g);
+    if (tm.name === "day" && clearish) {
+      sv("circle", { cx: x + w * 0.72, cy: y + h * 0.3, r: Math.min(w, h) * 0.2, fill: "#fff3b0", opacity: 0.3 }, g);
+      sv("circle", { cx: x + w * 0.72, cy: y + h * 0.3, r: Math.min(w, h) * 0.1, fill: "#fff3b0" }, g);
+    }
+    if (kind === "fog") sv("rect", { x, y, width: w, height: h, fill: "#d8d2ec", opacity: 0.35 }, g);
+    const n = Math.max(6, Math.round(w * h / 420));
+    if (kind === "rain" || kind === "storm") for (let i = 0; i < n; i++) { const cx = x + 3 + rnd("wrx" + i) * (w - 6), cy = y + 3 + rnd("wry" + i) * (h - 10); sv("line", { x1: cx.toFixed(1), y1: cy.toFixed(1), x2: (cx - 1.2).toFixed(1), y2: (cy + 5).toFixed(1), stroke: "#cfe0ff", "stroke-width": 0.9, opacity: 0.6 }, g); }
+    if (kind === "snow") for (let i = 0; i < n; i++) sv("circle", { cx: (x + 3 + rnd("wnx" + i) * (w - 6)).toFixed(1), cy: (y + 3 + rnd("wny" + i) * (h - 6)).toFixed(1), r: 1.2, fill: "#fff" }, g);
+    if (kind === "leaves") for (let i = 0; i < Math.max(3, n >> 2); i++) sv("ellipse", { cx: (x + 4 + rnd("wlx" + i) * (w - 8)).toFixed(1), cy: (y + 4 + rnd("wly" + i) * (h - 8)).toFixed(1), rx: 2.2, ry: 1.1, fill: ["#d9731f", "#b5541a", "#e0a032"][i % 3], transform: `rotate(${Math.round(rnd("wlr" + i) * 180)} ${(x + w / 2).toFixed(0)} ${(y + h / 2).toFixed(0)})` }, g);
+  }
+
+  // thunder: a low rumble of filtered noise (obeys the bell tower's sound setting)
+  function hkThunder() {
+    const ac = bellUnlock();
+    if (!ac || ac.state !== "running" || bellMuted()) return;
+    try {
+      const t0 = ac.currentTime + 0.01, len = 2.6;
+      const buf = ac.createBuffer(1, Math.ceil(ac.sampleRate * len), ac.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = ac.createBufferSource(); src.buffer = buf;
+      const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(260, t0); lp.frequency.exponentialRampToValueAtTime(70, t0 + len);
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.22, t0 + 0.25); g.gain.linearRampToValueAtTime(0.1, t0 + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+      src.connect(lp); lp.connect(g); g.connect(ac.destination); src.start(t0); src.stop(t0 + len);
+    } catch {}
+  }
+
+  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder };
 };
 
 // ════════ lib/figures.js ════════
@@ -1253,7 +1311,7 @@
 
     // ── extras: preferences, seasons and little scenes ──
     const PKEY = "ao3-gg-prefs", SKEY = "ao3_gg_sync_v1";
-    // wisps (found, spent, carried, cat/ghost gifts, keeper count) and everything about Bram (hats, lanterns, flowers,
+    // wisps (found, spent, carried, keeper count) and everything about Bram (hats, lanterns, flowers,
     // story) go in SKEY, which the cloud sync picks up because it starts with ao3_. Time of day, weather etc. stay on this device.
     const SYNCED = ["wm", "wi", "wg", "wc", "wf", "keeper", "bt", "hw"];
     let prefs = {};
@@ -1437,7 +1495,6 @@
       if (picked) picked.setAttribute("opacity", 0);
       if (picked === mark) { picked = null; card.style.display = "none"; return; }
       picked = mark; mark.setAttribute("opacity", 0.35);
-      if (keeperGoTo) { const kn = graveNodes.find(x => x.g === g); if (kn) keeperGoTo(kn); }   // Bram walks over
       const f = g.f, rec = gyRec(f.workId), total = gyTotal(rec);
       const lit = rec.lit && rec.lit > Date.now();
       card.textContent = "";
@@ -1659,74 +1716,8 @@
       hit.addEventListener("click", () => collect(false));
     }
 
-    // ── unspent wisps: Bram's jar, a gift for the cat or the ghost (one each per day), or up to WISP_KEEP carry over to tomorrow ──
+    // ── unspent wisps: Bram's jar, or up to WISP_KEEP carry over to tomorrow ──
     const wispAvail = () => Math.max(0, wispFound().length + (prefs.wc || 0) - (prefs.wg || 0));
-    const wfToday = () => {
-      const f = (prefs.wf && typeof prefs.wf === "object") ? prefs.wf : (prefs.wf = {});
-      if (f.d !== dayKey) { f.d = dayKey; f.cat = 0; f.ghost = 0; }     // today's gifts; catAll / ghostAll keep the running count
-      return f;
-    };
-    const ctl = {};                                     // the cat and ghost fill these in so a gift can light them up
-    const CAT_LINES = [
-      "The cat laps at the glow as if it were milk, then purrs loud enough to shake the stone.",
-      "She noses the wisp, sneezes, and decides it is hers now.",
-      "A small blue light curls up beside her. She keeps one eye on it all night.",
-      "The cat head-butts your hand. Once. That is a great honour.",
-      "She sits in the wisp-light and, for a moment, looks like a lantern herself."
-    ];
-    const GHOST_TALES = [
-      "Thank you. I haven\u2019t been warm since the last chapter. It was chapter six.",
-      "I was a slow burn. Six chapters of almost. I never got my kiss.",
-      "My author wrote me at night, mostly. You can tell. Everyone in me is tired and brave.",
-      "There was a reader who left a comment on every chapter. Every one. \u2018Please update.\u2019 I think about her.",
-      "Do you know what\u2019s worse than an ending that hurts? One that never comes.",
-      "The last thing written was a line of dialogue, stopped halfway. I\u2019ve been finishing it in my head for years.",
-      "I never found out the ending. But I know how it felt to be read. That counts for something.",
-      "Keep going. Whatever you\u2019re reading. Finish it for me."
-    ];
-    const wispCard = (head, text, note, build) => {
-      if (picked) { picked.setAttribute("opacity", 0); picked = null; }
-      card.textContent = "";
-      card.appendChild(el("div", "font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(159,212,255,0.9);", head));
-      card.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13.5px;line-height:1.45;margin:8px 0 2px;color:#e6dcf5;", text));
-      if (note) card.appendChild(el("div", "font-size:11.5px;line-height:1.4;margin-top:5px;color:rgba(159,212,255,0.9);", note));
-      const row = el("div", "display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:10px;");
-      build((label, fn) => { const b = el("button", bcss, label); b.type = "button"; b.onclick = fn; row.appendChild(b); });
-      card.appendChild(row);
-      card.style.display = "block"; card.scrollTop = 0;
-    };
-    const giveWisp = who => {
-      const f = wfToday();
-      if (wispAvail() < 1 || f[who]) return;
-      prefs.wg = (prefs.wg || 0) + 1; f[who] = 1; f[who + "All"] = (f[who + "All"] || 0) + 1;
-      const n = f[who + "All"];
-      savePrefs(); updateSub();
-      try { if (navigator.vibrate) navigator.vibrate(12); } catch {}
-      if (who === "cat") {
-        const p = ctl.catPos ? ctl.catPos() : null;
-        if (p) sparkle(p.x, p.y - 8, 8);
-        if (ctl.catGlow) ctl.catGlow();
-        card.style.display = "none";
-        say(CAT_LINES[(n - 1) % CAT_LINES.length]);
-      } else {
-        if (ctl.ghostGlow) ctl.ghostGlow();
-        const tale = GHOST_TALES[n - 1];
-        wispCard("\u{1F47B} The ghost",
-          tale ? `\u201C${tale}\u201D` : "The ghost says nothing. It glows a little brighter, and that is enough.",
-          tale ? `(${n} of ${GHOST_TALES.length})` : "",
-          btn => btn("Close", () => { card.style.display = "none"; }));
-      }
-    };
-    const offerWisp = who => {                          // false when there is nothing to offer, so the cat and ghost act as usual
-      const f = wfToday();
-      if (wispAvail() < 1 || f[who]) return false;
-      const a = wispAvail();
-      wispCard(who === "cat" ? "\u{1F408} The cat" : "\u{1F47B} The ghost",
-        who === "cat" ? "She sniffs at your lantern, ears forward." : "It drifts closer, hollow eyes on the glow in your lantern.",
-        `${a} wisp${a === 1 ? "" : "s"} to spare \u00B7 one gift each per day`,
-        btn => { btn("Give 1 \u2726", () => giveWisp(who)); btn("Not now", () => { card.style.display = "none"; }); });
-      return true;
-    };
 
     // a ghost that drifts across the grounds
     {
@@ -1736,9 +1727,7 @@
       const drift = sv("g", { transform: "translate(180 0)" }, wrap);
       const bob = sv("g", {}, drift);
       sv("circle", { cx: 0, cy: -4, r: 20, fill: "#cfe0ff", opacity: 0.12 }, bob);
-      const gbody = sv("path", { d: "M-9 8 V-2 A9 9 0 0 1 9 -2 V8 L6 5 L3 8 L0 5 L-3 8 L-6 5 Z", fill: "#f1f4ff", opacity: 0.55 }, bob);
-      ctl.ghostGlow = () => gbody.setAttribute("opacity", wfToday().ghost ? 0.95 : 0.55);   // brighter for the rest of the day after a gift
-      ctl.ghostGlow();
+      sv("path", { d: "M-9 8 V-2 A9 9 0 0 1 9 -2 V8 L6 5 L3 8 L0 5 L-3 8 L-6 5 Z", fill: "#f1f4ff", opacity: 0.55 }, bob);
       sv("circle", { cx: -3, cy: -3, r: 1.3, fill: "#1b1530" }, bob);
       sv("circle", { cx: 3, cy: -3, r: 1.3, fill: "#1b1530" }, bob);
       sv("ellipse", { cx: 0, cy: 1.5, rx: 1.5, ry: 2, fill: "#1b1530" }, bob);
@@ -1749,7 +1738,6 @@
       let gone = false;
       hit.addEventListener("click", () => {
         if (gone) return;
-        if (offerWisp("ghost")) { say("The ghost drifts closer, eyeing your lantern."); return; }   // it lingers while there is a gift to give
         gone = true;
         say(pick([
           "Boo. (Affectionately.)",
@@ -1765,7 +1753,7 @@
     }
 
     // hooks that Bram's block fills in (declared here so the cat, the weather and the graves can reach them)
-    let keeperGoTo = null, keeperOnWeather = null, catCtl = null;
+    let keeperOnWeather = null, catCtl = null;
 
     // a cat who sits on graves; pet her and she eventually wanders off to another one.
     // catCtl lets Bram chase her: while he does, she runs loose over the grounds (see Bram's block below).
@@ -1776,7 +1764,6 @@
       catG.style.transition = "transform .9s ease-in-out";
       const place = () => { const p = spot(graveNodes[at]); cx = p.x; cy = p.y; catG.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; };
       place();
-      const wglow = sv("circle", { cx: 0, cy: -8, r: 17, fill: "#9fd4ff", opacity: 0 }, catG);     // lit up for the day after a wisp gift
       const tail = sv("path", { d: "M5 -2 Q13 -3 11 -11", stroke: "#0b0910", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, catG);
       anim(tail, "animation:ggSway 2.4s ease-in-out infinite;transform-origin:5px -2px;");
       sv("ellipse", { cx: 0, cy: -6, rx: 6, ry: 6, fill: "#0b0910" }, catG);
@@ -1792,13 +1779,9 @@
         run: (x, y) => { cx = x; cy = y; catG.style.transition = "none"; catG.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`; },
         sit: i => { if (i != null) at = i; catG.style.transition = "transform .9s ease-in-out"; place(); }
       };
-      ctl.catPos = () => ({ x: cx, y: cy });
-      ctl.catGlow = () => wglow.setAttribute("opacity", wfToday().cat ? 0.26 : 0);
-      ctl.catGlow();
       hit.addEventListener("click", e => {
         e.stopPropagation();
         pets++;
-        offerWisp("cat");
         const h = sv("text", { x: cx, y: cy - 24, "text-anchor": "middle", "font-size": 10, fill: "#ff9fb8" }, svg);
         h.textContent = "\u2665";
         anim(h, "animation:ggHeart 1s ease-out forwards;");
@@ -1815,8 +1798,7 @@
     // talks about YOUR graveyard: quiet fics, flowers, candles, wisps, anniversaries, the weather.
     // A glowing "!" over his hat means he has news (an anniversary today, or candles about to go out).
     // He also goes about his day: he stops to sweep a stone, straighten a flower, or sit on the bench
-    // with a thermos; he chases the cat when she knocks something over; he walks over to any grave you
-    // tap; and when it rains he goes into his cottage by the gate (lit window) until it clears.
+    // with a thermos; he chases the cat when she knocks something over; and when it rains he goes into his cottage by the gate (lit window) until it clears.
     // You can also send him on errands (fetch a wisp, lead you to a quiet grave), give him a flower for his hat,
     // drop today's wisps in his tip jar for lantern colours and hats (different each day, back to normal at 2 am), and slowly learn who he used to be.
     {
@@ -2116,9 +2098,7 @@
         });
         btn("Chat", () => talk(nextLine()));
         btn("\u{1F9ED} Errands", () => errandsMenu());
-        btn("\u{1F337} Gift", () => giftMenu());
-        btn("\u2726 Tip jar", () => tipMenu());
-        btn("\u{1F3E0} Cottage", () => { closeCard(); openBramCottage(); });
+        btn("\u{1F381} Gifts", () => giftsMenu());
         btn("Who are you?", () => storyMenu());
         btn("Close", closeCard);
       });
@@ -2165,6 +2145,13 @@
           btn("Back", again);
         });
       };
+
+      // ── gifts: one button on his menu, then a flower for the hat or wisps for the jar ──
+      const giftsMenu = () => bramCard({ t: pick(["A gift? Flower for the hat, or wisps for the jar?", "Gifts, is it? You\u2019re spoiling me."]) }, ({ btn }) => {
+        btn("\u{1F337} Flower", () => giftMenu());
+        btn("\u2726 Wisps", () => tipMenu());
+        btn("Back", again);
+      });
 
       // ── gifts: a flower goes in his hat band (the last three stay) ──
       const FLOWER_SAY = {
@@ -2415,7 +2402,7 @@
 
         // ── state ──
         let dir = 1, wSpeed = 20, stopT = 14 + Math.random() * 12, chaseT = 40 + Math.random() * 30;
-        let act = null, ch = null, onArrive = null, tendNode = null, pendingTap = null;
+        let act = null, ch = null, onArrive = null, tendNode = null;
         let insideT = 0, phT = 0, flags = 0, clock = 0, started = false;
 
         const hasFlowers = n => gyTotal(gyRec(n.g.f.workId)) > 0;
@@ -2430,7 +2417,6 @@
           onArrive = () => startAct(hasFlowers(n) && Math.random() < 0.6 ? "straighten" : "sweep", n);
         };
         const resume = () => {                    // back onto the path, or off to a grave you tapped meanwhile
-          if (pendingTap) { const n = pendingTap; pendingTap = null; walkToTend(n, 28); return; }
           const y1 = clampY(bm.y);
           mode = "walk"; wSpeed = 22; onArrive = null; tendNode = null;
           bm.route = mkRoute(bm.x, bm.y, { x: pathX(y1) + OFF, y: y1 }, OFF);
@@ -2494,7 +2480,7 @@
         const LAG = 0.6;                          // Bram runs this many seconds behind her
         const propTarget = p => ({ x: p.x + 9, y: p.y + 3, lane: true });
         const tryChase = () => {
-          if (!catCtl || catCtl.busy || rainNow() || pendingTap) return false;
+          if (!catCtl || catCtl.busy || rainNow()) return false;
           const cn = graveNodes[catCtl.at()];
           if (Math.abs(cn.gy + 54 - bm.y) > 700) return false;       // too far to bother
           const free = props.filter(p => !p.down).sort((p1, p2) => Math.abs(p1.y - cn.gy) - Math.abs(p2.y - cn.gy));
@@ -2652,17 +2638,6 @@
           else if (mode === "exit") exitTick(dt);
           if (lead) followView(dt);
           put(); applyBody();
-        };
-
-        // tap a grave and he walks over to it
-        keeperGoTo = n => {
-          if (mode === "chase") { pendingTap = n; return; }
-          if (mode === "inside") { say(pick(["A shadow moves behind the lit window. \u201CNot in this rain, love.\u201D", "Bram taps the glass from inside. \u201CAfter the rain!\u201D"])); return; }
-          if (mode === "home" || mode === "enter" || mode === "exit") return;
-          if (tendNode === n && (mode === "walk" || mode === "act")) return;
-          if (act) endAct(true);
-          walkToTend(n, 28);
-          bsay(pick([`Bram ambles over to ${q2(titleOf(n.g.f))}.`, "Bram heads over, lantern swinging.", "\u201CComing, coming.\u201D"]));
         };
 
         // ── errands: he leads, and the view follows him until you touch the screen ──
@@ -6473,7 +6448,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["hawkins"] = function (ctx) {
   'use strict';
-  const { hkShell, hkTimeGet, HK_TIMES, hkTimeSet } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
   const openWheelers = (...args) => world.openWheelers(...args);
@@ -6624,7 +6599,7 @@
       sub.textContent = "indiana \u00B7 " + t.name;
       if (announce) caption.textContent = t.say.map;
     };
-    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % HK_TIMES.length; hkTimeSet(tI); applyTime(true); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
     pill("\u{1F3E1} Wheelers\u2019", "Walk up to the Wheelers\u2019 house", () => { close(); openWheelers(); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
     applyTime(true);
@@ -6662,7 +6637,7 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["wheelers"] = function (ctx) {
   'use strict';
   const {
-    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkWxSet, hkCrackle
+    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder
   } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
@@ -6673,10 +6648,10 @@
   const openMikesRoom = (...args) => world.openMikesRoom(...args);
 
   // ── the Wheelers' house, from the front lawn ──
-  // A two-storey at dusk (or night, or dawn: the same switch as the grounds), porch light on, a mailbox, two bikes dropped on the
+  // A two-storey (the time of day follows the real clock, and the weather rolls once an hour: see hawkins-kit; both can be changed with the buttons), porch light on, a mailbox, two bikes dropped on the
   // lawn leaning on each other. Two lit windows: Mike's room upstairs (fairy lights) and a small basement window at ground level.
   // The basement window is the way in (it climbs through to openBasement); there is no menu. Weather, season and time of day come
-  // from the grounds' own settings, so a snowy evening is the cosiest version. Small living details: a curtain twitches,
+  // from the live Hawkins environment (real clock, hourly weather), so a snowy evening is the cosiest version. Small living details: a curtain twitches,
   // a walkie-talkie crackles from the basement now and then, and somebody waves from Mike's window when you arrive.
   function openWheelers() {
     const sh = hkShell("ao3-wheelers", "\u{1F3E1} The Wheelers\u2019");
@@ -6963,12 +6938,15 @@
     const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
     field.appendChild(svg);
 
+    let flashEl = null;                                                                                       // the lightning, in a storm
     const paintWeather = () => {
       const kind = HK_WX[wxI][0], cozy = kind === "snow";
-      wxG.textContent = "";
-      if (kind === "rain") {
-        sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#0a1230", opacity: 0.14 }, wxG);
-        if (!reduce) for (let i = 0; i < 70; i++) {
+      wxG.textContent = ""; flashEl = null;
+      if (kind === "rain" || kind === "storm") {
+        const storm = kind === "storm";
+        sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#0a1230", opacity: storm ? 0.26 : 0.14 }, wxG);
+        if (storm) flashEl = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#eaf0ff", opacity: 0, "pointer-events": "none" }, wxG);
+        if (!reduce) for (let i = 0; i < (storm ? 110 : 70); i++) {
           const x = rnd("rx" + i) * (W + 20), y = rnd("ry" + i) * H;
           anim(sv("line", { x1: x.toFixed(1), y1: y.toFixed(1), x2: (x - 2.5).toFixed(1), y2: (y + 9).toFixed(1), stroke: "#a9bcff", "stroke-width": 1, opacity: 0.45 }, wxG), `animation:hkRain ${(0.6 + rnd("rd" + i) * 0.5).toFixed(2)}s linear -${rnd("rs" + i).toFixed(2)}s infinite;`);
         }
@@ -6976,6 +6954,12 @@
         for (let i = 0; i < 90; i++) anim(sv("circle", { cx: (rnd("nx" + i) * W).toFixed(1), cy: (rnd("ny" + i) * H).toFixed(1), r: (1 + rnd("nr" + i) * 1.4).toFixed(1), fill: "#fff", opacity: 0.85 }, wxG), `animation:hkFall ${(5 + rnd("nd" + i) * 5).toFixed(1)}s linear -${(rnd("nz" + i) * 8).toFixed(1)}s infinite;`);
       } else if (cozy) {
         for (let i = 0; i < 60; i++) sv("circle", { cx: (rnd("nx" + i) * W).toFixed(1), cy: (rnd("ny" + i) * H).toFixed(1), r: (1 + rnd("nr" + i) * 1.2).toFixed(1), fill: "#fff", opacity: 0.7 }, wxG);
+      } else if (kind === "leaves") {
+        const LEAF = ["#d9731f", "#b5541a", "#e0a032", "#a8441a"];
+        for (let i = 0; i < 34; i++) {
+          const lf = sv("ellipse", { cx: (rnd("lx" + i) * W).toFixed(1), cy: (rnd("ly" + i) * H * 0.9).toFixed(1), rx: 3.4, ry: 1.7, fill: LEAF[i % 4], opacity: 0.9, transform: `rotate(${Math.round(rnd("lr" + i) * 180)})`, "transform-box": "fill-box", "transform-origin": "center" }, wxG);
+          if (!reduce) anim(lf, `animation:hkFall ${(6 + rnd("ld" + i) * 6).toFixed(1)}s linear -${(rnd("lz" + i) * 10).toFixed(1)}s infinite;`);
+        }
       } else if (kind === "fog") {
         for (let i = 0; i < 4; i++) anim(sv("ellipse", { cx: (rnd("fx" + i) * W).toFixed(1), cy: ((i + 0.5) * H / 4).toFixed(1), rx: 190, ry: 46, fill: "#c8bee6", opacity: 0.22 }, wxG), `animation:hkFog ${11 + i % 4 * 3}s ease-in-out infinite;`);
       }
@@ -7005,11 +6989,13 @@
         const p = sv("circle", { cx: 302, cy: 108, r: 4, fill: "#cfc8e6", opacity: 0 }, dynG);
         if (!reduce) anim(p, `animation:hkSmoke 4s ease-out -${i}s infinite;`); else p.setAttribute("opacity", 0.25 - i * 0.05);
       }
-      if (kind === "rain") for (let i = 0; i < 4; i++) sv("ellipse", { cx: [210, 90, 270, 150][i], cy: 470 + (i % 2) * 2, rx: 18 - i * 2, ry: 2.4, fill: i === 0 ? "#ffd98a" : "#a9bcff", opacity: i === 0 ? 0.22 : 0.12 }, dynG);   // puddles, the porch light in the first
+      if (kind === "rain" || kind === "storm") for (let i = 0; i < 4; i++) sv("ellipse", { cx: [210, 90, 270, 150][i], cy: 470 + (i % 2) * 2, rx: 18 - i * 2, ry: 2.4, fill: i === 0 ? "#ffd98a" : "#a9bcff", opacity: i === 0 ? 0.22 : 0.12 }, dynG);   // puddles, the porch light in the first
     };
 
-    const COZY = { night: "Snow at night. Every lit window feels like a promise kept.", dusk: "A snowy dusk. The whole house is glowing.", dawn: "Snow at dawn. One window is still lit from last night." };
-    const WX_SAY = { clear: "The sky clears. The porch light hums.", rain: "Rain on the roof. Every window looks warmer for it.", fog: "Fog swallows the road. The porch light becomes a small moon.", snow: "Snow. The windows are as cosy as they will ever be." };
+    const COZY = { day: "Snow in daylight. The whole street looks like a snow globe.", night: "Snow at night. Every lit window feels like a promise kept.", dusk: "A snowy dusk. The whole house is glowing.", dawn: "Snow at dawn. One window is still lit from last night." };
+    const WX_SAY = { clear: "The sky clears. The porch light hums.", rain: "Rain on the roof. Every window looks warmer for it.", fog: "Fog swallows the road. The porch light becomes a small moon.", snow: "Snow. The windows are as cosy as they will ever be.", leaves: "A gust of leaves skitters across the lawn. Somebody\u2019s bike bell rings in the wind.", storm: "Thunder rolls over the roofs. Every lit window looks braver for it.", sunny: "Sunshine on the lawn. The bikes are warm to the touch." };
+    const wxLine = () => { const k = HK_WX[wxI][0]; return k === "clear" && HK_TIMES[tI].name === "day" ? WX_SAY.sunny : WX_SAY[k]; };
+    const wxLabel = () => HK_WX[wxI][0] === "clear" ? (HK_TIMES[tI].name === "day" ? "\u2600\uFE0F sunny" : "\u2728 clear") : HK_WX[wxI][1];
     const applyTime = announce => {
       const t = HK_TIMES[tI], kind = HK_WX[wxI][0], cozy = kind === "snow";
       const over = kind === "clear" ? 1 : kind === "fog" ? 0.4 : 0.2;                                          // cloud hides the stars and dims the moon
@@ -7019,13 +7005,13 @@
       moonG.setAttribute("transform", `translate(0 ${t.dy})`);
       moonG.setAttribute("opacity", over < 1 ? 0.3 + over * 0.5 : 1);
       lit.setAttribute("opacity", Math.min(1, t.lit + (cozy ? 0.12 : 0)));
-      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
-      timeBtn.textContent = t.label;
+      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.name === "day" ? 0.16 : t.tint[1]);   // daylight washes the whole scene a little paler
+      timeBtn.textContent = t.label; wxBtn.textContent = wxLabel();
       sub.textContent = "hawkins \u00B7 " + t.name + " \u00B7 " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
-      if (announce) say(cozy ? COZY[t.name] : t.say.house);
+      if (announce) say(cozy ? COZY[t.name] : kind === "clear" || kind === "leaves" ? t.say.house : wxLine());
     };
-    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % HK_TIMES.length; hkTimeSet(tI); applyTime(true); });
-    const wxBtn = pill(HK_WX[wxI][1], "Change the weather", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); wxBtn.textContent = HK_WX[wxI][1]; paintWeather(); applyTime(false); say(WX_SAY[HK_WX[wxI][0]]); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
     pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
 
@@ -7046,6 +7032,20 @@
     const RADIO = ["From the basement, through static: \u201C\u2026do you copy? Over.\u201D", "Crackle. A small voice: \u201CSay again? Over.\u201D", "The window hisses. \u201C\u2026bring snacks. Over.\u201D", "Static. Then: \u201CIs anyone out there? Over.\u201D"];
     const sched = (fn, lo, hi) => later(() => { if (gone) return; fn(); sched(fn, lo, hi); }, lo + Math.random() * (hi - lo));
     sched(twitch, 14000, 30000);
+    // lightning (and thunder a moment later) when it storms
+    sched(() => {
+      if (!flashEl) return;
+      if (!reduce) { try { flashEl.animate([{ opacity: 0 }, { opacity: 0.55 }, { opacity: 0 }, { opacity: 0.35 }, { opacity: 0 }], { duration: 650 }); } catch {} }
+      later(() => { if (!gone && flashEl) hkThunder(); }, 700 + Math.random() * 900);
+    }, 5000, 14000);
+    // the live values roll over by themselves if you stay (a new hour, or the override running out)
+    const syncEnv = () => {
+      if (gone) return;
+      const t = hkTimeGet(), w = hkWxGet();
+      if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); }
+      later(syncEnv, 60000);
+    };
+    later(syncEnv, 60000);
     sched(() => { hkCrackle(); ring(); say(pick(RADIO)); }, 20000, 42000);
 
     // the basement window is the way in: crouch, the latch gives, and the screen fades to the basement
@@ -7082,7 +7082,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["basement"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade, hkWindowSky } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -7175,11 +7175,9 @@
     sv("rect", { x: 22, y: 352, width: 316, height: 150, rx: 10, fill: "#5a2f4a" }, svg);
     sv("rect", { x: 30, y: 360, width: 300, height: 134, rx: 8, fill: "none", stroke: "#8a5a6a", "stroke-width": 1.4, "stroke-dasharray": "6 5" }, svg);
     // the high window you came through, showing the sky outside
-    const sky = { night: "#18203a", dusk: "#8a4a62", dawn: "#6e75b0" }[HK_TIMES[hkTimeGet()].name];
     sv("rect", { x: 22, y: 68, width: 70, height: 30, fill: "#cfc9dc" }, svg);
-    sv("rect", { x: 25, y: 71, width: 64, height: 24, fill: sky }, svg);
+    hkWindowSky(sv, rnd, svg, 25, 71, 64, 24, HK_TIMES[hkTimeGet()], HK_WX[hkWxGet()][0]);
     sv("path", { d: "M57 71 V95", stroke: "#cfc9dc", "stroke-width": 2 }, svg);
-    if (HK_WX[hkWxGet()][0] === "snow") for (let i = 0; i < 8; i++) sv("circle", { cx: 28 + rnd("bf" + i) * 58, cy: 73 + rnd("bg" + i) * 20, r: 1.1, fill: "#fff" }, svg);
     // the stairs up to the house, on the right
     sv("polygon", { points: "262,330 350,330 350,60 322,60", fill: "#2c2028" }, svg);
     for (let i = 0; i < 9; i++) sv("path", { d: `M${262 + i * 6.6} ${330 - i * 30} H350`, stroke: "#4a3340", "stroke-width": 1.6 }, svg);
@@ -8291,12 +8289,12 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["mikes-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const { bsKit } = ctx.lib["figures"];
   const world = ctx.world;
-  const openWheelers = (...args) => world.openWheelers(...args);
   const openBasement = (...args) => world.openBasement(...args);
+  const openWheelers = (...args) => world.openWheelers(...args);
   const openHawkins = (...args) => world.openHawkins(...args);
 
   // ── Mike's room (reached through his window from the front lawn, or up the stairs from the basement) ──
@@ -8305,14 +8303,13 @@
   // Styled after the room in the show: deep blue walls covered in posters, a red metal bed with a checked comforter and a striped knit
   // blanket, a lamp with a red base on the nightstand (a guitar on the wall behind it), a corkboard, a ONE WAY street sign over a
   // closet with a mirrored door (ties hanging off it), dark red carpet, and cold blue light coming in from the right.
-  // There is no window in here: the way back to the lawn is out through the door, down the stairs and out the front.
+  // There is no window in here: the ways out are the "downstairs" and "outside" buttons; there is no door on the wall.
   // Same stage as the basement: a 360 x 540 picture, a back wall with the floor in front of it. From left to right:
-  //   the room door (the way down to the basement), the nightstand and the bed, and the closet on the right.
+  //   the nightstand and the bed, and the closet on the right.
   //   The pool of lamplight on the carpet in front of the bed is where the two of them will sit.
   // Where things will go later is marked "TODO(figures)" below.
   const MR = {
     spot: { x: 180, y: 482, rx: 112, ry: 34 },    // the open carpet in front of the bed (a second place for the figures)
-    door: { x: 4, y: 60, w: 46, h: 280 },
     bed: { x: 98, y: 226, w: 184 },                                  // the bed, drawn 3/4 so its top shows
     bedTop: [[118, 296], [262, 296], [282, 376], [98, 376]],         // the mattress top: where Will and Mike sit or lie on the bed
     closet: { x: 270, y: 66, w: 78, h: 274 }
@@ -8428,14 +8425,6 @@
     for (let i = 0; i < 70; i++) sv("circle", { cx: (rnd("mrf" + i) * W).toFixed(1), cy: (344 + rnd("mrg" + i) * 190).toFixed(1), r: 1, fill: "#5e2a2c", opacity: 0.6 }, A);
     // TODO(figures): Will and Mike sit on the carpet in the lamplight here (same bsKit figures as the basement, about x 180, y 450).
     sv("ellipse", { cx: MR.spot.x, cy: MR.spot.y, rx: MR.spot.rx, ry: MR.spot.ry, fill: "url(#mr-glow)", opacity: 0.22 }, A);
-
-    // ── the room door, on the far left: the way down to the basement ──
-    const dr = MR.door;
-    sv("rect", { x: dr.x, y: dr.y - 4, width: dr.w + 6, height: dr.h + 4, fill: "#b8b2a2" }, A);
-    sv("rect", { x: dr.x, y: dr.y, width: dr.w, height: dr.h, fill: "#e4ddcb" }, A);
-    sv("rect", { x: dr.x + 6, y: dr.y + 12, width: dr.w - 12, height: 100, fill: "none", stroke: "#bdb59f", "stroke-width": 1.4 }, A);
-    sv("rect", { x: dr.x + 6, y: dr.y + 126, width: dr.w - 12, height: 140, fill: "none", stroke: "#bdb59f", "stroke-width": 1.4 }, A);
-    sv("circle", { cx: dr.x + dr.w - 8, cy: dr.y + 140, r: 3, fill: "#c9a850" }, A);
 
     // ── posters and prints, the wall is covered ──
     const paper = (pts, fill) => sv("polygon", { points: pts, fill, stroke: "#0f1e33", "stroke-width": 0.6, "stroke-opacity": 0.5 }, A);
@@ -8603,11 +8592,9 @@
     sv("path", { d: "M276 134 L286 118 L296 130 L304 114 L312 134 Z", fill: "#f0b45a" }, B);
     sv("rect", { x: 272, y: 144, width: 42, height: 3, fill: "#2a3f8a" }, B); sv("rect", { x: 272, y: 152, width: 30, height: 3, fill: "#2a3f8a" }, B);
     // the window, with the sky outside, curtains, and fairy lights
-    const sky = { night: "#18203a", dusk: "#8a4a62", dawn: "#6e75b0" }[tm.name], wd = { x: 126, y: 66, w: 108, h: 112 };
+    const wd = { x: 126, y: 66, w: 108, h: 112 };
     sv("rect", { x: wd.x - 6, y: wd.y - 6, width: wd.w + 12, height: wd.h + 12, fill: "#e4ddcb" }, B);
-    sv("rect", { x: wd.x, y: wd.y, width: wd.w, height: wd.h, fill: sky }, B);
-    if (tm.name !== "dawn") for (let i = 0; i < 12; i++) sv("circle", { cx: (wd.x + 5 + rnd("mrx" + i) * (wd.w - 10)).toFixed(1), cy: (wd.y + 5 + rnd("mry" + i) * (wd.h * 0.6)).toFixed(1), r: 0.9, fill: "#fff", opacity: 0.7 }, B);
-    if (HK_WX[hkWxGet()][0] === "snow") for (let i = 0; i < 22; i++) sv("circle", { cx: (wd.x + 4 + rnd("mrr" + i) * (wd.w - 8)).toFixed(1), cy: (wd.y + 4 + rnd("mrt" + i) * (wd.h - 8)).toFixed(1), r: 1.3, fill: "#fff" }, B);
+    hkWindowSky(sv, rnd, B, wd.x, wd.y, wd.w, wd.h, tm, HK_WX[hkWxGet()][0]);                                          // the live sky: time of day, sun or stars, the weather
     sv("path", { d: `M${wd.x + wd.w / 2} ${wd.y} V${wd.y + wd.h} M${wd.x} ${wd.y + wd.h / 2} H${wd.x + wd.w}`, stroke: "#e4ddcb", "stroke-width": 2.6 }, B);
     sv("path", { d: `M${wd.x} ${wd.y} H${wd.x + 16} Q${wd.x + 10} ${wd.y + wd.h / 2} ${wd.x + 14} ${wd.y + wd.h} H${wd.x} Z M${wd.x + wd.w} ${wd.y} H${wd.x + wd.w - 16} Q${wd.x + wd.w - 10} ${wd.y + wd.h / 2} ${wd.x + wd.w - 14} ${wd.y + wd.h} H${wd.x + wd.w}`, fill: "#b9772a", opacity: 0.85 }, B);   // amber curtains
     sv("circle", { cx: 180, cy: 122, r: 90, fill: "url(#mr-glow)", opacity: 0.22 }, B);
@@ -8649,7 +8636,6 @@
     const hit = (x, y, w, h, label, fn) => cur.push([x, y, w, h, label, fn]);
     const goWindow = () => { if (leaving) return; leaving = true; say("You lean out of the window. The lawn is a long way down, and so is the bike on it."); bfFade(sh, () => openWheelers()); };
     hit(318, 452, 38, 52, "Turn to the window wall", () => setView("B"));
-    hit(MR.door.x, MR.door.y - 4, MR.door.w + 6, MR.door.h + 4, "The door, and the way down to the basement", goDown);
     hit(60, 62, 44, 64, "The black-and-white print", () => say("A black-and-white print of a hand holding a glass ball. Everything in it is upside down."));
     hit(106, 80, 32, 72, "The action poster", () => say("A warrior poster, a bit curled at the corners. It has been read to death."));
     hit(142, 104, 44, 34, "The corkboard", () => say("A corkboard crowded with scraps, photos and maps, all pinned on top of each other."));
