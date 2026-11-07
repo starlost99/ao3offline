@@ -6142,7 +6142,7 @@
     box.appendChild(caption);
 
     const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); close(); } };
-    const close = () => { back.remove(); document.removeEventListener("keydown", onKey, true); };
+    const close = () => { try { cancelAnimationFrame(moveRaf); } catch (e) {} back.remove(); document.removeEventListener("keydown", onKey, true); };
     xBtn.onclick = close;
     back.addEventListener("click", e => { if (e.target === back) close(); });
     document.addEventListener("keydown", onKey, true);
@@ -6891,19 +6891,19 @@
     const awakeN = placed.filter(a => !a.it.asleep).length, asleepN = placed.length - awakeN;
     placed.forEach(an => thing(an.y, g => {
       const it = an.it, w = sv("g", { transform: `translate(${an.x.toFixed(1)} ${an.y.toFixed(1)})` }, g);
-      sv("ellipse", { cx: 0, cy: 0.5, rx: 13 * an.sc, ry: 3.4, fill: "#000", opacity: 0.35 }, w);
-      const wander = sv("g", {}, w), inner = sv("g", {}, wander);
-      // asleep: a flat curled-up loaf, with slow breaths and a few z's; awake: standing, shifting about a little
-      const body = sv("g", { transform: it.asleep ? `translate(0 0.6) scale(${(an.flip * an.sc * 1.1).toFixed(2)} ${(an.sc * 0.6).toFixed(2)})` : `scale(${(an.flip * an.sc).toFixed(2)} ${an.sc.toFixed(2)})` }, inner);
+      const shadow = sv("ellipse", { cx: 0, cy: 0.5, rx: 13 * an.sc, ry: 3.4, fill: "#000", opacity: 0.35 }, w);
+      const mover = sv("g", {}, w), inner = sv("g", {}, mover);
+      // asleep: a flat curled-up loaf, with slow breaths and a few z's; awake: standing, moving about (see "movement" below)
+      const bodyT = f => it.asleep ? `translate(0 0.6) scale(${(f * an.sc * 1.1).toFixed(2)} ${(an.sc * 0.6).toFixed(2)})` : `scale(${(f * an.sc).toFixed(2)} ${an.sc.toFixed(2)})`;
+      const body = sv("g", { transform: bodyT(an.flip) }, inner);
       ANIMALS[it.species](body);
       const slow = it.asleep ? 2.2 : 1;
       anim(inner, `animation:wdBreathe ${((3.2 + rnd("br" + it.id) * 1.6) * slow).toFixed(1)}s ease-in-out ${(rnd("bd" + it.id) * 3).toFixed(1)}s infinite;transform-box:fill-box;transform-origin:50% 100%;`);
-      if (!it.asleep) anim(wander, `animation:wdWander ${(7 + rnd("wn" + it.id) * 5).toFixed(1)}s ease-in-out ${(rnd("wd" + it.id) * 6).toFixed(1)}s infinite;`);
-      else [0, 1, 2].forEach(k => {
+      if (it.asleep) [0, 1, 2].forEach(k => {
         const z = sv("text", { x: (an.flip * 9 + k * 3.5).toFixed(1), y: -12 * an.sc - 4, "font-family": "Georgia,serif", "font-size": 4.8 + k * 1.3, "font-weight": 700, fill: "#dfeaff", opacity: 0 }, w);
         z.textContent = "z"; anim(z, `animation:wdZ 4.2s ease-in-out ${(k * 1.1 + rnd("zz" + it.id) * 2).toFixed(1)}s infinite;`);
       });
-      an.node = inner;
+      an.node = inner; an.mover = mover; an.shadow = shadow; an.body = body; an.bodyT = bodyT;
     }));
 
     // prints in the soft ground, drawn flat under everything (a dark dent with a pale rim)
@@ -6991,7 +6991,7 @@
       const l1 = [], l2 = [];
       if (f.author) l1.push(f.author);
       l1.push(total ? `chapter ${it.read} of ${total} (${Math.min(100, Math.round(it.read / total * 100))}%)` : `chapter ${it.read}`);
-      if (t.kind === "animal") l2.push(it.asleep ? `asleep, quiet for ${it.upd == null ? "a while" : it.upd + "d"}` : "awake and about");
+      if (t.kind === "animal") l2.push(it.asleep ? `asleep, quiet for ${it.upd == null ? "a while" : it.upd + "d"}` : (doingOf(t).startsWith("and") ? "awake and about" : `awake, ${doingOf(t)}`));
       else if (t.kind === "eyes") l2.push(it.asleep ? "dozing out in the dark" : "watching from the dark");
       else if (t.kind === "gone") l2.push("left the woods, down the path to the graveyard");
       if (f.words) l2.push(`${fmtWords(f.words)} words`);
@@ -7036,13 +7036,15 @@
     }
     function drawSel() {
       while (selG.firstChild) selG.removeChild(selG.firstChild);
+      selG.removeAttribute("transform");
       if (!picked) return;
       const t = picked, r = t.ring;
       sv("ellipse", { cx: r.cx, cy: r.cy, rx: r.rx, ry: r.ry, fill: "none", stroke: "#ffe9a8", "stroke-width": 1.4, opacity: 0.9 }, selG);
       sv("ellipse", { cx: r.cx, cy: r.cy, rx: r.rx, ry: r.ry, fill: "#ffe9a8", opacity: 0.14 }, selG);
       let s = t.kind === "gate" ? "Graveyard" : t.kind === "howl" ? "A distant howl" : titleOf(t.it.f); if (s.length > 28) s = s.slice(0, 27) + "…";
-      const w = Math.max(40, s.length * 4.7 + 14), top = t.tagTop != null ? t.tagTop : Math.max(130, t.y - 50), bx = Math.max(6, Math.min(W - 6 - w, t.x - w / 2));
-      sv("polygon", { points: `${t.x - 4},${top + 15} ${t.x + 4},${top + 15} ${t.x},${top + 21}`, fill: "rgba(12,22,18,0.88)" }, selG);
+      const tx0 = t.hx != null ? t.hx : t.x, ty0 = t.hy != null ? t.hy : t.y;
+      const w = Math.max(40, s.length * 4.7 + 14), top = t.tagTop != null ? t.tagTop : Math.max(130, ty0 - 50), bx = Math.max(6, Math.min(W - 6 - w, tx0 - w / 2));
+      sv("polygon", { points: `${tx0 - 4},${top + 15} ${tx0 + 4},${top + 15} ${tx0},${top + 21}`, fill: "rgba(12,22,18,0.88)" }, selG);
       sv("rect", { x: bx, y: top, width: w, height: 16, rx: 8, fill: "rgba(12,22,18,0.88)", stroke: "rgba(255,233,168,0.65)", "stroke-width": 0.8 }, selG);
       const tx = sv("text", { x: bx + w / 2, y: top + 11, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 8.6, fill: "#f6ecd2" }, selG);
       tx.textContent = s;
@@ -7058,6 +7060,111 @@
 
     // ── draw the trees and props back to front ──
     things.sort((a, b) => a.y - b.y).forEach(t => t.fn(svg));
+
+    // ── movement: awake animals move about, in their own way, and the more recently the fic was updated or read, the livelier ──
+    // heat comes from recency (the fic's last update or your last read, whichever is newer): today = 1 down to 0.18 for old news.
+    // It sets how fast they go, how short their rests are and how far they roam. Gaits: hop (rabbit, squirrel), bound (otter),
+    // fly (owl), trot (fox, fawn, wolf, raccoon, badger), scurry (mouse, hedgehog, mole), lumber (bear), waddle (duck).
+    // Only the look changes: nothing is saved, and reduced-motion keeps everyone still.
+    const GAITS = {
+      rabbit:   { s: "hop",    hop: [9, 16],  air: 0.34, h: 8,   chain: [1, 3], rest: [0.7, 2.6], range: 44, verb: "hopping" },
+      squirrel: { s: "hop",    hop: [7, 13],  air: 0.26, h: 5.5, chain: [2, 4], rest: [0.3, 1.8], range: 38, verb: "bounding" },
+      otter:    { s: "hop",    hop: [11, 17], air: 0.4,  h: 3.5, chain: [1, 3], rest: [1.2, 3.5], range: 38, verb: "bounding" },
+      owl:      { s: "fly",    v: 52, lift: 28, rest: [3, 8],    range: 70, verb: "flying" },
+      fox:      { s: "walk",   v: 27, bob: 1.1, stride: 7, rock: 1.5, rest: [1.5, 4],  range: 40, verb: "trotting" },
+      wolf:     { s: "walk",   v: 28, bob: 1.2, stride: 8, rock: 1.5, rest: [2, 5],    range: 42, verb: "prowling" },
+      fawn:     { s: "walk",   v: 20, bob: 1.6, stride: 9, rock: 1,   rest: [2, 5],    range: 36, verb: "stepping" },
+      raccoon:  { s: "walk",   v: 18, bob: 0.9, stride: 6, rock: 2.5, rest: [1.5, 4],  range: 32, verb: "scampering" },
+      badger:   { s: "walk",   v: 16, bob: 0.7, stride: 6, rock: 2,   rest: [2, 5],    range: 28, verb: "snuffling" },
+      mouse:    { s: "walk",   v: 46, bob: 0.5, stride: 4, rock: 0,   rest: [0.4, 1.6], range: 30, dash: [7, 18], verb: "scurrying" },
+      hedgehog: { s: "walk",   v: 12, bob: 0.5, stride: 4, rock: 2,   rest: [2, 5],    range: 24, verb: "shuffling" },
+      mole:     { s: "walk",   v: 9,  bob: 0.4, stride: 4, rock: 1.5, rest: [2.5, 6],  range: 20, verb: "burrowing about" },
+      bear:     { s: "walk",   v: 11, bob: 1.5, stride: 10, rock: 3,  rest: [3, 7],    range: 28, verb: "lumbering" },
+      duck:     { s: "walk",   v: 13, bob: 0.6, stride: 5, rock: 6,   rest: [1.5, 4.5], range: 32, verb: "waddling" }
+    };
+    const heatOf = it => { const r = recency(it); return r <= 1 ? 1 : r <= 3 ? 0.75 : r <= 7 ? 0.5 : r <= 14 ? 0.3 : 0.18; };
+    const reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const rr = (a, b) => a + Math.random() * (b - a);
+    const movers = placed.filter(a => !a.it.asleep).map(an => {
+      an.gait = GAITS[an.it.species] || GAITS.fox;
+      an.heat = heatOf(an.it);
+      an.spd = 0.5 + 1.2 * an.heat;                                   // 1.7 (today) down to 0.7
+      an.hx = an.x; an.hy = an.y; an.px = an.x; an.py = an.y;
+      an.face = an.flip; an.segs = []; an.si = 0; an.u = 0; an.lift = 0; an.rot = 0; an.sy = 1;
+      an.rest = rr(0, 3.5);
+      return an;
+    });
+    // short, relaxed words for the caption: what it is doing, and how eagerly
+    const doingOf = an => an.gait && !reduceMotion ? `${an.gait.verb}${an.heat >= 1 ? " about, full of beans" : an.heat >= 0.75 ? " about" : an.heat >= 0.5 ? " about, unhurried" : an.heat >= 0.3 ? " about, slowly" : " about, in no hurry"}` : "and about";
+    const clearSpot = (an, x, y) => !placed.some(o => o !== an && Math.hypot((o.px != null ? o.px : o.x) - x, ((o.py != null ? o.py : o.y) - y) * 1.4) < 24);
+    const planMove = an => {
+      const g = an.gait, reach = g.range * (0.6 + 0.4 * an.heat);
+      for (let tries = 0; tries < 16; tries++) {
+        const ang = Math.random() * Math.PI * 2, d = g.dash ? rr(g.dash[0], g.dash[1]) : g.s === "hop" ? rr(g.hop[0], g.hop[1]) * rr(g.chain[0], g.chain[1]) : rr(g.v * 0.5, g.v * 1.6);
+        const x = an.px + Math.cos(ang) * d, y = an.py + Math.sin(ang) * d * 0.7;
+        if (x < 16 || x > W - 16 || y < 130 || y > H - 160) continue;
+        if (Math.hypot(x - an.hx, (y - an.hy) * 1.3) > reach) continue;
+        if (!standOk(x, y) || !clearSpot(an, x, y)) continue;
+        if (g.s !== "fly" && !(standOk((x + an.px) / 2, (y + an.py) / 2))) continue;     // walkers do not cut across the trail, the water or a prop
+        const dist = Math.hypot(x - an.px, y - an.py), segs = [];
+        if (g.s === "hop") {
+          const n = Math.max(1, Math.round(dist / ((g.hop[0] + g.hop[1]) / 2)));
+          for (let k = 0; k < n; k++) segs.push({ x0: an.px + (x - an.px) * k / n, y0: an.py + (y - an.py) * k / n, x1: an.px + (x - an.px) * (k + 1) / n, y1: an.py + (y - an.py) * (k + 1) / n, dur: g.air / an.spd, h: g.h * (0.8 + 0.2 * an.heat), pause: 0.12 / an.spd });
+        } else if (g.s === "fly") {
+          segs.push({ x0: an.px, y0: an.py, x1: x, y1: y, dur: Math.max(1.1, dist / (g.v * an.spd)), h: g.lift, pause: 0 });
+        } else {
+          segs.push({ x0: an.px, y0: an.py, x1: x, y1: y, dur: dist / (g.v * an.spd), h: 0, pause: 0, steps: Math.max(1, Math.round(dist / g.stride)) });
+        }
+        an.segs = segs; an.si = 0; an.u = 0; an.pause = 0;
+        if (Math.abs(x - an.px) > 1.5) an.face = x > an.px ? 1 : -1;
+        return true;
+      }
+      return false;
+    };
+    const stepMover = (an, dt) => {
+      const g = an.gait;
+      if (!an.segs.length) {
+        an.rest -= dt; an.lift = 0; an.rot = 0; an.sy = 1;
+        if (an.rest <= 0) {
+          if (!planMove(an)) { an.rest = rr(g.rest[0], g.rest[1]) / an.spd; }
+        }
+      } else {
+        const sg = an.segs[an.si];
+        if (an.pause > 0) { an.pause -= dt; an.lift = 0; }
+        else {
+          an.u += dt / sg.dur;
+          const u = Math.min(1, an.u);
+          if (g.s === "hop") {
+            an.px = sg.x0 + (sg.x1 - sg.x0) * u; an.py = sg.y0 + (sg.y1 - sg.y0) * u;
+            an.lift = sg.h * 4 * u * (1 - u); an.rot = (u - 0.5) * 8 * an.face; an.sy = 1 + 0.07 * Math.sin(Math.PI * u) * (u < 0.5 ? 1 : -1);
+          } else if (g.s === "fly") {
+            const e = u * u * (3 - 2 * u);
+            an.px = sg.x0 + (sg.x1 - sg.x0) * e; an.py = sg.y0 + (sg.y1 - sg.y0) * e;
+            an.lift = sg.h * Math.pow(Math.sin(Math.PI * u), 0.6); an.rot = 6 * Math.sin(Math.PI * u) * an.face; an.sy = 1 + 0.08 * Math.sin(u * Math.PI * sg.dur * 7);
+          } else {
+            an.px = sg.x0 + (sg.x1 - sg.x0) * u; an.py = sg.y0 + (sg.y1 - sg.y0) * u;
+            const ph = u * sg.steps * Math.PI;
+            an.lift = g.bob * Math.abs(Math.sin(ph)) * Math.min(1, u * 8, (1 - u) * 8); an.rot = g.rock * Math.sin(ph) * an.face; an.sy = 1;
+          }
+          if (an.u >= 1) { an.px = sg.x1; an.py = sg.y1; an.si++; an.u = 0; an.pause = sg.pause; an.lift = 0; an.rot = 0; an.sy = 1; if (an.si >= an.segs.length) { an.segs = []; an.rest = rr(g.rest[0], g.rest[1]) / an.spd; if (Math.random() < 0.3) an.face = -an.face; } }
+        }
+      }
+      const dx = an.px - an.hx, dy = an.py - an.hy;
+      an.x = an.px; an.y = an.py;                                     // the tap target and the selection ring follow
+      an.mover.setAttribute("transform", `translate(${dx.toFixed(2)} ${(dy - an.lift).toFixed(2)}) rotate(${an.rot.toFixed(2)}) scale(1 ${an.sy.toFixed(3)})`);
+      an.shadow.setAttribute("transform", `translate(${dx.toFixed(2)} ${dy.toFixed(2)}) scale(${(1 - an.lift / 70).toFixed(3)} 1)`);
+      an.shadow.setAttribute("opacity", (0.35 * (1 - Math.min(0.6, an.lift / 60))).toFixed(2));
+      if (an.face !== an.flip) { an.flip = an.face; an.body.setAttribute("transform", an.bodyT(an.flip)); }
+      if (an.hit) { const h = an.hitEl; if (h) { h.setAttribute("cx", an.x.toFixed(1)); h.setAttribute("cy", (an.y + (an.hitDy || 0)).toFixed(1)); } }
+      if (picked === an) selG.setAttribute("transform", `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+    };
+    let moveRaf = 0, moveLast = 0;
+    const moveTick = now => {
+      if (!back.isConnected) return;                                  // the scene was closed: stop
+      const dt = Math.min(0.05, (now - (moveLast || now)) / 1000); moveLast = now;
+      movers.forEach(an => stepMover(an, dt));
+      moveRaf = requestAnimationFrame(moveTick);
+    };
 
     // ── light: rays (day, dawn, dusk), moonlit pools (night), mist ──
     const rays = sv("g", { "pointer-events": "none" }, svg);
@@ -7086,7 +7193,7 @@
     const hits = sv("g", {}, svg);                                          // the tap targets sit on top of the light and shade
     targets.forEach(t => {
       const h = sv("circle", { cx: t.x.toFixed(1), cy: (t.y + (t.hitDy || 0)).toFixed(1), r: t.hit, fill: "transparent" }, hits);
-      h.style.cursor = "pointer";
+      h.style.cursor = "pointer"; t.hitEl = h;
       h.setAttribute("role", "button"); h.setAttribute("aria-label", t.kind === "gate" ? "Graveyard gate" : t.kind === "howl" ? "A distant howl" : titleOf(t.it.f));
       h.addEventListener("click", e => { e.stopPropagation(); pickThing(t); });
     });
@@ -7126,6 +7233,7 @@
     pill("\u{1FAA6} graveyard", "Follow the quiet path to the graveyard", () => { close(); openGraveyardGrounds(); });
     applyTime();
     document.body.appendChild(back);
+    if (!reduceMotion && movers.length) moveRaf = requestAnimationFrame(moveTick);
   }
 
   return { openWoods };
