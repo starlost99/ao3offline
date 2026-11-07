@@ -392,10 +392,11 @@
   // rain and storm: steady rain on the roof with the odd drip; fog and snow: hushed wind; leaves: gusts and rustle;
   // clear: birds by day and dawn, crickets at dusk and night. Everything sits low and fades in and out when the weather turns.
   // It obeys the bell tower's sound setting, and starts on the first tap if the browser is still holding audio back.
-  // opts.muffled: heard through the walls (the basement, Mike's room): a dull rain wash, a hushed wind, the odd far-off rumble in a storm, no birds or crickets.
+  // opts.muffled: heard through the walls (the basement, Mike's room): calm, quiet and cosy: a soft low patter, a hushed wind, a rare drip, the odd far-off roll in a storm, no birds or crickets; slower fades, about half the lawn's level.
   // opts.owner: the scene's outer element; if it is ever removed without closing, the sound stops by itself.
   function hkAmbience(opts) {
     const muffled = !!(opts && opts.muffled), owner = opts && opts.owner;
+    const LVL = muffled ? 0.55 : 1;                                                            // indoors the whole bed sits well under the lawn's level: calm, cosy
     let ac = null, master = null, lowp = null, grp = null, want = null, closed = false, waiting = false, noise = null, quiet = false, duckF = 1;
     const rand = (lo, hi) => lo + Math.random() * (hi - lo);
     const noiseBuf = () => {
@@ -433,30 +434,37 @@
         };
         later(run, rand(0, 1000));
       };
-      const rumble = () => {                                                                 // thunder far off, through the walls
+      const rumble = () => {                                                                 // thunder far off, through the walls: a soft low roll, never a crack
         const t = ac.currentTime + 0.02, s = ac.createBufferSource(), lp = ac.createBiquadFilter(), g = ac.createGain();
-        s.buffer = noiseBuf(); lp.type = "lowpass"; lp.frequency.setValueAtTime(220, t); lp.frequency.exponentialRampToValueAtTime(60, t + 2.6);
-        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.3, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.8);
-        s.connect(lp); lp.connect(g); g.connect(out); s.start(t); s.stop(t + 3);
+        s.buffer = noiseBuf(); lp.type = "lowpass"; lp.frequency.setValueAtTime(140, t); lp.frequency.exponentialRampToValueAtTime(50, t + 3.4);
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.14, t + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.6);
+        s.connect(lp); lp.connect(g); g.connect(out); s.start(t); s.stop(t + 3.8);
       };
       const bird = (dawn) => {                                                                // two to four quick notes
         const base = rand(2300, 4200), n = 2 + Math.floor(Math.random() * (dawn ? 3 : 2)), up = Math.random() < 0.5;
         for (let i = 0; i < n; i++) blip(base * (up ? 1 + i * 0.12 : 1 - i * 0.08), base * (up ? 1.25 + i * 0.12 : 0.8 - i * 0.08), 0.09, 0.03, i * 0.13);
       };
-      if (kind === "rain" || kind === "storm") {
+      if ((kind === "rain" || kind === "storm") && muffled) {
+        // indoors: a soft, even patter on the roof, a low hush of wind in a storm, a rare gentle drip, and a far-off roll of thunder
+        const heavy = kind === "storm";
+        bed("lowpass", 420, 0.5, heavy ? 0.07 : 0.05, 0.08, 0.008);                             // the patter, softened by the walls
+        bed("bandpass", 1500, 0.4, heavy ? 0.035 : 0.022, 0.1, 0.006);                          // a little shimmer of rain on the window
+        if (heavy) bed("lowpass", 240, 0.6, 0.035, 0.06, 0.02);                                 // wind, slow and low
+        every(() => blip(rand(500, 800), 380, 0.09, 0.012), 3500, 9000);                        // a drip, now and then
+        if (heavy) every(rumble, 18000, 42000);
+      } else if (kind === "rain" || kind === "storm") {
         const heavy = kind === "storm";
         bed("bandpass", 2400, 0.4, heavy ? 0.16 : 0.09, 0.2, heavy ? 0.03 : 0.015);          // the rain itself
         bed("lowpass", 500, 0.7, heavy ? 0.12 : 0.05);                                        // the low patter on the roof
         if (heavy) bed("bandpass", 350, 0.8, 0.05, 0.11, 0.04);                               // wind in the gusts
         every(() => blip(rand(900, 1600), 600, 0.05, 0.04), 700, 2600);                       // a drip somewhere
-        if (heavy && muffled) every(rumble, 9000, 26000);
       } else if (kind === "fog") {
-        bed("lowpass", 260, 0.7, 0.04, 0.07, 0.015);
+        bed("lowpass", muffled ? 200 : 260, 0.7, muffled ? 0.025 : 0.04, 0.07, muffled ? 0.008 : 0.015);
       } else if (kind === "snow") {
-        bed("lowpass", 220, 0.6, 0.025, 0.05, 0.01);                                          // snow muffles everything
+        bed("lowpass", muffled ? 180 : 220, 0.6, muffled ? 0.016 : 0.025, 0.05, muffled ? 0.006 : 0.01);   // snow muffles everything
       } else {
-        if (kind === "leaves") { bed("bandpass", 450, 0.7, 0.05, 0.13, 0.045); bed("highpass", 3500, 0.5, 0.012, 0.13, 0.011); }   // gusts, and the rustle in them
-        else bed("lowpass", 380, 0.6, 0.012, 0.06, 0.006);                                    // a faint breeze
+        if (kind === "leaves") { bed("bandpass", muffled ? 320 : 450, 0.7, muffled ? 0.03 : 0.05, muffled ? 0.07 : 0.13, muffled ? 0.02 : 0.045); if (!muffled) bed("highpass", 3500, 0.5, 0.012, 0.13, 0.011); }   // gusts, and the rustle in them
+        else bed("lowpass", muffled ? 300 : 380, 0.6, muffled ? 0.008 : 0.012, 0.06, muffled ? 0.004 : 0.006);                                    // a faint breeze
         if (muffled) { /* birds and crickets do not carry through the walls */ }
         else if (tm === "day" || tm === "dawn") every(() => bird(tm === "dawn"), tm === "dawn" ? 900 : 1800, tm === "dawn" ? 3200 : 6000);
         else { cricket(4300, 1.1, 0.012); cricket(4700, 1.4, 0.009); if (tm === "night") cricket(3900, 1.8, 0.008); }
@@ -484,13 +492,13 @@
       if (grp && grp.key === key) return;
       try {
         if (!master) {
-          master = ac.createGain(); master.gain.value = (muffled ? 1.3 : 1) * duckF;
-          if (muffled) { lowp = ac.createBiquadFilter(); lowp.type = "lowpass"; lowp.frequency.value = 650; lowp.Q.value = 0.6; master.connect(lowp); lowp.connect(ac.destination); }
+          master = ac.createGain(); master.gain.value = LVL * duckF;
+          if (muffled) { lowp = ac.createBiquadFilter(); lowp.type = "lowpass"; lowp.frequency.value = 380; lowp.Q.value = 0.4; master.connect(lowp); lowp.connect(ac.destination); }
           else master.connect(ac.destination);
         }
         const old = grp; grp = make(want.kind, want.tm); grp.key = key;
-        const t = ac.currentTime; grp.out.gain.setValueAtTime(0.0001, t); grp.out.gain.linearRampToValueAtTime(1, t + 1.6);
-        dispose(old, 1.2);
+        const t = ac.currentTime; grp.out.gain.setValueAtTime(0.0001, t); grp.out.gain.linearRampToValueAtTime(1, t + (muffled ? 3 : 1.6));
+        dispose(old, muffled ? 2.4 : 1.2);
       } catch {}
     }
     const api = {
@@ -501,7 +509,7 @@
       fadeOut(secs) { quiet = true; if (grp) { dispose(grp, secs); grp = null; } },          // a sleep timer: fade the bed away and keep it away until resume()
       duck(f, secs) {                                                                       // turn the bed down to f (0 to 1) of its level, e.g. under a sleep sound
         duckF = f;
-        if (master && ac) { try { const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.linearRampToValueAtTime((muffled ? 1.3 : 1) * f, t + (secs || 1.5)); } catch {} }
+        if (master && ac) { try { const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.linearRampToValueAtTime(LVL * f, t + (secs || 1.5)); } catch {} }
       },
       stop() { closed = true; dispose(grp, 0.5); grp = null; setTimeout(() => { try { if (master) master.disconnect(); if (lowp) lowp.disconnect(); } catch {} }, 900); }
     };
