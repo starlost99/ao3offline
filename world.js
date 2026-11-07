@@ -8764,7 +8764,7 @@
   const MR_CL = [[187, 338], [196, 337]];                 // where their two hands meet, on top of the comforter
   const MR_HOLD = { a: { R: MR_CL[0] }, b: { L: MR_CL[1] } };
   const MR_BASE = { a: { sx: 3, head: [2, 1, 4], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: -3, head: [-2, 1, -4], mood: "smile", look: -1, L: "lap", R: "lap" } };
-  // The carpet moments: Will and Mike sit cross-legged on the carpet in the lamplight in front of the bed (a moment with stage: "carpet"), a little smaller than in the bed.
+  // The carpet moments: Will and Mike sit cross-legged on the carpet in the lamplight in front of the bed (a moment with stage: "carpet"), the same size as in the bed (scale 1.1).
   // A carpet beat can also set: prop ("game", "comic" or "phones": what lies between them), game { w, m } (the pawns, by square 0 to 13), die (1 to 6, a roll),
   // page (1 or 2: the comic's page) and notes: n (music notes). Hands are [x, y] on the picture as in the bed, or "lap".
   const MRC_BASE = { a: { head: [1, 1, 2], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { head: [-1, 1, -2], mood: "smile", look: -1, L: "lap", R: "lap" } };
@@ -9167,8 +9167,8 @@
     });
 
     // ── the carpet scenes: Will and Mike sit cross-legged in the lamplight in front of the bed (hidden until a carpet moment plays), with a board game, a comic or one
-    //    set of earphones between them. The same figures (bsKit) a little smaller, with jeans and shoes; the bed figures are hidden while these are shown (see setStage). ──
-    const FIGC = { a: { cx: 112, sy: 460, s: 0.86, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 244, sy: 458, s: 0.86, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
+    //    set of earphones between them. The same figures (bsKit) at the same size as in the bed, with jeans and shoes; the bed figures are hidden while these are shown (see setStage). ──
+    const FIGC = { a: { cx: 100, sy: 436, s: 1.1, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 256, sy: 434, s: 1.1, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
     const carpetG = sv("g", { display: "none" }, A);
     [["a", 4.2], ["b", 4.8]].forEach(([k, br]) => { const F = FIGC[k]; F.brT = br; F.g1 = sv("g", {}, carpetG); F.r1 = sv("g", {}, F.g1); F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); });
     const propG = sv("g", {}, carpetG);
