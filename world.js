@@ -6055,20 +6055,25 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["woods"] = function (ctx) {
   'use strict';
   const { gyHash } = ctx.shared;
-  const { getTracked, isWip, readChapterFor, fmtWords, daysSince, wordsToReadMinutes, formatReadTime } = ctx.core || {};
+  const { getTracked, isWip, readChapterFor, fmtWords, daysSince, wordsToReadMinutes, formatReadTime, READ_LOG_KEY } = ctx.core || {};
   const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHollowbrook = (...args) => world.openHollowbrook(...args);
+  const openGraveyardGrounds = (...args) => world.openGraveyardGrounds(...args);
 
   // ── 🌲 THE WOODS ──
-  // One animal lives here for every fic you are reading (a WIP you have started): tap one for the title and some stats.
-  // Nothing is saved. Nothing else in here is tappable except the pills.
+  // Every tracked fic has an animal, and its state decides where it is and what it does (see "the animals" below):
+  //   reading and lively = awake and close to the trail; reading but quiet = asleep at the far edge of a glade;
+  //   finished = settled into a den (your favourites look out of theirs, the rest leave tracks); abandoned = gone, with
+  //   tracks down a quiet side path to the graveyard gate. The crowd is capped: the rest are eyes in the dark or a distant howl.
+  // The species comes from a hash of the work id. All of it is worked out from the tracker data on every visit; nothing is saved.
+  // Tap an animal, a den, tracks, a pair of eyes, the howl or the gate for the details in the caption.
   // You get here from the trail through the hedge on the village's west side. The scene is one tall picture (it scrolls)
-  // with a trail winding down through four open glades, each with room for a crowd of animals later (one per fic
-  // being read): 1 a mossy glade with a hollow log, a ring of stumps and a fairy ring; 2 a pond with a stream and a
-  // plank bridge; 3 a hollow oak with burrow mounds; 4 a wide meadow with a boulder, a lantern and tall grass.
-  // Trees crowd the edges and the belts between glades, and thin out toward the bottom, where the deep woods begin.
+  // with a trail winding down through four open glades, each with room for a crowd of animals:
+  // 1 a mossy glade with a hollow log, a ring of stumps and a fairy ring; 2 a pond with a stream and a
+  // plank bridge; 3 a hollow oak with burrow mounds; 4 a wide meadow with a boulder, a lantern and tall grass, and the side
+  // path to the graveyard gate. Trees crowd the edges and the belts between glades, and thin out toward the bottom.
   // Time of day and weather are the shared live ones (see lib/hawkins-kit.js), the same as in the village.
   function openWoods() {
     const old = document.getElementById("ao3-woods");
@@ -6083,6 +6088,10 @@
         @keyframes wdRipple{0%{opacity:.5;transform:scale(.3)}100%{opacity:0;transform:scale(1.5)}}
         @keyframes wdBreathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.02,0.965)}}
         @keyframes wdGlint{0%,100%{opacity:.25}50%{opacity:.6}}
+        @keyframes wdZ{0%{opacity:0;transform:translate(0,0)}25%{opacity:.9}100%{opacity:0;transform:translate(3px,-9px)}}
+        @keyframes wdBlink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+        @keyframes wdWander{0%,100%{transform:translateX(0)}30%{transform:translateX(3px)}65%{transform:translateX(-3px)}}
+        @keyframes wdHowl{0%{opacity:0}20%{opacity:.8}100%{opacity:0;transform:translate(3px,-3px)}}
         @media (prefers-reduced-motion: reduce){.wd-anim{animation:none !important}}
       `;
       (document.head || document.documentElement).appendChild(st);
@@ -6114,7 +6123,7 @@
     const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(160,210,170,0.18);background:rgba(6,14,12,0.55);z-index:3;");
     const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
     ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;line-height:1.2;text-transform:uppercase;color:#d3ecd9;", "\u{1F332} The Woods"));
-    const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(211,236,217,0.6);", "");
+    const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(211,236,217,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "");
     ttl.appendChild(sub);
     const xBtn = el("button", "background:none;border:none;color:rgba(211,236,217,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "✕");
     xBtn.type = "button"; xBtn.setAttribute("aria-label", "Close");
@@ -6179,12 +6188,18 @@
     const lineD = pts => pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
     const TRAIL = catmull([[-12, 112], [40, 126], [100, 176], [172, 216], [214, 290], [172, 368], [122, 442], [150, 518], [196, 582], [150, 668], [112, 734], [150, 800], [208, 852], [172, 930], [112, 1004], [150, 1084], [208, 1152], [170, 1242], [132, 1322], [160, 1440]]);
     const STREAM = catmull([[246, 664], [236, 716], [206, 764], [168, 792], [104, 812], [40, 820], [-12, 834]]);
+    // the quiet side path to the graveyard gate, leaving the trail at the bottom of the last glade, going right
+    const GATE = [302, 1352];
+    const GPATH = (() => {
+      const ts = TRAIL.reduce((b, p) => Math.abs(p[1] - 1296) < Math.abs(b[1] - 1296) ? p : b);
+      return catmull([[ts[0] + 4, ts[1]], [ts[0] + 36, ts[1] + 30], [232, 1346], [GATE[0] - 17, GATE[1] - 3]]);
+    })();
     const GLADES = [[180, 336, 146, 124], [180, 646, 150, 120], [180, 944, 150, 130], [180, 1236, 150, 132]];
     const POND = [272, 630, 54, 32];
     const near = (pts, x, y, d) => pts.some(p => Math.hypot(p[0] - x, p[1] - y) < d);
     const inGlade = (x, y, pad) => GLADES.some(([cx, cy, rx, ry]) => ((x - cx) / (rx + pad)) ** 2 + ((y - cy) / (ry + pad)) ** 2 < 1);
     const inPond = (x, y, pad) => ((x - POND[0]) / (POND[2] + pad)) ** 2 + ((y - POND[1]) / (POND[3] + pad)) ** 2 < 1;
-    const blocked = (x, y, pad) => near(TRAIL, x, y, 26 + pad) || near(STREAM, x, y, 14 + pad) || inPond(x, y, 12 + pad);
+    const blocked = (x, y, pad) => near(TRAIL, x, y, 26 + pad) || near(STREAM, x, y, 14 + pad) || inPond(x, y, 12 + pad) || near(GPATH, x, y, 18 + pad) || Math.hypot(x - GATE[0], y - GATE[1]) < 36 + pad;
 
     // where the plank bridge sits: found from the two curves (where they come closest), turned to follow the trail,
     // and long enough to clear both banks. Worked out here so the trail can stop short of it on each side.
@@ -6270,6 +6285,9 @@
         sv("ellipse", { cx: (x + (rnd(sd) - 0.5) * 30).toFixed(1), cy: (y + (rnd(sd + "y") - 0.5) * 12).toFixed(1), rx: (1.4 + rnd(sd + "w") * 2.2).toFixed(1), ry: (1 + rnd(sd + "h") * 1.4).toFixed(1), fill: pick(["#7a6a5e", "#6a5a50", "#8a7a6c", "#5a4a42"], sd + "c"), opacity: 0.6 }, svg);
       }
     }
+
+    // ── the side path to the graveyard (glade 4, bottom right) ──
+    [[20, "#0c1512", 0.35], [13, "#3a2d29", 1], [8, "#54423a", 0.8]].forEach(([w, c, o]) => sv("path", { d: lineD(GPATH), fill: "none", stroke: c, "stroke-width": w, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: o }, svg));
 
     // ── the pond (glade 2) ──
     {
@@ -6375,7 +6393,7 @@
       const ext = kind === "pine" ? size : kind === "oak" ? size * 2.25 : size + 14, half = kind === "pine" ? size * 0.28 : kind === "oak" ? size * 1.5 : size * 0.35;
       if (strict) for (const f of [0.1, 0.5, 0.9]) {
         const cy = base - ext * f;
-        if (inGlade(x, cy, 4) || inGlade(x - half * 0.6, cy, 0) || inGlade(x + half * 0.6, cy, 0) || near(TRAIL, x, cy, 22 + half * 0.6) || near(STREAM, x, cy, 12 + half * 0.5) || inPond(x, cy, 14)) return;
+        if (inGlade(x, cy, 4) || inGlade(x - half * 0.6, cy, 0) || inGlade(x + half * 0.6, cy, 0) || near(TRAIL, x, cy, 22 + half * 0.6) || near(STREAM, x, cy, 12 + half * 0.5) || inPond(x, cy, 14) || near(GPATH, x, cy, 24 + half * 0.6) || Math.hypot(x - GATE[0], cy - GATE[1]) < 40 + half) return;
       }
       thing(base, g => {
         const grp = sv("g", {}, g);
@@ -6406,12 +6424,12 @@
     }
     // the deep woods at the bottom: darker and closer, but only at the sides so the last glade stays open
     for (let i = 0; i < 14; i++) {
-      const x = i % 2 ? 4 + rnd("dx" + i) * 50 : 306 + rnd("dx" + i) * 50, y = 1380 + rnd("dy" + i) * 60;
+      const x = i % 2 ? 4 + rnd("dx" + i) * 50 : 336 + rnd("dx" + i) * 22, y = 1380 + rnd("dy" + i) * 60;
       thing(y, g => pine(g, x, y, 110 + rnd("dh" + i) * 40, "#0a211e"));
     }
     for (let i = 0; i < 8; i++) {                                                                 // across the bottom, low enough to leave the last glade open
       const x = 70 + rnd("dz" + i) * 220, y = 1415 + rnd("dw" + i) * 22;
-      if (near(TRAIL, x, y, 34)) continue;
+      if (near(TRAIL, x, y, 34) || x > 245) continue;
       thing(y, g => pine(g, x, y, 58 + rnd("dv" + i) * 22, "#0a211e"));
     }
 
@@ -6419,12 +6437,12 @@
     const BLOOM = ["#e9e4f5", "#d6c4f0", "#f6e27a", "#f4c2d0"];
     for (let i = 0; i < 260; i++) {
       const x = 8 + rnd("gx" + i) * (W - 16), y = 130 + rnd("gy" + i) * (H - 150);
-      if (near(TRAIL, x, y, 14) || near(STREAM, x, y, 10) || inPond(x, y, 6)) continue;
+      if (near(TRAIL, x, y, 14) || near(STREAM, x, y, 10) || inPond(x, y, 6) || near(GPATH, x, y, 8)) continue;
       sv("path", { d: `M${x.toFixed(1)} ${y.toFixed(1)} l-2.2 -5 M${x.toFixed(1)} ${y.toFixed(1)} l0 -7 M${x.toFixed(1)} ${y.toFixed(1)} l2.2 -5`, stroke: pick(["#3f6c4c", "#4f7a5c", "#365f45"], "gc" + i), "stroke-width": 1.3, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, svg);
     }
     for (let i = 0; i < 46; i++) {                                                                // ferns
       const x = 10 + rnd("fx" + i) * (W - 20), y = 150 + rnd("fy" + i) * (H - 190);
-      if (near(TRAIL, x, y, 20) || near(STREAM, x, y, 14) || inPond(x, y, 10)) continue;
+      if (near(TRAIL, x, y, 20) || near(STREAM, x, y, 14) || inPond(x, y, 10) || near(GPATH, x, y, 14)) continue;
       thing(y, g => {
         for (let k = -3; k <= 3; k++) {
           const a = k * 0.34, L = 12 + rnd("fl" + i + k) * 6;
@@ -6491,7 +6509,7 @@
       sv("ellipse", { cx: mx, cy: my + 2, rx: 24 * s, ry: 6 * s, fill: "#000", opacity: 0.3 }, g);
       sv("path", { d: `M${mx - 24 * s} ${my} Q${mx - 14 * s} ${my - 22 * s} ${mx} ${my - 22 * s} Q${mx + 14 * s} ${my - 22 * s} ${mx + 24 * s} ${my} Z`, fill: "#4a3a2e" }, g);
       sv("path", { d: `M${mx - 24 * s} ${my} Q${mx - 14 * s} ${my - 22 * s} ${mx} ${my - 22 * s}`, fill: "none", stroke: "#5f4c3c", "stroke-width": 1.4 }, g);
-      sv("path", { d: `M${mx - 8 * s} ${my} a8 ${9 * s} 0 0 1 ${16 * s} 0 Z`, fill: "#0b0807" }, g);
+      sv("path", { d: `M${mx - 8 * s} ${my} a${8 * s} ${9 * s} 0 0 1 ${16 * s} 0 Z`, fill: "#0b0807" }, g);
       sv("path", { d: `M${mx - 18 * s} ${my - 6 * s} l-3 -4 M${mx + 18 * s} ${my - 7 * s} l3 -4 M${mx - 4 * s} ${my - 22 * s} l-2 -5 M${mx + 5 * s} ${my - 21 * s} l3 -4`, stroke: "#4f7a5c", "stroke-width": 1.2, fill: "none", "stroke-linecap": "round" }, g);
       for (let k = 0; k < 6; k++) sv("ellipse", { cx: (mx + (rnd("dm" + i + k) - 0.5) * 50 * s).toFixed(1), cy: (my + 3 + rnd("dn" + i + k) * 5).toFixed(1), rx: 2.4, ry: 1.2, fill: "#5a4838", opacity: 0.8 }, g);
     }));
@@ -6509,6 +6527,7 @@
       sv("path", { d: `M${x - 40} ${y - 6} Q${x - 24} ${y - 16} ${x - 6} ${y - 10} Q${x - 16} ${y - 2} ${x - 36} ${y} Z`, fill: "#4d8a52", opacity: 0.9 }, g);
       sv("path", { d: `M${x - 4} ${y - 38} Q${x + 12} ${y - 42} ${x + 22} ${y - 32} Q${x + 8} ${y - 31} ${x - 4} ${y - 38} Z`, fill: "#4d8a52", opacity: 0.85 }, g);
       sv("path", { d: `M${x + 10} ${y} v-14 M${x + 26} ${y} l4 -16`, stroke: "#2a3330", "stroke-width": 1, fill: "none", opacity: 0.8 }, g);
+      sv("path", { d: `M${x - 36} ${y} a10 11 0 0 1 20 0 Z`, fill: "#0b0807" }, g);                       // a gap under the boulder: a den
     });
     thing(1318, g => {
       const x = 74, y = 1316;
@@ -6519,6 +6538,7 @@
         sv("ellipse", { cx: x + dx + L / 2, cy: y + dy - 1, rx: 2, ry: 3.6, fill: "none", stroke: "#8a6a46", "stroke-width": 0.7 }, g);
       });
       sv("ellipse", { cx: x - 8, cy: y - 27, rx: 16, ry: 3, fill: "#4d8a52" }, g);
+      sv("ellipse", { cx: x - 38, cy: y - 7, rx: 4.5, ry: 7, fill: "#0b0807" }, g);                // the hollow end of the lowest log: a den
     });
     thing(1232, g => {                                                                            // the lantern post by the trail
       const x = 214, y = 1230;
@@ -6534,6 +6554,21 @@
         sv("path", { d: `M${gx + dx} ${gy} q${lean / 2} ${-h / 2} ${lean} ${-h}`, stroke: k % 3 ? "#5a8a5c" : "#7a9a5a", "stroke-width": 1.5, fill: "none", "stroke-linecap": "round", opacity: 0.9 }, g);
       }
     }));
+
+    // ── the graveyard gate at the end of the side path ──
+    thing(GATE[1] + 2, g => {
+      const x = GATE[0], y = GATE[1];
+      sv("ellipse", { cx: x, cy: y + 1, rx: 20, ry: 4, fill: "#000", opacity: 0.4 }, g);
+      [-1, 1].forEach(sd => {
+        sv("rect", { x: x + sd * 12 - 3.2, y: y - 32, width: 6.4, height: 32, fill: "#4a4f55" }, g);
+        sv("rect", { x: x + sd * 12 - 3.2, y: y - 32, width: 6.4, height: 3, fill: "#6a7077" }, g);
+        sv("circle", { cx: x + sd * 12, cy: y - 35, r: 2.6, fill: "#5a6067" }, g);
+      });
+      for (let k = -2; k <= 2; k++) sv("rect", { x: x + k * 4 - 0.5, y: y - 27, width: 1, height: 27, fill: "#1f232a" }, g);
+      sv("path", { d: `M${x - 9} ${y - 27} Q${x} ${y - 44} ${x + 9} ${y - 27}`, stroke: "#1f232a", "stroke-width": 1.8, fill: "none" }, g);
+      sv("path", { d: `M${x} ${y - 38} v-5 M${x - 2} ${y - 41} h4`, stroke: "#1f232a", "stroke-width": 1.2, fill: "none" }, g);
+      lits.push(l => anim(sv("circle", { cx: x, cy: y - 30, r: 28, fill: "url(#wd-pool)", opacity: 0.55 }, l), "animation:wdFlicker 4.2s ease-in-out infinite;"));
+    });
 
     // ── the way in: a gap in the hedge, a signpost and a lantern, top left ──
     const HEDGE = ["#1f3a34", "#27473e", "#1a312c"];
@@ -6560,19 +6595,37 @@
       lits.push(l => anim(sv("circle", { cx: x, cy: y - 34, r: 26, fill: "url(#wd-glow)" }, l), "animation:wdFlicker 2.8s ease-in-out infinite;"));
     });
 
-    // ── the animals: one for every fic you are reading ──
-    // A tracked fic that is not finished, not abandoned and that you have started. Each one gets an animal (picked from the
-    // work id, so it is always the same one) standing in a glade; they are dealt out to the four glades in turn.
+    // ── the animals: who lives in the woods ──
+    // Everything here is worked out from the tracker each time the woods open; nothing is stored.
+    //  · A fic you are reading (a WIP you have started) is an animal in a glade. It is awake and close to the trail when the
+    //    fic is lively (updated lately, or you read it in the last three days), and curled up asleep, off in the glade's far
+    //    edge, when it has gone quiet.
+    //  · A finished fic settles into a den (a hollow, a burrow, a gap under the boulder). Your favourites (the finished fics
+    //    you have logged the most reading for) look out of their dens; the rest are only tracks leading to one.
+    //  · The crowd is capped: what does not fit is a pair of eyes in the dark, or the howl far off.
+    //  · An abandoned fic's animal has left: its tracks run down a quiet side path to the graveyard gate.
+    // The species comes from a hash of the work id, so a fic keeps the same animal forever.
     const fmtAgo = d => d == null ? "" : d <= 0 ? "updated today" : d === 1 ? "updated yesterday" : `updated ${d}d ago`;
     const titleOf = f => f.title || `Work ${f.workId}`;
-    const reading = (() => {
-      let all = [];
-      try { all = getTracked() || []; } catch (e) { all = []; }
-      return all.filter(f => { try { return !f.finished && isWip(f); } catch (e) { return false; } }).map(f => {
-        let read = 0; try { read = Number(readChapterFor(f)) || 0; } catch (e) { read = 0; }
-        return { f, read: read || Number(f.currentChapter) || 0 };
-      }).filter(x => x.read > 0).sort((a, b) => titleOf(a.f).localeCompare(titleOf(b.f)));
-    })();
+    const dayKey = s => {
+      s = String(s || "");
+      if (s.length <= 10) return s;
+      const d = new Date(s);
+      return isNaN(d) ? s.slice(0, 10) : d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    };
+    const agoDays = x => { try { if (!x) return null; const v = daysSince(x); return v == null || isNaN(v) ? null : v; } catch (e) { return null; } };
+    const logInfo = new Map();                                        // work id → { n: chapters logged, last: last day read }
+    try {
+      const raw = READ_LOG_KEY ? JSON.parse(localStorage.getItem(READ_LOG_KEY) || "[]") : [];
+      (Array.isArray(raw) ? raw : []).forEach(e => {
+        if (!e || !e.date) return;
+        const id = String(e.key || "").split("::")[0];
+        if (!id) return;
+        const r = logInfo.get(id) || { n: 0, last: "" }, d = dayKey(e.date);
+        r.n++; if (d > r.last) r.last = d;
+        logInfo.set(id, r);
+      });
+    } catch (e) {}
     const ANIMALS = {
       fox(g) {
         sv("ellipse", { cx: -14, cy: -11, rx: 10, ry: 4.6, fill: "#d2702f", transform: "rotate(-28 -14 -11)" }, g);
@@ -6646,90 +6699,409 @@
         sv("ellipse", { cx: 10.5, cy: -9, rx: 2.6, ry: 3, fill: "#8a5a2a" }, g);
         sv("path", { d: "M8.4 -11.4 q2.1 -2 4.2 0 Z", fill: "#5f4020" }, g);
         [-3, 3].forEach(x => sv("ellipse", { cx: x, cy: -0.8, rx: 2.8, ry: 1.2, fill: "#8a4f26" }, g));
+      },
+      badger(g) {
+        sv("ellipse", { cx: -12.5, cy: -9, rx: 3.4, ry: 2.2, fill: "#8a8580" }, g);
+        [-7, -3, 5, 9].forEach(x => sv("rect", { x: x - 1.5, y: -6, width: 3, height: 6, rx: 1, fill: "#242020" }, g));
+        sv("ellipse", { cx: 0, cy: -9.5, rx: 12.5, ry: 6.6, fill: "#6f6a66" }, g);
+        sv("ellipse", { cx: 1, cy: -7, rx: 8, ry: 2.8, fill: "#4a4643" }, g);
+        sv("circle", { cx: 10, cy: -13.8, r: 1.7, fill: "#1c1a19" }, g);
+        sv("ellipse", { cx: 13.5, cy: -8.6, rx: 6.6, ry: 4.4, fill: "#e8e4de" }, g);
+        sv("polygon", { points: "9,-13 18.5,-9.6 17.5,-7.6 9,-10.8", fill: "#1c1a19" }, g);
+        sv("polygon", { points: "9.5,-5.6 17.5,-8 17,-5.6 11,-4", fill: "#1c1a19" }, g);
+        sv("circle", { cx: 19.6, cy: -8.6, r: 1.3, fill: "#0f0e0d" }, g);
+        sv("circle", { cx: 14.8, cy: -9.4, r: 0.8, fill: "#111" }, g);
+      },
+      raccoon(g) {
+        sv("ellipse", { cx: -15, cy: -9.5, rx: 9, ry: 4, fill: "#8d8883", transform: "rotate(-12 -15 -9.5)" }, g);
+        [-20, -15.5, -11].forEach(x => sv("ellipse", { cx: x, cy: -9.8, rx: 1.5, ry: 3.6, fill: "#2e2b29", transform: "rotate(-12 " + x + " -9.8)" }, g));
+        [-6, -2.5, 4, 8].forEach(x => sv("rect", { x: x - 1.4, y: -6, width: 2.8, height: 6, rx: 1, fill: "#2e2b29" }, g));
+        sv("ellipse", { cx: 0, cy: -10, rx: 11.5, ry: 6.5, fill: "#8d8883" }, g);
+        sv("circle", { cx: 8, cy: -18.8, r: 1.8, fill: "#8d8883" }, g);
+        sv("circle", { cx: 13.6, cy: -19.2, r: 1.8, fill: "#8d8883" }, g);
+        sv("circle", { cx: 11, cy: -14, r: 5.4, fill: "#a09a94" }, g);
+        sv("ellipse", { cx: 11.6, cy: -14.4, rx: 5.2, ry: 2.2, fill: "#25221f" }, g);
+        sv("ellipse", { cx: 16, cy: -12.4, rx: 2.9, ry: 2, fill: "#e3ded7" }, g);
+        sv("circle", { cx: 18.3, cy: -12.9, r: 0.95, fill: "#111" }, g);
+        sv("circle", { cx: 13.2, cy: -14.6, r: 0.8, fill: "#f3f0ea" }, g);
+      },
+      mouse(g) {
+        sv("path", { d: "M-7 -3 q-9 3 -10 -6", stroke: "#d9a9a0", "stroke-width": 1.2, fill: "none", "stroke-linecap": "round" }, g);
+        sv("ellipse", { cx: 0, cy: -5, rx: 7.5, ry: 5, fill: "#a89888" }, g);
+        sv("ellipse", { cx: 8, cy: -5.8, rx: 4.6, ry: 3.6, fill: "#b6a696" }, g);
+        [[5.6, -10], [9.8, -10.4]].forEach(([x, y]) => { sv("circle", { cx: x, cy: y, r: 2.5, fill: "#b6a696" }, g); sv("circle", { cx: x, cy: y, r: 1.4, fill: "#e8b9b9" }, g); });
+        sv("circle", { cx: 12.6, cy: -5.4, r: 0.9, fill: "#d98c9a" }, g);
+        sv("circle", { cx: 10, cy: -6.8, r: 0.8, fill: "#1a120e" }, g);
+        [-2, 4].forEach(x => sv("ellipse", { cx: x, cy: -0.6, rx: 1.9, ry: 0.9, fill: "#d9a9a0" }, g));
+      },
+      bear(g) {
+        [-7.5, -3, 5, 9].forEach(x => sv("rect", { x: x - 1.8, y: -8, width: 3.6, height: 8, rx: 1.6, fill: "#3f2a1d" }, g));
+        sv("ellipse", { cx: 0, cy: -11.5, rx: 12.8, ry: 8, fill: "#5a3d2b" }, g);
+        sv("circle", { cx: 8.8, cy: -22.4, r: 2.3, fill: "#5a3d2b" }, g);
+        sv("circle", { cx: 15, cy: -22.8, r: 2.3, fill: "#5a3d2b" }, g);
+        sv("circle", { cx: 8.8, cy: -22.4, r: 1.1, fill: "#8a6040" }, g);
+        sv("circle", { cx: 12.2, cy: -17.4, r: 6.3, fill: "#66452f" }, g);
+        sv("ellipse", { cx: 16.6, cy: -15.4, rx: 3.5, ry: 2.6, fill: "#c9a47c" }, g);
+        sv("circle", { cx: 19.4, cy: -16, r: 1.2, fill: "#1a120e" }, g);
+        sv("circle", { cx: 13.6, cy: -18.6, r: 0.9, fill: "#111" }, g);
+      },
+      otter(g) {
+        sv("ellipse", { cx: -17, cy: -4.6, rx: 9, ry: 2.6, fill: "#5a4030", transform: "rotate(8 -17 -4.6)" }, g);
+        [-6, 5].forEach(x => sv("rect", { x: x - 1.5, y: -4.4, width: 3, height: 4.4, rx: 1.2, fill: "#4a3224" }, g));
+        sv("ellipse", { cx: -2, cy: -7, rx: 13.5, ry: 4.9, fill: "#6a4a35" }, g);
+        sv("ellipse", { cx: 0, cy: -5, rx: 9.5, ry: 2.4, fill: "#b99572" }, g);
+        sv("circle", { cx: 8.6, cy: -13.2, r: 1.5, fill: "#6a4a35" }, g);
+        sv("ellipse", { cx: 11.2, cy: -9.6, rx: 5.5, ry: 4.3, fill: "#7a5640" }, g);
+        sv("ellipse", { cx: 15.2, cy: -8.2, rx: 3.3, ry: 2.5, fill: "#d9bf9c" }, g);
+        sv("circle", { cx: 17.9, cy: -8.8, r: 1, fill: "#1a120e" }, g);
+        sv("circle", { cx: 13.2, cy: -10.8, r: 0.8, fill: "#111" }, g);
+      },
+      wolf(g) {
+        sv("ellipse", { cx: -13, cy: -11, rx: 9, ry: 3.4, fill: "#7d8186", transform: "rotate(-22 -13 -11)" }, g);
+        [-7, -3, 5, 9].forEach(x => sv("rect", { x: x - 1.4, y: -9, width: 2.8, height: 9, rx: 1, fill: "#5b5f64" }, g));
+        sv("ellipse", { cx: 0, cy: -11.5, rx: 12.2, ry: 6.4, fill: "#8b9096" }, g);
+        sv("ellipse", { cx: 6, cy: -9, rx: 6, ry: 4, fill: "#c9ccd0" }, g);
+        sv("polygon", { points: "9,-21 10,-29.5 14.2,-22", fill: "#6b7076" }, g);
+        sv("polygon", { points: "13.6,-21 17,-28.5 18.6,-21", fill: "#6b7076" }, g);
+        sv("ellipse", { cx: 12.4, cy: -17, rx: 6, ry: 5, fill: "#8b9096" }, g);
+        sv("path", { d: "M16.5 -18.2 L24.4 -15.2 L16.5 -12.8 Z", fill: "#c9ccd0" }, g);
+        sv("circle", { cx: 24.4, cy: -15.2, r: 1.1, fill: "#14171a" }, g);
+        sv("circle", { cx: 14.8, cy: -18.2, r: 0.9, fill: "#1a1a14" }, g);
+      },
+      mole(g) {
+        sv("path", { d: "M-9 -3 q-4 0 -5 -2", stroke: "#e9b5b0", "stroke-width": 1, fill: "none", "stroke-linecap": "round" }, g);
+        sv("ellipse", { cx: 0, cy: -5.5, rx: 9.6, ry: 5.5, fill: "#3a3438" }, g);
+        sv("ellipse", { cx: 9, cy: -5, rx: 5, ry: 3.6, fill: "#453e43" }, g);
+        sv("polygon", { points: "12.5,-6.6 19.8,-4.6 12.5,-2.4", fill: "#e9b5b0" }, g);
+        sv("circle", { cx: 19.8, cy: -4.6, r: 1.2, fill: "#e98f98" }, g);
+        sv("circle", { cx: 11, cy: -6.2, r: 0.6, fill: "#111" }, g);
+        [[5, -0.8], [11.5, -0.8]].forEach(([x, y]) => sv("ellipse", { cx: x, cy: y, rx: 3, ry: 1.5, fill: "#e9b5b0" }, g));
+      },
+      duck(g) {
+        [-2.4, 1.6].forEach(x => sv("rect", { x: x - 0.6, y: -4.4, width: 1.2, height: 4.4, fill: "#e0903a" }, g));
+        [-2.4, 1.6].forEach(x => sv("ellipse", { cx: x + 0.9, cy: -0.5, rx: 2.4, ry: 0.8, fill: "#e0903a" }, g));
+        sv("polygon", { points: "-9,-12.4 -15.5,-14.6 -10,-6.4", fill: "#7a6a4e" }, g);
+        sv("ellipse", { cx: 0, cy: -9.4, rx: 10.6, ry: 6.2, fill: "#8a7a5c" }, g);
+        sv("ellipse", { cx: 5.4, cy: -9.4, rx: 5.2, ry: 4.2, fill: "#8a4a32" }, g);
+        sv("ellipse", { cx: -1.6, cy: -9.8, rx: 6.4, ry: 3.6, fill: "#6f6049", transform: "rotate(-8 -1.6 -9.8)" }, g);
+        sv("ellipse", { cx: 8.6, cy: -14, rx: 3, ry: 4.4, fill: "#2f6a5a" }, g);
+        sv("ellipse", { cx: 8.2, cy: -14.8, rx: 3.2, ry: 0.9, fill: "#f1ede6" }, g);
+        sv("circle", { cx: 9.6, cy: -18.6, r: 4.3, fill: "#2f6a5a" }, g);
+        sv("polygon", { points: "13.4,-19.6 19.8,-18.4 13.4,-16.6", fill: "#e3b43a" }, g);
+        sv("circle", { cx: 11.2, cy: -19.8, r: 0.8, fill: "#111" }, g);
       }
+    };
+    // head centre (hx, hy) is where a peeking animal's face goes; eye is its glow in the dark; print is the kind of track it leaves
+    const META = {
+      fox: { hx: 13, hy: -15, size: 1, eye: "#ffd27a", print: "paw" },
+      rabbit: { hx: 9, hy: -12, size: 1, eye: "#ff9aa8", print: "tiny" },
+      fawn: { hx: 15, hy: -25, size: 1, eye: "#ffe9b0", print: "hoof" },
+      hedgehog: { hx: 10, hy: -5, size: 1, eye: "#ffd27a", print: "tiny" },
+      owl: { hx: 0, hy: -15, size: 1, eye: "#fff2a0", print: "bird" },
+      squirrel: { hx: 7.5, hy: -15, size: 1, eye: "#ffd27a", print: "tiny" },
+      badger: { hx: 13.5, hy: -8.6, size: 1, eye: "#d8e8ff", print: "paw" },
+      raccoon: { hx: 11, hy: -14, size: 1, eye: "#b8ffd0", print: "paw" },
+      mouse: { hx: 8, hy: -6, size: 0.85, eye: "#ffb0b0", print: "tiny" },
+      bear: { hx: 12.2, hy: -17.4, size: 1.05, eye: "#ffc890", print: "paw" },
+      otter: { hx: 11.2, hy: -9.6, size: 1, eye: "#ffe0b0", print: "paw" },
+      wolf: { hx: 12.4, hy: -17, size: 1, eye: "#e8f0a0", print: "paw" },
+      mole: { hx: 9, hy: -5, size: 0.9, eye: "#ffb0b0", print: "tiny" },
+      duck: { hx: 9.6, hy: -18.6, size: 1, eye: "#ffe9b0", print: "bird" }
     };
     const SPECIES = Object.keys(ANIMALS);
-    // where animals may stand: inside a glade, off the trail, the stream, the pond, the bridge and the props
+
+    // ── sort every tracked fic into its place ──
+    const caps = { active: 12, den: 8, eyes: 14, tracks: 22, gone: 6 };
+    const everyone = (() => {
+      let all = [];
+      try { all = getTracked() || []; } catch (e) { all = []; }
+      return all.map(f => {
+        const id = String(f.workId || titleOf(f)), li = logInfo.get(String(f.workId)) || { n: 0, last: "" };
+        let read = 0; try { read = Number(readChapterFor(f)) || 0; } catch (e) { read = 0; }
+        read = read || Number(f.currentChapter) || 0;
+        let wip = false; try { wip = !f.finished && isWip(f); } catch (e) { wip = false; }
+        const state = f.finished ? "done" : wip ? (read > 0 ? "wip" : "new") : "gone";
+        const upd = agoDays(f.lastUpdate), readAgo = agoDays(li.last), avg = Number(f.avgUpdateDays) || 0;
+        // quiet: the fic has not updated for much longer than it usually does, and you have not read it in the last few days
+        const asleep = state === "wip" && upd != null && upd > Math.max(21, avg * 2.5) && !(readAgo != null && readAgo <= 3);
+        const species = SPECIES[Math.floor(rnd("sp" + id) * SPECIES.length)];
+        return { f, id, state, read, asleep, upd, readAgo, species, logged: li.n, words: Number(f.words) || 0 };
+      });
+    })();
+    const recency = it => Math.min(it.readAgo == null ? 9999 : it.readAgo, it.upd == null ? 9999 : it.upd);
+    const wips = everyone.filter(i => i.state === "wip").sort((a, b) => (a.asleep - b.asleep) || (recency(a) - recency(b)) || titleOf(a.f).localeCompare(titleOf(b.f)));
+    const dones = everyone.filter(i => i.state === "done").sort((a, b) => (b.logged - a.logged) || (b.words - a.words) || titleOf(a.f).localeCompare(titleOf(b.f)));
+    const gones = everyone.filter(i => i.state === "gone").sort((a, b) => ((a.upd == null ? 9999 : a.upd) - (b.upd == null ? 9999 : b.upd)) || titleOf(a.f).localeCompare(titleOf(b.f)));
+    const shown = wips.slice(0, caps.active);
+    const eyesList = wips.slice(caps.active, caps.active + caps.eyes);
+    const favs = dones.slice(0, caps.den);
+    const trackList = dones.slice(caps.den, caps.den + caps.tracks);
+    const goneShown = gones.slice(0, caps.gone);
+    let howl = Math.max(0, wips.length - caps.active - caps.eyes) + Math.max(0, dones.length - caps.den - caps.tracks);
+
+    const targets = [];                                                   // everything you can tap: { kind, it, x, y, hit, ring, ... }
+    const dist = (pts, x, y) => pts.reduce((m, p) => Math.min(m, Math.hypot(p[0] - x, p[1] - y)), 1e9);
+
+    // where animals may stand: inside a glade, off the trail, the stream, the pond, the bridge, the side path and the props
     const AVOID = [[98, 372, 72, 24], [252, 372, 22, 18], [288, 396, 18, 14], [222, 408, 18, 14], [244, 262, 40, 18], [BR.x, BR.y, 50, 50],
       [262, 958, 56, 40], [64, 984, 30, 18], [102, 1014, 26, 16], [46, 1040, 28, 16], [140, 1052, 22, 14], [224, 964, 24, 12],
-      [240, 1286, 50, 30], [74, 1316, 48, 26], [214, 1230, 16, 12]];
-    const standOk = (x, y) => !AVOID.some(([ax, ay, arx, ary]) => ((x - ax) / arx) ** 2 + ((y - ay) / ary) ** 2 < 1) &&
-      !near(TRAIL, x, y, 30) && !near(STREAM, x, y, 22) && !inPond(x, y, 14);
+      [240, 1286, 50, 30], [74, 1316, 48, 26], [214, 1230, 16, 12], [GATE[0], GATE[1], 30, 18]];
+    const propHit = (x, y) => AVOID.some(([ax, ay, arx, ary]) => ((x - ax) / arx) ** 2 + ((y - ay) / ary) ** 2 < 1);
+    const standOk = (x, y) => !propHit(x, y) && !near(TRAIL, x, y, 30) && !near(STREAM, x, y, 22) && !inPond(x, y, 14) && !near(GPATH, x, y, 20);
+    const spots = [];
+    const crowded = (x, y, d) => spots.some(q => Math.hypot(q.x - x, (q.y - y) * 1.4) < d);
+
+    // animals in the glades: awake ones close to the trail, sleepers out at the far edge
     const placed = [];
-    let unplaced = 0;
-    reading.forEach((it, idx) => {
-      const gl = GLADES[idx % 4], key = String(it.f.workId || titleOf(it.f));
+    const toEyes = [];
+    shown.forEach((it, idx) => {
       let spot = null;
-      for (let pass = 0; pass < 2 && !spot; pass++) {
-        for (let t = 0; t < 160 && !spot; t++) {
-          const a = rnd("an" + key + pass + "a" + t) * Math.PI * 2, d = Math.sqrt(rnd("an" + key + pass + "d" + t));
-          const x = gl[0] + Math.cos(a) * gl[2] * 0.82 * d, y = gl[1] + Math.sin(a) * gl[3] * 0.78 * d;
-          if (standOk(x, y) && !placed.some(q => Math.hypot(q.x - x, (q.y - y) * 1.4) < (pass ? 24 : 38))) spot = { x, y };
+      const order = [0, 1, 2, 3].map(k => (idx + k) % 4);               // dealt out to the glades in turn, trying the next if one is full
+      for (let pass = 0; pass < 3 && !spot; pass++) {
+        for (let oi = 0; oi < order.length && !spot; oi++) {
+          const gl = GLADES[order[oi]];
+          for (let t = 0; t < 60 && !spot; t++) {
+            const a = rnd("an" + it.id + pass + order[oi] + "a" + t) * Math.PI * 2, d = Math.sqrt(rnd("an" + it.id + pass + order[oi] + "d" + t));
+            const x = gl[0] + Math.cos(a) * gl[2] * 0.84 * d, y = gl[1] + Math.sin(a) * gl[3] * 0.8 * d;
+            if (!standOk(x, y)) continue;
+            const dt = dist(TRAIL, x, y);
+            if (pass < 2 && (it.asleep ? dt < 52 : dt > 68)) continue;
+            if (crowded(x, y, pass === 0 ? 38 : pass === 1 ? 26 : 20)) continue;
+            spot = { x, y };
+          }
         }
       }
-      if (!spot) { unplaced++; return; }
-      const sp = SPECIES[Math.floor(rnd("sp" + key) * SPECIES.length)];
-      placed.push(Object.assign({ sp, flip: rnd("fl" + key) < 0.5 ? -1 : 1, sc: 0.95 + rnd("sz" + key) * 0.2 }, spot, it));
+      if (!spot) { toEyes.push(it); return; }
+      spots.push(spot);
+      const m = META[it.species], sc = (0.95 + rnd("sz" + it.id) * 0.2) * m.size;
+      const an = Object.assign({ kind: "animal", it, flip: rnd("fl" + it.id) < 0.5 ? -1 : 1, sc, hit: 19, hitDy: -12 }, spot);
+      an.ring = { cx: an.x, cy: an.y + 1, rx: 20, ry: 6.5 };
+      placed.push(an); targets.push(an);
     });
+    const awakeN = placed.filter(a => !a.it.asleep).length, asleepN = placed.length - awakeN;
     placed.forEach(an => thing(an.y, g => {
-      const w = sv("g", { transform: `translate(${an.x.toFixed(1)} ${an.y.toFixed(1)})` }, g);
+      const it = an.it, w = sv("g", { transform: `translate(${an.x.toFixed(1)} ${an.y.toFixed(1)})` }, g);
       sv("ellipse", { cx: 0, cy: 0.5, rx: 13 * an.sc, ry: 3.4, fill: "#000", opacity: 0.35 }, w);
-      const inner = sv("g", {}, w);
-      const body = sv("g", { transform: `scale(${(an.flip * an.sc).toFixed(2)} ${an.sc.toFixed(2)})` }, inner);
-      ANIMALS[an.sp](body);
-      anim(inner, `animation:wdBreathe ${(3.2 + rnd("br" + an.f.workId) * 1.6).toFixed(1)}s ease-in-out ${(rnd("bd" + an.f.workId) * 3).toFixed(1)}s infinite;transform-box:fill-box;transform-origin:50% 100%;`);
+      const wander = sv("g", {}, w), inner = sv("g", {}, wander);
+      // asleep: a flat curled-up loaf, with slow breaths and a few z's; awake: standing, shifting about a little
+      const body = sv("g", { transform: it.asleep ? `translate(0 0.6) scale(${(an.flip * an.sc * 1.1).toFixed(2)} ${(an.sc * 0.6).toFixed(2)})` : `scale(${(an.flip * an.sc).toFixed(2)} ${an.sc.toFixed(2)})` }, inner);
+      ANIMALS[it.species](body);
+      const slow = it.asleep ? 2.2 : 1;
+      anim(inner, `animation:wdBreathe ${((3.2 + rnd("br" + it.id) * 1.6) * slow).toFixed(1)}s ease-in-out ${(rnd("bd" + it.id) * 3).toFixed(1)}s infinite;transform-box:fill-box;transform-origin:50% 100%;`);
+      if (!it.asleep) anim(wander, `animation:wdWander ${(7 + rnd("wn" + it.id) * 5).toFixed(1)}s ease-in-out ${(rnd("wd" + it.id) * 6).toFixed(1)}s infinite;`);
+      else [0, 1, 2].forEach(k => {
+        const z = sv("text", { x: (an.flip * 9 + k * 3.5).toFixed(1), y: -12 * an.sc - 4, "font-family": "Georgia,serif", "font-size": 4.8 + k * 1.3, "font-weight": 700, fill: "#dfeaff", opacity: 0 }, w);
+        z.textContent = "z"; anim(z, `animation:wdZ 4.2s ease-in-out ${(k * 1.1 + rnd("zz" + it.id) * 2).toFixed(1)}s infinite;`);
+      });
       an.node = inner;
     }));
-    // tapping: a soft ring and a small name tag at the animal, the stats in the caption
+
+    // dens: the places a finished fic can settle (opening centre and size, the scale a peeking animal gets, and the prop's draw order)
+    const DENS = [
+      { x: 40.3, y: 378.6, rx: 7, ry: 12, s: 0.8, py: 390 },
+      { x: 262, y: 922, rx: 12, ry: 30, s: 1.1, py: 960 },
+      ...[[64, 984, 1], [102, 1014, 0.85], [46, 1040, 0.95], [140, 1052, 0.7]].map(([mx, my, s]) => ({ x: mx, y: my - 4 * s, rx: 7 * s, ry: 5.2 * s, s: 0.7 * s, py: my })),
+      { x: 214, y: 1281, rx: 10, ry: 7, s: 0.8, py: 1288 },
+      { x: 36, y: 1309, rx: 5, ry: 8, s: 0.6, py: 1318 }
+    ];
+    const peekers = [];
+    {
+      const free = DENS.map((d, i) => i);
+      favs.forEach((it, k) => {
+        let best = -1, bs = 2;
+        free.forEach(di => { const s = rnd("dn" + it.id + di); if (s < bs) { bs = s; best = di; } });
+        if (best < 0) return;
+        free.splice(free.indexOf(best), 1);
+        const den = DENS[best], m = META[it.species], fl = rnd("fl" + it.id) < 0.5 ? -1 : 1, s = den.s * m.size, cid = "wd-dc" + best;
+        const cp = sv("clipPath", { id: cid }, defs);
+        sv("ellipse", { cx: den.x, cy: den.y, rx: den.rx, ry: den.ry }, cp);
+        thing(den.py + 0.01, g => {
+          const cg = sv("g", { "clip-path": `url(#${cid})` }, g);
+          const body = sv("g", {}, cg);
+          const a = sv("g", { transform: `translate(${(den.x - m.hx * s * fl).toFixed(1)} ${(den.y - m.hy * s).toFixed(1)}) scale(${(fl * s).toFixed(2)} ${s.toFixed(2)})` }, body);
+          ANIMALS[it.species](a);
+          anim(body, `animation:wdBreathe ${(3.6 + rnd("br" + it.id) * 1.6).toFixed(1)}s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;`);
+          const eyes = sv("g", { opacity: 0 }, cg);
+          [-1, 1].forEach(sd => sv("circle", { cx: (den.x + sd * Math.max(1.6, den.rx * 0.34)).toFixed(1), cy: den.y.toFixed(1), r: Math.max(0.9, 1.15 * Math.min(1, s * 1.2)).toFixed(2), fill: m.eye }, eyes));
+          peekers.push({ body, eyes });
+        });
+        targets.push({ kind: "den", it, x: den.x, y: den.y, hit: Math.max(12, den.rx + 5), hitDy: 0, ring: { cx: den.x, cy: den.y, rx: den.rx + 4, ry: Math.max(den.ry * 0.55, 6) + 2 }, tagTop: Math.max(130, den.y - den.ry - 34) });
+      });
+    }
+    const peekState = () => peekers.forEach(p => { const night = TIMES[tI].name === "night"; p.body.setAttribute("opacity", night ? 0 : 1); p.eyes.setAttribute("opacity", night ? 1 : 0); });
+
+    // prints in the soft ground, drawn flat under everything (a dark dent with a pale rim)
+    const tracksG = sv("g", { "pointer-events": "none" }, svg);
+    const printAt = (x, y, ang, kind, op) => {
+      [[0.55, 0.7, "#8f7f70", 0.5], [0, 0, "#0e1815", 0.85]].forEach(([dx, dy, fill, o]) => {
+        const p = sv("g", { transform: `translate(${(x + dx).toFixed(1)} ${(y + dy).toFixed(1)}) rotate(${(ang * 180 / Math.PI).toFixed(0)})`, opacity: (o * op).toFixed(2) }, tracksG);
+        if (kind === "paw") {
+          sv("ellipse", { cx: 0, cy: 0, rx: 1.7, ry: 1.3, fill }, p);
+          [[2.4, -1.5], [3, 0], [2.4, 1.5]].forEach(([tx, ty]) => sv("circle", { cx: tx, cy: ty, r: 0.62, fill }, p));
+        } else if (kind === "hoof") {
+          [-1.1, 1.1].forEach(ty => sv("ellipse", { cx: 0, cy: ty, rx: 1.5, ry: 0.75, fill }, p));
+        } else if (kind === "bird") {
+          sv("path", { d: "M-1.6 0 L2.6 0 M0 0 L2.2 -2.1 M0 0 L2.2 2.1", stroke: fill, "stroke-width": 0.7, fill: "none", "stroke-linecap": "round" }, p);
+        } else {
+          [-0.9, 0.9].forEach(ty => sv("circle", { cx: 0, cy: ty, r: 0.8, fill }, p));
+          sv("circle", { cx: 1.9, cy: 0, r: 0.55, fill }, p);
+        }
+      });
+    };
+    // settled fics that do not look out of a den: a short line of prints ending at one
+    let trackless = 0;
+    trackList.forEach(it => {
+      const den = DENS[Math.floor(rnd("td" + it.id) * DENS.length)];
+      let A = null;
+      for (let t = 0; t < 16 && !A; t++) {
+        const ang = rnd("ta" + it.id + t) * Math.PI * 2, len = 34 + rnd("tl" + it.id + t) * 12;
+        const x = den.x + Math.cos(ang) * len, y = den.y + Math.sin(ang) * len * 0.7;
+        if (standOk(x, y) && y > 150 && y < H - 30) A = [x, y];
+      }
+      if (!A) { trackless++; return; }
+      const ang = Math.atan2(den.y - A[1], den.x - A[0]), nx = -Math.sin(ang), ny = Math.cos(ang), kind = META[it.species].print;
+      for (let k = 0; k < 4; k++) {
+        const f = k / 4.4, sd = k % 2 ? 2.2 : -2.2;
+        printAt(A[0] + (den.x - A[0]) * f + nx * sd, A[1] + (den.y - A[1]) * f + ny * sd, ang, kind, 1);
+      }
+      const mx = A[0] + (den.x - A[0]) * 0.38, my = A[1] + (den.y - A[1]) * 0.38;
+      targets.push({ kind: "track", it, x: mx, y: my, hit: 14, hitDy: 0, ring: { cx: mx, cy: my, rx: 15, ry: 7 } });
+    });
+    howl += trackless;
+
+    // eyes in the dark: fics that do not fit in the glades are watching from the bushes at the edges of the clearings
+    const eyeFics = eyesList.concat(toEyes);
+    eyeFics.forEach(it => {
+      let spot = null;
+      for (let t = 0; t < 240 && !spot; t++) {
+        const x = 12 + rnd("ex" + it.id + t) * (W - 24), y = 200 + rnd("ey" + it.id + t) * (H - 260);
+        if (inGlade(x, y, 12) || blocked(x, y, 8) || propHit(x, y) || near(GPATH, x, y, 24) || crowded(x, y, 30)) continue;
+        spot = { x, y };
+      }
+      if (!spot) { howl++; return; }
+      spots.push(spot);
+      thing(spot.y, g => bush(g, spot.x, spot.y + 9, 8.5 + rnd("eb" + it.id) * 3, "#0f2a23"));
+      targets.push({ kind: "eyes", it, x: spot.x, y: spot.y, hit: 13, hitDy: 0, ring: { cx: spot.x, cy: spot.y + 2, rx: 11, ry: 5.5 } });
+    });
+    const eyesG = sv("g", { "pointer-events": "none" });                 // added to the picture after the trees, so the eyes show through
+    targets.filter(t => t.kind === "eyes").forEach((t, i) => {
+      const col = META[t.it.species].eye;
+      sv("circle", { cx: t.x, cy: t.y, r: 6, fill: col, opacity: 0.16 }, eyesG);
+      [-1, 1].forEach(sd => anim(sv("ellipse", { cx: (t.x + sd * 3).toFixed(1), cy: t.y.toFixed(1), rx: 1.5, ry: 1.1, fill: col }, eyesG), `animation:wdBlink ${(5 + rnd("eb" + t.it.id) * 5).toFixed(1)}s ease-in-out ${(rnd("ed" + t.it.id) * 5).toFixed(1)}s infinite;transform-box:fill-box;transform-origin:center;`));
+    });
+
+    // the quiet way out: tracks of the fics that were left behind lead down a side path to the graveyard gate
+    {
+      const cum = [0];
+      for (let i = 1; i < GPATH.length; i++) cum.push(cum[i - 1] + Math.hypot(GPATH[i][0] - GPATH[i - 1][0], GPATH[i][1] - GPATH[i - 1][1]));
+      const total = cum[cum.length - 1];
+      const at = f => {
+        const s = f * total; let i = 1;
+        while (i < GPATH.length - 1 && cum[i] < s) i++;
+        const t = (s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1), a = GPATH[i - 1], b = GPATH[i];
+        return { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t, ang: Math.atan2(b[1] - a[1], b[0] - a[0]) };
+      };
+      const n = goneShown.length;
+      goneShown.forEach((it, i) => {
+        const kind = META[it.species].print, pts = [];
+        for (let k = 0; k < 2; k++) {
+          const f = 0.05 + 0.88 * ((i * 2 + k) / (n * 2)), p = at(f), sd = (i * 2 + k) % 2 ? 2.4 : -2.4;
+          const nx = -Math.sin(p.ang), ny = Math.cos(p.ang), px = p.x + nx * sd, py = p.y + ny * sd;
+          printAt(px, py, p.ang, kind, 0.95 - 0.5 * f); pts.push([px, py]);
+        }
+        const mx = (pts[0][0] + pts[1][0]) / 2, my = (pts[0][1] + pts[1][1]) / 2;
+        targets.push({ kind: "gone", it, x: mx, y: my, hit: 10, hitDy: 0, ring: { cx: mx, cy: my, rx: 10, ry: 5 } });
+      });
+    }
+    targets.push({ kind: "gate", x: GATE[0], y: GATE[1] - 14, hit: 17, hitDy: 0, ring: { cx: GATE[0], cy: GATE[1] + 1, rx: 18, ry: 5.5 }, tagTop: GATE[1] - 62 });
+
+    // a distant howl: a wolf on the far ridge, only when more fics are out there than the woods can show
+    if (howl > 0) {
+      const wx = 316, wy = 113, wg = sv("g", {}, far);
+      sv("ellipse", { cx: wx, cy: wy - 4, rx: 6.5, ry: 4, fill: "#04090a" }, wg);
+      [-4, -1.4, 2.6, 5].forEach(dx => sv("rect", { x: wx + dx - 0.8, y: wy - 3, width: 1.6, height: 4, fill: "#04090a" }, wg));
+      sv("path", { d: `M${wx + 3} ${wy - 5} L${wx + 7.5} ${wy - 14} L${wx + 10.5} ${wy - 17} L${wx + 12} ${wy - 15.6} L${wx + 9.5} ${wy - 12.6} L${wx + 7.5} ${wy - 4} Z`, fill: "#04090a" }, wg);
+      sv("path", { d: `M${wx - 6} ${wy - 5} q-6 1 -8 5`, stroke: "#04090a", "stroke-width": 2.4, fill: "none", "stroke-linecap": "round" }, wg);
+      [[14, -20, 5], [18, -24, 8]].forEach(([dx, dy, r], i) => anim(sv("path", { d: `M${wx + dx} ${wy + dy} q${r * 0.7} ${-r * 0.5} ${r * 0.9} ${-r * 1.4}`, stroke: "#cfe0e6", "stroke-width": 0.9, fill: "none", "stroke-linecap": "round" }, wg), `animation:wdHowl 5s ease-out ${i * 0.5}s infinite;`));
+      targets.push({ kind: "howl", x: wx + 6, y: wy - 8, hit: 15, hitDy: 0, ring: { cx: wx + 6, cy: wy + 2, rx: 14, ry: 4 }, tagTop: wy + 8 });
+    }
+    const settledN = favs.length + trackList.length - trackless;
+
+    // tapping: a soft ring and a small name tag at the thing, the details in the caption
     let picked = null;
     const selG = sv("g", { "pointer-events": "none" });
-    const statLines = an => {
-      const f = an.f, total = Number(f.totalChapters) || 0;
+    const plural = (n, a, b) => n + " " + (n === 1 ? a : b);
+    const detailLines = t => {
+      const it = t.it, f = it.f, total = Number(f.totalChapters) || 0;
       const posted = parseInt(((f.chaptersLabel || "").split("/")[0]) || "", 10) || 0;
-      const bits1 = [];
-      if (f.author) bits1.push(f.author);
-      bits1.push(total ? `chapter ${an.read} of ${total} (${Math.min(100, Math.round(an.read / total * 100))}%)` : `chapter ${an.read}`);
-      const bits2 = [];
-      if (f.words) bits2.push(`${fmtWords(f.words)} words`);
-      if (posted > an.read) {
-        if (f.words) { try { bits2.push(`${formatReadTime(wordsToReadMinutes(f.words * (posted - an.read) / posted))} to catch up`); } catch (e) {} }
-        bits2.push(`${posted - an.read} new ${posted - an.read === 1 ? "chapter" : "chapters"} waiting`);
-      } else if (posted && posted === an.read) bits2.push("all caught up");
-      let ago = null; try { ago = fmtAgo(daysSince(f.lastUpdate)); } catch (e) { ago = ""; }
-      if (ago) bits2.push(ago);
-      if (f.avgUpdateDays) bits2.push(`about every ${f.avgUpdateDays}d`);
-      return [bits1.join(" · "), bits2.join(" · ")];
+      const l1 = [], l2 = [];
+      if (f.author) l1.push(f.author);
+      if (it.state === "done") l1.push(total ? `finished, ${plural(total, "chapter", "chapters")}` : "finished");
+      else l1.push(total ? `chapter ${it.read} of ${total} (${Math.min(100, Math.round(it.read / total * 100))}%)` : `chapter ${it.read}`);
+      if (t.kind === "animal") l2.push(it.asleep ? `asleep, quiet for ${it.upd == null ? "a while" : it.upd + "d"}` : "awake and about");
+      else if (t.kind === "den") l2.push("settled into a den");
+      else if (t.kind === "track") l2.push("settled in: only tracks left");
+      else if (t.kind === "eyes") l2.push(it.asleep ? "dozing out in the dark" : "watching from the dark");
+      else if (t.kind === "gone") l2.push("left the woods, down the path to the graveyard");
+      if (f.words) l2.push(`${fmtWords(f.words)} words`);
+      if (it.state === "wip") {
+        if (posted > it.read) {
+          if (f.words) { try { l2.push(`${formatReadTime(wordsToReadMinutes(f.words * (posted - it.read) / posted))} to catch up`); } catch (e) {} }
+          l2.push(`${plural(posted - it.read, "new chapter", "new chapters")} waiting`);
+        } else if (posted && posted === it.read) l2.push("all caught up");
+      }
+      let ago = ""; try { ago = it.state === "gone" && it.upd != null ? `quiet for ${gyAgoShort(it.upd)}` : fmtAgo(it.upd); } catch (e) { ago = ""; }
+      if (ago) l2.push(ago);
+      if (it.state === "wip" && f.avgUpdateDays) l2.push(`about every ${f.avgUpdateDays}d`);
+      return [l1.join(" · "), l2.join(" · ")];
     };
+    const gyAgoShort = d => d < 60 ? `${d}d` : d < 730 ? `${Math.round(d / 30)} months` : `${(d / 365).toFixed(1).replace(/\.0$/, "")} years`;
     function renderCaption() {
       caption.textContent = "";
       caption.style.minHeight = "64px"; caption.style.display = "flex"; caption.style.flexDirection = "column"; caption.style.justifyContent = "center"; caption.style.gap = "3px";
+      const sm = "font-style:normal;font-size:10.5px;line-height:1.35;color:rgba(220,240,226,0.62);";
       if (!picked) {
-        caption.appendChild(el("div", "", TIMES[tI].say + (reading.length ? "" : " Nobody lives here yet: an animal turns up for each fic you start reading.")));
+        const any = everyone.some(i => i.state !== "new");
+        caption.appendChild(el("div", "", TIMES[tI].say + (any ? "" : " Nobody lives here yet: an animal turns up for each fic you start reading.")));
+        if (any) caption.appendChild(el("div", sm, "Tap an animal, a den, a set of tracks or a pair of eyes."));
         return;
       }
-      const [l1, l2] = statLines(picked);
-      caption.appendChild(el("div", "font-style:normal;font-weight:700;font-size:13.5px;line-height:1.25;color:#f1e6c8;", titleOf(picked.f)));
+      if (picked.kind === "gate") {
+        caption.appendChild(el("div", "font-style:normal;font-weight:700;font-size:13.5px;line-height:1.25;color:#f1e6c8;", "The way to the graveyard"));
+        caption.appendChild(el("div", "font-style:normal;font-size:11px;line-height:1.35;color:rgba(220,240,226,0.85);", gones.length ? `${plural(gones.length, "fic has", "fics have")} left the woods this way.` : "Nobody has taken this path yet."));
+        caption.appendChild(el("div", sm, "Tap the gate again to go in."));
+        return;
+      }
+      if (picked.kind === "howl") {
+        caption.appendChild(el("div", "font-style:normal;font-weight:700;font-size:13.5px;line-height:1.25;color:#f1e6c8;", "A distant howl"));
+        caption.appendChild(el("div", "font-style:normal;font-size:11px;line-height:1.35;color:rgba(220,240,226,0.85);", `${plural(howl, "more fic is", "more fics are")} out there, beyond the trees.`));
+        caption.appendChild(el("div", sm, "The woods only show the lively ones and your favourites."));
+        return;
+      }
+      const [l1, l2] = detailLines(picked);
+      caption.appendChild(el("div", "font-style:normal;font-weight:700;font-size:13.5px;line-height:1.25;color:#f1e6c8;", titleOf(picked.it.f)));
       caption.appendChild(el("div", "font-style:normal;font-size:11px;line-height:1.35;color:rgba(220,240,226,0.85);", l1));
-      if (l2) caption.appendChild(el("div", "font-style:normal;font-size:10.5px;line-height:1.35;color:rgba(220,240,226,0.62);", l2));
+      if (l2) caption.appendChild(el("div", sm, l2));
     }
     function drawSel() {
       while (selG.firstChild) selG.removeChild(selG.firstChild);
       if (!picked) return;
-      const an = picked;
-      sv("ellipse", { cx: an.x, cy: an.y + 1, rx: 20, ry: 6.5, fill: "none", stroke: "#ffe9a8", "stroke-width": 1.4, opacity: 0.9 }, selG);
-      sv("ellipse", { cx: an.x, cy: an.y + 1, rx: 20, ry: 6.5, fill: "#ffe9a8", opacity: 0.14 }, selG);
-      let t = titleOf(an.f); if (t.length > 28) t = t.slice(0, 27) + "…";
-      const w = Math.max(40, t.length * 4.7 + 14), top = Math.max(130, an.y - 50), bx = Math.max(6, Math.min(W - 6 - w, an.x - w / 2));
-      sv("polygon", { points: `${an.x - 4},${top + 15} ${an.x + 4},${top + 15} ${an.x},${top + 21}`, fill: "rgba(12,22,18,0.88)" }, selG);
+      const t = picked, r = t.ring;
+      sv("ellipse", { cx: r.cx, cy: r.cy, rx: r.rx, ry: r.ry, fill: "none", stroke: "#ffe9a8", "stroke-width": 1.4, opacity: 0.9 }, selG);
+      sv("ellipse", { cx: r.cx, cy: r.cy, rx: r.rx, ry: r.ry, fill: "#ffe9a8", opacity: 0.14 }, selG);
+      let s = t.kind === "gate" ? "Graveyard" : t.kind === "howl" ? "A distant howl" : titleOf(t.it.f); if (s.length > 28) s = s.slice(0, 27) + "…";
+      const w = Math.max(40, s.length * 4.7 + 14), top = t.tagTop != null ? t.tagTop : Math.max(130, t.y - 50), bx = Math.max(6, Math.min(W - 6 - w, t.x - w / 2));
+      sv("polygon", { points: `${t.x - 4},${top + 15} ${t.x + 4},${top + 15} ${t.x},${top + 21}`, fill: "rgba(12,22,18,0.88)" }, selG);
       sv("rect", { x: bx, y: top, width: w, height: 16, rx: 8, fill: "rgba(12,22,18,0.88)", stroke: "rgba(255,233,168,0.65)", "stroke-width": 0.8 }, selG);
       const tx = sv("text", { x: bx + w / 2, y: top + 11, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 8.6, fill: "#f6ecd2" }, selG);
-      tx.textContent = t;
+      tx.textContent = s;
     }
-    const pickAnimal = an => {
-      picked = picked === an ? null : an;
+    const pickThing = t => {
+      if (t.kind === "gate" && picked === t) { close(); openGraveyardGrounds(); return; }
+      picked = picked === t ? null : t;
       drawSel(); renderCaption();
-      if (picked && an.node && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) && an.node.animate) {
-        try { an.node.animate([{ transform: "translateY(0)" }, { transform: "translateY(-7px)" }, { transform: "translateY(0)" }], { duration: 360, easing: "ease-out" }); } catch (e) {}
+      if (picked && picked.node && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) && picked.node.animate) {
+        try { picked.node.animate([{ transform: "translateY(0)" }, { transform: "translateY(-7px)" }, { transform: "translateY(0)" }], { duration: 360, easing: "ease-out" }); } catch (e) {}
       }
     };
 
@@ -6748,6 +7120,7 @@
     // ── everything that glows, then fireflies, the shade at the edges and the time-of-day tint ──
     const lit = sv("g", {}, svg);
     lits.forEach(f => f(lit));
+    svg.appendChild(eyesG);
     const flies = sv("g", {}, svg);
     for (let i = 0; i < 46; i++) {
       const g = GLADES[i % 4], a = rnd("ffa" + i) * Math.PI * 2, d = Math.sqrt(rnd("ffd" + i));
@@ -6760,11 +7133,11 @@
     const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
     svg.appendChild(selG);
     const hits = sv("g", {}, svg);                                          // the tap targets sit on top of the light and shade
-    placed.forEach(an => {
-      const h = sv("circle", { cx: an.x.toFixed(1), cy: (an.y - 12).toFixed(1), r: 19, fill: "transparent" }, hits);
+    targets.forEach(t => {
+      const h = sv("circle", { cx: t.x.toFixed(1), cy: (t.y + (t.hitDy || 0)).toFixed(1), r: t.hit, fill: "transparent" }, hits);
       h.style.cursor = "pointer";
-      h.setAttribute("role", "button"); h.setAttribute("aria-label", titleOf(an.f));
-      h.addEventListener("click", e => { e.stopPropagation(); pickAnimal(an); });
+      h.setAttribute("role", "button"); h.setAttribute("aria-label", t.kind === "gate" ? "Graveyard gate" : t.kind === "howl" ? "A distant howl" : titleOf(t.it.f));
+      h.addEventListener("click", e => { e.stopPropagation(); pickThing(t); });
     });
     svg.addEventListener("click", () => { if (picked) { picked = null; drawSel(); renderCaption(); } });
     field.appendChild(svg);
@@ -6785,7 +7158,14 @@
       rays.setAttribute("opacity", t.rays);
       tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
       timeBtn.textContent = t.label;
-      sub.textContent = "behind Hollowbrook · " + t.name + (placed.length ? ` · ${placed.length} reading${unplaced ? " (+" + unplaced + " more)" : ""}` : "");
+      eyesG.setAttribute("opacity", { night: 1, dusk: 0.75, dawn: 0.6, day: 0.3 }[t.name]);
+      peekState();
+      const bits = [];
+      if (awakeN) bits.push(awakeN + " awake");
+      if (asleepN) bits.push(asleepN + " asleep");
+      if (settledN) bits.push(settledN + " settled");
+      if (gones.length) bits.push(gones.length + " gone");
+      sub.textContent = "behind Hollowbrook · " + t.name + (bits.length ? " · " + bits.join(" · ") : "");
       renderCaption();
     };
     const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); });
@@ -6794,6 +7174,7 @@
     paintWx();
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u{1F3D8}️ village", "Back to Hollowbrook", () => { close(); openHollowbrook(); });
+    pill("\u{1FAA6} graveyard", "Follow the quiet path to the graveyard", () => { close(); openGraveyardGrounds(); });
     applyTime();
     document.body.appendChild(back);
   }
