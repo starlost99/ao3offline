@@ -6075,6 +6075,10 @@
   // plank bridge; 3 a hollow oak with burrow mounds; 4 a wide meadow with a boulder, a lantern and tall grass, and the side
   // path to the graveyard gate. Trees crowd the edges and the belts between glades, and thin out toward the bottom.
   // Time of day and weather are the shared live ones (see lib/hawkins-kit.js), the same as in the village.
+  let restoreScroll = null;                                         // after switching an animal the woods reopen at the same spot
+  const OVR_KEY = "ao3-wd-species";                                 // { work id: species } the animals you chose yourself (long-press)
+  const ovrGet = () => { try { const o = JSON.parse(localStorage.getItem(OVR_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } };
+  const ovrSet = (id, sp) => { try { const o = ovrGet(); if (sp) o[id] = sp; else delete o[id]; localStorage.setItem(OVR_KEY, JSON.stringify(o)); } catch (e) {} };
   function openWoods() {
     const old = document.getElementById("ao3-woods");
     if (old) old.remove();
@@ -6837,9 +6841,12 @@
     // moves between groups or fics are added or removed.
     {
       const used = {}; SPECIES.forEach(k => { used[k] = 0; });
+      const ovr = ovrGet();
+      everyone.forEach(it => { if (ovr[it.id] && ANIMALS[ovr[it.id]]) { it.species = ovr[it.id]; it.chosen = true; used[it.species]++; } });   // your own picks first
       const byHash = (a, b) => (gyHash(a.id) - gyHash(b.id)) || a.id.localeCompare(b.id);
       [wips.slice(0, caps.active), wips.slice(caps.active, caps.active + caps.eyes), goneShown, wips.slice(caps.active + caps.eyes).concat(gones.slice(caps.gone))].forEach(group => {
         group.slice().sort(byHash).forEach(it => {
+          if (it.chosen) return;
           const start = Math.floor(rnd("sp" + it.id) * SPECIES.length);
           let best = null;
           for (let k = 0; k < SPECIES.length; k++) { const sp = SPECIES[(start + k) % SPECIES.length]; if (best == null || used[sp] < used[best]) best = sp; }
@@ -7014,7 +7021,7 @@
       if (!picked) {
         const any = everyone.some(i => i.state !== "new");
         caption.appendChild(el("div", "", TIMES[tI].say + (any ? "" : " Nobody lives here yet: an animal turns up for each fic you start reading.")));
-        if (any) caption.appendChild(el("div", sm, "Tap an animal, a pair of eyes or a set of tracks."));
+        if (any) caption.appendChild(el("div", sm, "Tap an animal, a pair of eyes or a set of tracks. Hold one to change its animal."));
         return;
       }
       if (picked.kind === "gate") {
@@ -7057,6 +7064,36 @@
         try { picked.node.animate([{ transform: "translateY(0)" }, { transform: "translateY(-7px)" }, { transform: "translateY(0)" }], { duration: 360, easing: "ease-out" }); } catch (e) {}
       }
     };
+
+    // ── switching an animal by hand: hold an animal, pick another (or Auto). Saved per fic; nothing else about the woods is saved ──
+    function openSwitcher(it) {
+      if (box.querySelector(".wd-switch")) return;
+      const cur = it.species, chosen = !!it.chosen;
+      const sheet = el("div", "position:absolute;left:0;right:0;bottom:0;z-index:6;padding:12px 12px calc(env(safe-area-inset-bottom,0px) + 12px);background:rgba(8,16,13,0.97);border-top:1px solid rgba(160,210,170,0.3);border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,0.55);max-height:70%;overflow-y:auto;");
+      sheet.className = "wd-switch";
+      let t = titleOf(it.f); if (t.length > 44) t = t.slice(0, 43) + "…";
+      sheet.appendChild(el("div", "font-family:Georgia,serif;font-weight:700;font-size:13px;color:#f1e6c8;line-height:1.25;", t));
+      sheet.appendChild(el("div", "font-size:10.5px;color:rgba(220,240,226,0.6);margin:2px 0 10px;", chosen ? "Your pick. Choose another, or Auto to let the woods decide." : "Choose its animal. Auto lets the woods decide."));
+      const grid = el("div", "display:grid;grid-template-columns:repeat(4,1fr);gap:7px;");
+      const choose = sp => { ovrSet(it.id, sp); restoreScroll = field.scrollTop; close(); openWoods(); };
+      SPECIES.forEach(sp => {
+        const b = el("button", `border:1px solid ${sp === cur ? "#ffe9a8" : "rgba(160,210,170,0.22)"};background:${sp === cur ? "rgba(255,233,168,0.12)" : "rgba(255,255,255,0.04)"};border-radius:10px;padding:2px 2px 4px;color:#d3ecd9;font-family:Georgia,serif;font-size:9.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0;`);
+        b.type = "button"; b.setAttribute("aria-label", sp);
+        const s2 = document.createElementNS(NS, "svg"); s2.setAttribute("viewBox", "-30 -34 60 38"); s2.style.cssText = "width:100%;height:44px;";
+        const g2 = sv("g", { transform: "scale(1.15)" }, s2); ANIMALS[sp](g2);
+        b.appendChild(s2); b.appendChild(el("span", "", sp === "bear" ? "bear cub" : sp === "wolf" ? "wolf pup" : sp));
+        b.onclick = () => choose(sp);
+        grid.appendChild(b);
+      });
+      sheet.appendChild(grid);
+      const row = el("div", "display:flex;gap:8px;margin-top:10px;");
+      const mk = (txt, fn, hi) => { const b = el("button", `flex:1;padding:9px;border-radius:10px;border:1px solid rgba(160,210,170,0.3);background:${hi ? "rgba(160,210,170,0.18)" : "transparent"};color:#d3ecd9;font-family:Georgia,serif;font-size:12px;cursor:pointer;`, txt); b.type = "button"; b.onclick = fn; return b; };
+      if (chosen) row.appendChild(mk("Auto", () => choose(null), true));
+      row.appendChild(mk("Cancel", () => sheet.remove()));
+      sheet.appendChild(row);
+      sheet.addEventListener("click", e => e.stopPropagation());
+      box.appendChild(sheet);
+    }
 
     // ── draw the trees and props back to front ──
     things.sort((a, b) => a.y - b.y).forEach(t => t.fn(svg));
@@ -7195,7 +7232,16 @@
       const h = sv("circle", { cx: t.x.toFixed(1), cy: (t.y + (t.hitDy || 0)).toFixed(1), r: t.hit, fill: "transparent" }, hits);
       h.style.cursor = "pointer"; t.hitEl = h;
       h.setAttribute("role", "button"); h.setAttribute("aria-label", t.kind === "gate" ? "Graveyard gate" : t.kind === "howl" ? "A distant howl" : titleOf(t.it.f));
-      h.addEventListener("click", e => { e.stopPropagation(); pickThing(t); });
+      let lp = null, sx = 0, sy = 0, longDone = false;
+      const stopLp = () => { if (lp) { clearTimeout(lp); lp = null; } };
+      if (t.it) {                                                      // animals, eyes and leaving prints: hold to switch the animal
+        h.style.webkitTouchCallout = "none"; h.style.webkitUserSelect = "none"; h.style.userSelect = "none";
+        h.addEventListener("pointerdown", e => { longDone = false; sx = e.clientX; sy = e.clientY; stopLp(); lp = setTimeout(() => { lp = null; longDone = true; try { navigator.vibrate && navigator.vibrate(15); } catch (er) {} openSwitcher(t.it); }, 550); });
+        h.addEventListener("pointermove", e => { if (lp && Math.hypot(e.clientX - sx, e.clientY - sy) > 8) stopLp(); });
+        ["pointerup", "pointercancel", "pointerleave"].forEach(ev => h.addEventListener(ev, stopLp));
+        h.addEventListener("contextmenu", e => e.preventDefault());
+      }
+      h.addEventListener("click", e => { e.stopPropagation(); if (longDone) { longDone = false; return; } pickThing(t); });
     });
     svg.addEventListener("click", () => { if (picked) { picked = null; drawSel(); renderCaption(); } });
     field.appendChild(svg);
@@ -7234,6 +7280,7 @@
     applyTime();
     document.body.appendChild(back);
     if (!reduceMotion && movers.length) moveRaf = requestAnimationFrame(moveTick);
+    if (restoreScroll != null) { field.scrollTop = restoreScroll; restoreScroll = null; }
   }
 
   return { openWoods };
