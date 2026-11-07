@@ -6065,10 +6065,10 @@
   // ── 🌲 THE WOODS ──
   // Every tracked fic has an animal, and its state decides where it is and what it does (see "the animals" below):
   //   reading and lively = awake and close to the trail; reading but quiet = asleep at the far edge of a glade;
-  //   finished = settled into a den (your favourites look out of theirs, the rest leave tracks); abandoned = gone, with
-  //   tracks down a quiet side path to the graveyard gate. The crowd is capped: the rest are eyes in the dark or a distant howl.
-  // The species comes from a hash of the work id. All of it is worked out from the tracker data on every visit; nothing is saved.
-  // Tap an animal, a den, tracks, a pair of eyes, the howl or the gate for the details in the caption.
+  //   abandoned = gone, with tracks down a quiet side path to the graveyard gate. Finished fics are left out for now.
+  //   The crowd is capped: the rest are eyes in the dark or a distant howl.
+  // The species starts from a hash of the work id and is then spread so kinds repeat as little as possible. All of it is worked out from the tracker data on every visit; nothing is saved.
+  // Tap an animal, tracks, a pair of eyes, the howl or the gate for the details in the caption.
   // You get here from the trail through the hedge on the village's west side. The scene is one tall picture (it scrolls)
   // with a trail winding down through four open glades, each with room for a crowd of animals:
   // 1 a mossy glade with a hollow log, a ring of stumps and a fairy ring; 2 a pond with a stream and a
@@ -6600,8 +6600,6 @@
     //  · A fic you are reading (a WIP you have started) is an animal in a glade. It is awake and close to the trail when the
     //    fic is lively (updated lately, or you read it in the last three days), and curled up asleep, off in the glade's far
     //    edge, when it has gone quiet.
-    //  · A finished fic settles into a den (a hollow, a burrow, a gap under the boulder). Your favourites (the finished fics
-    //    you have logged the most reading for) look out of their dens; the rest are only tracks leading to one.
     //  · The crowd is capped: what does not fit is a pair of eyes in the dark, or the howl far off.
     //  · An abandoned fic's animal has left: its tracks run down a quiet side path to the graveyard gate.
     // The species comes from a hash of the work id, so a fic keeps the same animal forever.
@@ -6791,7 +6789,7 @@
         sv("circle", { cx: 11.2, cy: -19.8, r: 0.8, fill: "#111" }, g);
       }
     };
-    // head centre (hx, hy) is where a peeking animal's face goes; eye is its glow in the dark; print is the kind of track it leaves
+    // eye is the glow of its eyes in the dark; print is the kind of track it leaves (hx, hy: head centre, not used for now)
     const META = {
       fox: { hx: 13, hy: -15, size: 1, eye: "#ffd27a", print: "paw" },
       rabbit: { hx: 9, hy: -12, size: 1, eye: "#ff9aa8", print: "tiny" },
@@ -6811,7 +6809,7 @@
     const SPECIES = Object.keys(ANIMALS);
 
     // ── sort every tracked fic into its place ──
-    const caps = { active: 12, den: 8, eyes: 14, tracks: 22, gone: 6 };
+    const caps = { active: 12, eyes: 14, gone: 6 };
     const everyone = (() => {
       let all = [];
       try { all = getTracked() || []; } catch (e) { all = []; }
@@ -6824,20 +6822,32 @@
         const upd = agoDays(f.lastUpdate), readAgo = agoDays(li.last), avg = Number(f.avgUpdateDays) || 0;
         // quiet: the fic has not updated for much longer than it usually does, and you have not read it in the last few days
         const asleep = state === "wip" && upd != null && upd > Math.max(21, avg * 2.5) && !(readAgo != null && readAgo <= 3);
-        const species = SPECIES[Math.floor(rnd("sp" + id) * SPECIES.length)];
-        return { f, id, state, read, asleep, upd, readAgo, species, logged: li.n, words: Number(f.words) || 0 };
-      });
+        return { f, id, state, read, asleep, upd, readAgo, species: null, logged: li.n, words: Number(f.words) || 0 };
+      }).filter(it => it.state !== "done");                           // finished fics are left out of the woods for now
     })();
     const recency = it => Math.min(it.readAgo == null ? 9999 : it.readAgo, it.upd == null ? 9999 : it.upd);
     const wips = everyone.filter(i => i.state === "wip").sort((a, b) => (a.asleep - b.asleep) || (recency(a) - recency(b)) || titleOf(a.f).localeCompare(titleOf(b.f)));
-    const dones = everyone.filter(i => i.state === "done").sort((a, b) => (b.logged - a.logged) || (b.words - a.words) || titleOf(a.f).localeCompare(titleOf(b.f)));
     const gones = everyone.filter(i => i.state === "gone").sort((a, b) => ((a.upd == null ? 9999 : a.upd) - (b.upd == null ? 9999 : b.upd)) || titleOf(a.f).localeCompare(titleOf(b.f)));
     const shown = wips.slice(0, caps.active);
     const eyesList = wips.slice(caps.active, caps.active + caps.eyes);
-    const favs = dones.slice(0, caps.den);
-    const trackList = dones.slice(caps.den, caps.den + caps.tracks);
     const goneShown = gones.slice(0, caps.gone);
-    let howl = Math.max(0, wips.length - caps.active - caps.eyes) + Math.max(0, dones.length - caps.den - caps.tracks);
+    // Species: each fic has a preferred animal from a hash of its work id, but the kinds are dealt out so the ones you can see repeat
+    // as little as possible: the animals in the glades first, then the eyes, then the leaving prints, then everything else. A kind
+    // only turns up twice once all of them are in use. Within each group the order is by id hash, so a pick only changes when a fic
+    // moves between groups or fics are added or removed.
+    {
+      const used = {}; SPECIES.forEach(k => { used[k] = 0; });
+      const byHash = (a, b) => (gyHash(a.id) - gyHash(b.id)) || a.id.localeCompare(b.id);
+      [wips.slice(0, caps.active), wips.slice(caps.active, caps.active + caps.eyes), goneShown, wips.slice(caps.active + caps.eyes).concat(gones.slice(caps.gone))].forEach(group => {
+        group.slice().sort(byHash).forEach(it => {
+          const start = Math.floor(rnd("sp" + it.id) * SPECIES.length);
+          let best = null;
+          for (let k = 0; k < SPECIES.length; k++) { const sp = SPECIES[(start + k) % SPECIES.length]; if (best == null || used[sp] < used[best]) best = sp; }
+          it.species = best; used[best]++;
+        });
+      });
+    }
+    let howl = Math.max(0, wips.length - caps.active - caps.eyes);
 
     const targets = [];                                                   // everything you can tap: { kind, it, x, y, hit, ring, ... }
     const dist = (pts, x, y) => pts.reduce((m, p) => Math.min(m, Math.hypot(p[0] - x, p[1] - y)), 1e9);
@@ -6896,40 +6906,6 @@
       an.node = inner;
     }));
 
-    // dens: the places a finished fic can settle (opening centre and size, the scale a peeking animal gets, and the prop's draw order)
-    const DENS = [
-      { x: 40.3, y: 378.6, rx: 7, ry: 12, s: 0.8, py: 390 },
-      { x: 262, y: 922, rx: 12, ry: 30, s: 1.1, py: 960 },
-      ...[[64, 984, 1], [102, 1014, 0.85], [46, 1040, 0.95], [140, 1052, 0.7]].map(([mx, my, s]) => ({ x: mx, y: my - 4 * s, rx: 7 * s, ry: 5.2 * s, s: 0.7 * s, py: my })),
-      { x: 214, y: 1281, rx: 10, ry: 7, s: 0.8, py: 1288 },
-      { x: 36, y: 1309, rx: 5, ry: 8, s: 0.6, py: 1318 }
-    ];
-    const peekers = [];
-    {
-      const free = DENS.map((d, i) => i);
-      favs.forEach((it, k) => {
-        let best = -1, bs = 2;
-        free.forEach(di => { const s = rnd("dn" + it.id + di); if (s < bs) { bs = s; best = di; } });
-        if (best < 0) return;
-        free.splice(free.indexOf(best), 1);
-        const den = DENS[best], m = META[it.species], fl = rnd("fl" + it.id) < 0.5 ? -1 : 1, s = den.s * m.size, cid = "wd-dc" + best;
-        const cp = sv("clipPath", { id: cid }, defs);
-        sv("ellipse", { cx: den.x, cy: den.y, rx: den.rx, ry: den.ry }, cp);
-        thing(den.py + 0.01, g => {
-          const cg = sv("g", { "clip-path": `url(#${cid})` }, g);
-          const body = sv("g", {}, cg);
-          const a = sv("g", { transform: `translate(${(den.x - m.hx * s * fl).toFixed(1)} ${(den.y - m.hy * s).toFixed(1)}) scale(${(fl * s).toFixed(2)} ${s.toFixed(2)})` }, body);
-          ANIMALS[it.species](a);
-          anim(body, `animation:wdBreathe ${(3.6 + rnd("br" + it.id) * 1.6).toFixed(1)}s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;`);
-          const eyes = sv("g", { opacity: 0 }, cg);
-          [-1, 1].forEach(sd => sv("circle", { cx: (den.x + sd * Math.max(1.6, den.rx * 0.34)).toFixed(1), cy: den.y.toFixed(1), r: Math.max(0.9, 1.15 * Math.min(1, s * 1.2)).toFixed(2), fill: m.eye }, eyes));
-          peekers.push({ body, eyes });
-        });
-        targets.push({ kind: "den", it, x: den.x, y: den.y, hit: Math.max(12, den.rx + 5), hitDy: 0, ring: { cx: den.x, cy: den.y, rx: den.rx + 4, ry: Math.max(den.ry * 0.55, 6) + 2 }, tagTop: Math.max(130, den.y - den.ry - 34) });
-      });
-    }
-    const peekState = () => peekers.forEach(p => { const night = TIMES[tI].name === "night"; p.body.setAttribute("opacity", night ? 0 : 1); p.eyes.setAttribute("opacity", night ? 1 : 0); });
-
     // prints in the soft ground, drawn flat under everything (a dark dent with a pale rim)
     const tracksG = sv("g", { "pointer-events": "none" }, svg);
     const printAt = (x, y, ang, kind, op) => {
@@ -6948,27 +6924,6 @@
         }
       });
     };
-    // settled fics that do not look out of a den: a short line of prints ending at one
-    let trackless = 0;
-    trackList.forEach(it => {
-      const den = DENS[Math.floor(rnd("td" + it.id) * DENS.length)];
-      let A = null;
-      for (let t = 0; t < 16 && !A; t++) {
-        const ang = rnd("ta" + it.id + t) * Math.PI * 2, len = 34 + rnd("tl" + it.id + t) * 12;
-        const x = den.x + Math.cos(ang) * len, y = den.y + Math.sin(ang) * len * 0.7;
-        if (standOk(x, y) && y > 150 && y < H - 30) A = [x, y];
-      }
-      if (!A) { trackless++; return; }
-      const ang = Math.atan2(den.y - A[1], den.x - A[0]), nx = -Math.sin(ang), ny = Math.cos(ang), kind = META[it.species].print;
-      for (let k = 0; k < 4; k++) {
-        const f = k / 4.4, sd = k % 2 ? 2.2 : -2.2;
-        printAt(A[0] + (den.x - A[0]) * f + nx * sd, A[1] + (den.y - A[1]) * f + ny * sd, ang, kind, 1);
-      }
-      const mx = A[0] + (den.x - A[0]) * 0.38, my = A[1] + (den.y - A[1]) * 0.38;
-      targets.push({ kind: "track", it, x: mx, y: my, hit: 14, hitDy: 0, ring: { cx: mx, cy: my, rx: 15, ry: 7 } });
-    });
-    howl += trackless;
-
     // eyes in the dark: fics that do not fit in the glades are watching from the bushes at the edges of the clearings
     const eyeFics = eyesList.concat(toEyes);
     eyeFics.forEach(it => {
@@ -7025,7 +6980,6 @@
       [[14, -20, 5], [18, -24, 8]].forEach(([dx, dy, r], i) => anim(sv("path", { d: `M${wx + dx} ${wy + dy} q${r * 0.7} ${-r * 0.5} ${r * 0.9} ${-r * 1.4}`, stroke: "#cfe0e6", "stroke-width": 0.9, fill: "none", "stroke-linecap": "round" }, wg), `animation:wdHowl 5s ease-out ${i * 0.5}s infinite;`));
       targets.push({ kind: "howl", x: wx + 6, y: wy - 8, hit: 15, hitDy: 0, ring: { cx: wx + 6, cy: wy + 2, rx: 14, ry: 4 }, tagTop: wy + 8 });
     }
-    const settledN = favs.length + trackList.length - trackless;
 
     // tapping: a soft ring and a small name tag at the thing, the details in the caption
     let picked = null;
@@ -7036,11 +6990,8 @@
       const posted = parseInt(((f.chaptersLabel || "").split("/")[0]) || "", 10) || 0;
       const l1 = [], l2 = [];
       if (f.author) l1.push(f.author);
-      if (it.state === "done") l1.push(total ? `finished, ${plural(total, "chapter", "chapters")}` : "finished");
-      else l1.push(total ? `chapter ${it.read} of ${total} (${Math.min(100, Math.round(it.read / total * 100))}%)` : `chapter ${it.read}`);
+      l1.push(total ? `chapter ${it.read} of ${total} (${Math.min(100, Math.round(it.read / total * 100))}%)` : `chapter ${it.read}`);
       if (t.kind === "animal") l2.push(it.asleep ? `asleep, quiet for ${it.upd == null ? "a while" : it.upd + "d"}` : "awake and about");
-      else if (t.kind === "den") l2.push("settled into a den");
-      else if (t.kind === "track") l2.push("settled in: only tracks left");
       else if (t.kind === "eyes") l2.push(it.asleep ? "dozing out in the dark" : "watching from the dark");
       else if (t.kind === "gone") l2.push("left the woods, down the path to the graveyard");
       if (f.words) l2.push(`${fmtWords(f.words)} words`);
@@ -7063,7 +7014,7 @@
       if (!picked) {
         const any = everyone.some(i => i.state !== "new");
         caption.appendChild(el("div", "", TIMES[tI].say + (any ? "" : " Nobody lives here yet: an animal turns up for each fic you start reading.")));
-        if (any) caption.appendChild(el("div", sm, "Tap an animal, a den, a set of tracks or a pair of eyes."));
+        if (any) caption.appendChild(el("div", sm, "Tap an animal, a pair of eyes or a set of tracks."));
         return;
       }
       if (picked.kind === "gate") {
@@ -7159,11 +7110,9 @@
       tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
       timeBtn.textContent = t.label;
       eyesG.setAttribute("opacity", { night: 1, dusk: 0.75, dawn: 0.6, day: 0.3 }[t.name]);
-      peekState();
       const bits = [];
       if (awakeN) bits.push(awakeN + " awake");
       if (asleepN) bits.push(asleepN + " asleep");
-      if (settledN) bits.push(settledN + " settled");
       if (gones.length) bits.push(gones.length + " gone");
       sub.textContent = "behind Hollowbrook · " + t.name + (bits.length ? " · " + bits.join(" · ") : "");
       renderCaption();
