@@ -5547,6 +5547,7 @@
   const openBellTower = (...args) => world.openBellTower(...args);
   const openHawkins = (...args) => world.openHawkins(...args);
   const openGraveyardGrounds = (...args) => world.openGraveyardGrounds(...args);
+  const openWoods = (...args) => world.openWoods(...args);
 
   // ── 🏘️ HOLLOWBROOK ──
   // The village outside the graveyard grounds. You get here by tapping the iron gate in the grounds and
@@ -5558,6 +5559,7 @@
   // Tap the chapel door (or its big window, or the chapel pill) to go inside: see chapel.js.
   // Tap the bell tower behind the chapel (or the bell tower pill) to walk up to it: see belltower.js.
   // Tap the bus stop shelter (or the bus pill) and board to ride to Hawkins, Indiana: see hawkins.js.
+  // Tap the trail through the hedge, or the Woods signpost (or the woods pill), to walk into the woods: see woods.js.
   // Nothing in here saves anything except that one time-of-day value.
   function openHollowbrook() {
     const old = document.getElementById("ao3-hollowbrook");
@@ -5979,6 +5981,11 @@
       hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", "Walk up to the bell tower");
       hit.addEventListener("click", () => { close(); openBellTower(); });
     }
+    [[0, 386, 50, 48], [84, 342, 54, 32]].forEach(([hx, hy, hw, hh]) => {                        // tap the trail through the hedge, or the Woods signpost, to walk into the woods
+      const hit = sv("rect", { x: hx, y: hy, width: hw, height: hh, fill: "transparent" }, svg);
+      hit.style.cursor = "pointer"; hit.setAttribute("role", "button"); hit.setAttribute("aria-label", "Walk into the woods");
+      hit.addEventListener("click", () => { close(); openWoods(); });
+    });
     // the bus stop (the little shelter at the end of the Hawkins road): "catch the bus?" takes you to Hawkins (hawkins.js)
     const askBus = () => {
       if (document.getElementById("ao3-bus-ask")) return;
@@ -6032,6 +6039,7 @@
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u26EA chapel", "Step inside the chapel", () => { close(); openChapel(); });
     pill("\u{1F514} bell tower", "Walk up to the bell tower", () => { close(); openBellTower(); });
+    pill("\u{1F332} woods", "Walk into the woods", () => { close(); openWoods(); });
     pill("\u{1F68C} bus", "Catch the bus to Hawkins", askBus);
     pill("\u{1FAA6} grounds", "Back to the graveyard grounds", () => { close(); openGraveyardGrounds(); });
     applyTime();
@@ -6039,6 +6047,758 @@
   }
 
   return { openHollowbrook };
+};
+
+// ════════ woods.js ════════
+// woods.js — 🌲 the woods behind Hollowbrook (openWoods).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["woods"] = function (ctx) {
+  'use strict';
+  const { gyHash } = ctx.shared;
+  const { getTracked, isWip, readChapterFor, fmtWords, daysSince, wordsToReadMinutes, formatReadTime } = ctx.core || {};
+  const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
+  const world = ctx.world;
+  const openHollowbrook = (...args) => world.openHollowbrook(...args);
+
+  // ── 🌲 THE WOODS ──
+  // One animal lives here for every fic you are reading (a WIP you have started): tap one for the title and some stats.
+  // Nothing is saved. Nothing else in here is tappable except the pills.
+  // You get here from the trail through the hedge on the village's west side. The scene is one tall picture (it scrolls)
+  // with a trail winding down through four open glades, each with room for a crowd of animals later (one per fic
+  // being read): 1 a mossy glade with a hollow log, a ring of stumps and a fairy ring; 2 a pond with a stream and a
+  // plank bridge; 3 a hollow oak with burrow mounds; 4 a wide meadow with a boulder, a lantern and tall grass.
+  // Trees crowd the edges and the belts between glades, and thin out toward the bottom, where the deep woods begin.
+  // Time of day and weather are the shared live ones (see lib/hawkins-kit.js), the same as in the village.
+  function openWoods() {
+    const old = document.getElementById("ao3-woods");
+    if (old) old.remove();
+    if (!document.getElementById("ao3-wd-css")) {
+      const st = document.createElement("style");
+      st.id = "ao3-wd-css";
+      st.textContent = `
+        @keyframes wdFlicker{0%,100%{opacity:.8}30%{opacity:1}60%{opacity:.62}}
+        @keyframes wdFly{0%,100%{opacity:.1;transform:translate(0,0)}25%{opacity:1;transform:translate(9px,-8px)}50%{opacity:.3;transform:translate(-6px,-16px)}75%{opacity:1;transform:translate(8px,-6px)}}
+        @keyframes wdMist{0%,100%{opacity:.07;transform:translateX(-10px)}50%{opacity:.2;transform:translateX(10px)}}
+        @keyframes wdRipple{0%{opacity:.5;transform:scale(.3)}100%{opacity:0;transform:scale(1.5)}}
+        @keyframes wdBreathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.02,0.965)}}
+        @keyframes wdGlint{0%,100%{opacity:.25}50%{opacity:.6}}
+        @media (prefers-reduced-motion: reduce){.wd-anim{animation:none !important}}
+      `;
+      (document.head || document.documentElement).appendChild(st);
+    }
+    const el = (tag, css, text) => {
+      const e = document.createElement(tag);
+      if (css) e.style.cssText = css;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const NS = "http://www.w3.org/2000/svg";
+    const sv = (tag, attrs, parent) => {
+      const e = document.createElementNS(NS, tag);
+      Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+      if (parent) parent.appendChild(e);
+      return e;
+    };
+    const anim = (node, css) => { node.setAttribute("class", "wd-anim"); node.style.cssText += css; return node; };
+    const rnd = seed => { const x = Math.sin(gyHash(String(seed)) * 12.9898) * 43758.5453; return x - Math.floor(x); };
+    const pick = (arr, seed) => arr[Math.floor(rnd(seed) * arr.length)];
+
+    let tI = hkTimeGet(), wxI = hkWxGet();
+
+    // ── shell (same look as the village) ──
+    const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000002;");
+    back.id = "ao3-woods";
+    const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.6);border:1px solid rgba(160,210,170,0.18);");
+    back.appendChild(box);
+    const topbar = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(160,210,170,0.18);background:rgba(6,14,12,0.55);z-index:3;");
+    const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.05em;line-height:1.2;text-transform:uppercase;color:#d3ecd9;", "\u{1F332} The Woods"));
+    const sub = el("div", "font-size:10px;letter-spacing:0.04em;color:rgba(211,236,217,0.6);", "");
+    ttl.appendChild(sub);
+    const xBtn = el("button", "background:none;border:none;color:rgba(211,236,217,0.7);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;", "✕");
+    xBtn.type = "button"; xBtn.setAttribute("aria-label", "Close");
+    topbar.appendChild(ttl); topbar.appendChild(xBtn);
+    box.appendChild(topbar);
+
+    const tools = el("div", "flex:0 0 auto;display:flex;gap:6px;padding:7px 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;border-bottom:1px solid rgba(160,210,170,0.12);background:rgba(6,14,12,0.4);z-index:3;");
+    const pill = (label, title, fn) => {
+      const b = el("button", "flex:0 0 auto;border:1px solid rgba(160,210,170,0.3);background:rgba(255,255,255,0.06);color:#dcf0e0;border-radius:999px;padding:5px 11px;font:500 12px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", label);
+      b.type = "button"; b.title = title; b.onclick = fn; tools.appendChild(b); return b;
+    };
+    box.appendChild(tools);
+    const field = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;");
+    box.appendChild(field);
+    const caption = el("div", "flex:0 0 auto;padding:9px 14px;text-align:center;border-top:1px solid rgba(160,210,170,0.15);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;color:rgba(222,240,226,0.85);background:rgba(6,14,12,0.45);min-height:1.4em;");
+    box.appendChild(caption);
+
+    const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); close(); } };
+    const close = () => { back.remove(); document.removeEventListener("keydown", onKey, true); };
+    xBtn.onclick = close;
+    back.addEventListener("click", e => { if (e.target === back) close(); });
+    document.addEventListener("keydown", onKey, true);
+
+    // ── the picture ──
+    const W = 360, H = 1440;
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const radial = (id, col, op) => {
+      const g = sv("radialGradient", { id }, defs);
+      sv("stop", { offset: "0%", "stop-color": col, "stop-opacity": op }, g);
+      sv("stop", { offset: "100%", "stop-color": col, "stop-opacity": "0" }, g);
+    };
+    radial("wd-glow", "#ffd98a", "0.75");
+    radial("wd-fly", "#e8ff9a", "0.9");
+    radial("wd-pool", "#bcd4ff", "0.55");
+    radial("wd-floor", "#35553f", "0.85");
+    const lin = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, a]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": a }, g));
+    };
+    lin("wd-ground", [["0%", "#1a2b24", 1], ["50%", "#17261f", 1], ["100%", "#0f1a17", 1]]);
+    lin("wd-ray", [["0%", "#fff1b8", 0.5], ["100%", "#fff1b8", 0]]);
+    lin("wd-water", [["0%", "#1d4a52", 1], ["100%", "#12303a", 1]]);
+    lin("wd-fade", [["0%", "#060d0c", 0], ["100%", "#060d0c", 0.95]]);
+    lin("wd-top", [["0%", "#050c0b", 0.9], ["100%", "#050c0b", 0]]);
+
+    // ── layout: the trail, the stream and the four glades ──
+    const catmull = pts => {
+      const out = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+        for (let k = 0; k < 12; k++) {
+          const t = k / 12, t2 = t * t, t3 = t2 * t;
+          const f = j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3);
+          out.push([f(0), f(1)]);
+        }
+      }
+      out.push(pts[pts.length - 1]);
+      return out;
+    };
+    const lineD = pts => pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const TRAIL = catmull([[-12, 112], [40, 126], [100, 176], [172, 216], [214, 290], [172, 368], [122, 442], [150, 518], [196, 582], [150, 668], [112, 734], [150, 800], [208, 852], [172, 930], [112, 1004], [150, 1084], [208, 1152], [170, 1242], [132, 1322], [160, 1440]]);
+    const STREAM = catmull([[246, 664], [236, 716], [206, 764], [168, 792], [104, 812], [40, 820], [-12, 834]]);
+    const GLADES = [[180, 336, 146, 124], [180, 646, 150, 120], [180, 944, 150, 130], [180, 1236, 150, 132]];
+    const POND = [272, 630, 54, 32];
+    const near = (pts, x, y, d) => pts.some(p => Math.hypot(p[0] - x, p[1] - y) < d);
+    const inGlade = (x, y, pad) => GLADES.some(([cx, cy, rx, ry]) => ((x - cx) / (rx + pad)) ** 2 + ((y - cy) / (ry + pad)) ** 2 < 1);
+    const inPond = (x, y, pad) => ((x - POND[0]) / (POND[2] + pad)) ** 2 + ((y - POND[1]) / (POND[3] + pad)) ** 2 < 1;
+    const blocked = (x, y, pad) => near(TRAIL, x, y, 26 + pad) || near(STREAM, x, y, 14 + pad) || inPond(x, y, 12 + pad);
+
+    // where the plank bridge sits: found from the two curves (where they come closest), turned to follow the trail,
+    // and long enough to clear both banks. Worked out here so the trail can stop short of it on each side.
+    const BR = (() => {
+      let best = null;
+      for (let i = 2; i < TRAIL.length - 2; i++) for (let j = 2; j < STREAM.length - 2; j++) {
+        const d = Math.hypot(TRAIL[i][0] - STREAM[j][0], TRAIL[i][1] - STREAM[j][1]);
+        if (!best || d < best.d) best = { d, i, j, x: (TRAIL[i][0] + STREAM[j][0]) / 2, y: (TRAIL[i][1] + STREAM[j][1]) / 2 };
+      }
+      const dir = (pts, k) => Math.atan2(pts[k + 1][1] - pts[k - 1][1], pts[k + 1][0] - pts[k - 1][0]);
+      const ta = dir(TRAIL, best.i), sa = dir(STREAM, best.j);
+      best.L = Math.max(64, Math.min(104, 30 / Math.max(Math.abs(Math.sin(ta - sa)), 0.4) + 26));
+      best.HW = 11;
+      best.deg = ta * 180 / Math.PI;
+      best.ta = ta;
+      return best;
+    })();
+    // the trail is cut at the outer edge of each stone footing, and its last stretch narrows to the footing's width (TAPER)
+    const BR_CUT = BR.L / 2 + 5, TAPER = 30;
+    const brAlong = (x, y) => (x - BR.x) * Math.cos(BR.ta) + (y - BR.y) * Math.sin(BR.ta);
+    const brAcross = (x, y) => -(x - BR.x) * Math.sin(BR.ta) + (y - BR.y) * Math.cos(BR.ta);
+    const TRAIL_PIECES = (() => {
+      let a = BR.i, b = BR.i;
+      while (a > 0 && brAlong(TRAIL[a][0], TRAIL[a][1]) > -BR_CUT - TAPER) a--;
+      while (b < TRAIL.length - 1 && brAlong(TRAIL[b][0], TRAIL[b][1]) < BR_CUT + TAPER) b++;
+      const cross = (p, q, target) => {                                   // the point on p→q where the way along the bridge hits target
+        const ap = brAlong(p[0], p[1]), aq = brAlong(q[0], q[1]), t = aq === ap ? 0 : (target - ap) / (aq - ap);
+        return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+      };
+      const before = TRAIL.slice(0, a + 1);
+      if (a < BR.i) before.push(cross(TRAIL[a], TRAIL[a + 1], -BR_CUT - TAPER));
+      const after = TRAIL.slice(b);
+      if (b > BR.i) after.unshift(cross(TRAIL[b - 1], TRAIL[b], BR_CUT + TAPER));
+      return [before, after];
+    })();
+    const underBridge = (x, y, pad) => Math.abs(brAlong(x, y)) < BR_CUT + pad && Math.abs(brAcross(x, y)) < 40;
+
+    const lits = [];                                    // everything that glows, drawn last
+    const things = [];                                  // trees and props, drawn back to front
+    const thing = (y, fn) => things.push({ y, fn });
+
+    // ── far treeline, ground, glade floors ──
+    const far = sv("g", {}, svg);
+    sv("path", { d: "M0 128 Q60 96 130 120 T250 108 T360 118 V160 H0 Z", fill: "#0c1c1b" }, far);
+    for (let i = 0; i < 24; i++) {
+      const x = -6 + i * 16 + rnd("fp" + i) * 8, h = 34 + rnd("fh" + i) * 34, b = 128;
+      sv("polygon", { points: `${x.toFixed(1)},${(b - h).toFixed(1)} ${(x - h * 0.17).toFixed(1)},${b} ${(x + h * 0.17).toFixed(1)},${b}`, fill: i % 3 ? "#0a1819" : "#0e2021" }, far);
+    }
+    sv("rect", { x: 0, y: 118, width: W, height: H - 118, fill: "url(#wd-ground)" }, svg);
+    GLADES.forEach(([cx, cy, rx, ry], i) => {
+      sv("ellipse", { cx, cy, rx: rx + 12, ry: ry + 10, fill: "url(#wd-floor)", opacity: 0.55 }, svg);
+      sv("ellipse", { cx, cy, rx: rx - 6, ry: ry - 8, fill: i % 2 ? "#243d2e" : "#28422f", opacity: 0.5 }, svg);
+    });
+    // moss and soft ground patches
+    for (let i = 0; i < 70; i++) {
+      const x = rnd("mx" + i) * W, y = 130 + rnd("my" + i) * (H - 150);
+      sv("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: (12 + rnd("mr" + i) * 22).toFixed(1), ry: (3.5 + rnd("ms" + i) * 5).toFixed(1), fill: pick(["#223a2c", "#1c3226", "#2c4630", "#2a3d29"], "mc" + i), opacity: 0.45 }, svg);
+    }
+
+    // ── the stream, the trail ──
+    sv("path", { d: lineD(STREAM), fill: "none", stroke: "#0c1a1a", "stroke-width": 24, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.5 }, svg);
+    sv("path", { d: lineD(STREAM), fill: "none", stroke: "#1f4c58", "stroke-width": 17, "stroke-linecap": "round", "stroke-linejoin": "round" }, svg);
+    sv("path", { d: lineD(STREAM), fill: "none", stroke: "#3b7d8a", "stroke-width": 5, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.4, "stroke-dasharray": "10 14" }, svg);
+    TRAIL_PIECES.forEach(pc => {                                  // two pieces: the trail stops at the bridge on each side
+      sv("path", { d: lineD(pc), fill: "none", stroke: "#0c1512", "stroke-width": 50, "stroke-linecap": "butt", "stroke-linejoin": "round", opacity: 0.35 }, svg);
+      sv("path", { d: lineD(pc), fill: "none", stroke: "#3a2d29", "stroke-width": 36, "stroke-linecap": "butt", "stroke-linejoin": "round" }, svg);
+      sv("path", { d: lineD(pc), fill: "none", stroke: "#54423a", "stroke-width": 22, "stroke-linecap": "butt", "stroke-linejoin": "round", opacity: 0.85 }, svg);
+    });
+    // the mouths: from where each piece stops, the dirt narrows and runs in under the stone footing
+    TRAIL_PIECES.forEach((pc, k) => {
+      const P = k ? pc[0] : pc[pc.length - 1], sd = k ? 1 : -1;
+      const C = [BR.x + Math.cos(BR.ta) * sd * (BR.L / 2 - 1), BR.y + Math.sin(BR.ta) * sd * (BR.L / 2 - 1)];
+      const ang = Math.atan2(C[1] - P[1], C[0] - P[0]), nx = -Math.sin(ang), ny = Math.cos(ang);
+      [[25, 15.5, "#0c1512", 0.35], [18, 14, "#3a2d29", 1], [11, 8, "#54423a", 0.85]].forEach(([w0, w1, fill, op]) => {
+        sv("polygon", { points: [[P[0] + nx * w0, P[1] + ny * w0], [C[0] + nx * w1, C[1] + ny * w1], [C[0] - nx * w1, C[1] - ny * w1], [P[0] - nx * w0, P[1] - ny * w0]].map(q => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" "), fill, opacity: op }, svg);
+      });
+    });
+    for (let i = 0; i < TRAIL.length; i += 2) {
+      const [x, y] = TRAIL[i];
+      if (underBridge(x, y, 2)) continue;
+      for (let k = 0; k < 3; k++) {
+        const sd = "tp" + i + "_" + k;
+        sv("ellipse", { cx: (x + (rnd(sd) - 0.5) * 30).toFixed(1), cy: (y + (rnd(sd + "y") - 0.5) * 12).toFixed(1), rx: (1.4 + rnd(sd + "w") * 2.2).toFixed(1), ry: (1 + rnd(sd + "h") * 1.4).toFixed(1), fill: pick(["#7a6a5e", "#6a5a50", "#8a7a6c", "#5a4a42"], sd + "c"), opacity: 0.6 }, svg);
+      }
+    }
+
+    // ── the pond (glade 2) ──
+    {
+      const [px, py, prx, pry] = POND;
+      sv("ellipse", { cx: px, cy: py + 3, rx: prx + 8, ry: pry + 6, fill: "#0b1614", opacity: 0.55 }, svg);
+      sv("ellipse", { cx: px, cy: py, rx: prx, ry: pry, fill: "url(#wd-water)" }, svg);
+      sv("ellipse", { cx: px - 6, cy: py - 4, rx: prx * 0.7, ry: pry * 0.6, fill: "#2a6572", opacity: 0.35 }, svg);
+      const sheen = sv("ellipse", { cx: px + 14, cy: py - 8, rx: 22, ry: 5, fill: "#dfeeff", opacity: 0.3 }, svg);
+      sheen.id = "wd-sheen";
+      anim(sheen, "animation:wdGlint 5s ease-in-out infinite;");
+      [[px - 14, py + 4, 0], [px + 22, py + 10, 1.8]].forEach(([rx0, ry0, dl], i) => {
+        anim(sv("ellipse", { cx: rx0, cy: ry0, rx: 18, ry: 5, fill: "none", stroke: "#a8d8e0", "stroke-width": 0.9 }, svg), `animation:wdRipple 4.5s ease-out ${dl}s infinite;transform-box:fill-box;transform-origin:center;`);
+      });
+      for (let i = 0; i < 16; i++) {                                                           // pebbles round the rim
+        const a = i / 16 * Math.PI * 2 + rnd("pb" + i) * 0.3;
+        sv("ellipse", { cx: (px + Math.cos(a) * (prx + 3)).toFixed(1), cy: (py + Math.sin(a) * (pry + 2)).toFixed(1), rx: (2.5 + rnd("pbw" + i) * 3).toFixed(1), ry: (1.8 + rnd("pbh" + i) * 1.8).toFixed(1), fill: pick(["#6f7a74", "#5a655f", "#838d86"], "pbc" + i), opacity: 0.9 }, svg);
+      }
+      [[px - 18, py - 6, 7], [px + 4, py + 12, 8], [px + 26, py - 2, 6], [px - 30, py + 10, 5]].forEach(([lx, ly, lr], i) => {    // lily pads
+        const g = sv("g", {}, svg);
+        sv("path", { d: `M${lx} ${ly} L${lx + lr} ${ly - lr * 0.15} A${lr} ${lr * 0.5} 0 1 1 ${lx + lr * 0.9} ${ly + lr * 0.18} Z`, fill: i % 2 ? "#3f8a55" : "#4d9a5a", opacity: 0.95 }, g);
+        if (i === 1 || i === 3) { sv("circle", { cx: lx - 1, cy: ly - 1.5, r: 2.4, fill: "#f6c8dc" }, g); sv("circle", { cx: lx - 1, cy: ly - 1.5, r: 0.9, fill: "#f6e27a" }, g); }
+      });
+      [[px + prx - 6, py + pry - 8], [px - prx + 8, py - 12], [px + 8, py - pry + 3]].forEach(([rx0, ry0], i) => {            // reeds and cattails
+        thing(ry0 + 4, g => {
+          for (let k = 0; k < 4; k++) {
+            const dx = (k - 1.5) * 3.6, h = 26 + rnd("rd" + i + k) * 14, lean = (rnd("rl" + i + k) - 0.5) * 8;
+            sv("path", { d: `M${rx0 + dx} ${ry0} q${lean / 2} ${-h / 2} ${lean} ${-h}`, stroke: "#4f8a5a", "stroke-width": 1.5, fill: "none", "stroke-linecap": "round" }, g);
+            if (k % 2 === 0) sv("rect", { x: rx0 + dx + lean - 1.5, y: ry0 - h - 6, width: 3, height: 9, rx: 1.5, fill: "#6b4a35" }, g);
+          }
+        });
+      });
+    }
+
+    // ── the plank bridge where the trail crosses the stream ──
+    // Found from the two curves (where they come closest), turned to follow the trail, and long enough to clear both banks.
+    // Seen from above: stone footings at each end, a narrower deck of planks with two beams under it, rails with posts, and a shadow on the water.
+    {
+      const best = BR, L = BR.L, HW = BR.HW, deg = BR.deg;          // position worked out above, with the trail
+      thing(best.y + 6, g => {
+        sv("rect", { x: best.x - L / 2 + 3, y: best.y - HW - 1, width: L, height: HW * 2 + 2, rx: 3, fill: "#04100f", opacity: 0.45, transform: `rotate(${deg.toFixed(1)} ${best.x.toFixed(1)} ${best.y.toFixed(1)}) translate(5 9)` }, g);   // shadow on the water
+        const b = sv("g", { transform: `translate(${best.x.toFixed(1)} ${best.y.toFixed(1)}) rotate(${deg.toFixed(1)})` }, g);
+        [-1, 1].forEach(sd => {                                                                // stone footings on the banks
+          sv("rect", { x: sd * (L / 2 - 1) - 6, y: -HW - 3, width: 12, height: HW * 2 + 6, rx: 3, fill: "#59625e" }, b);
+          sv("rect", { x: sd * (L / 2 - 1) - 6, y: -HW - 3, width: 12, height: 3, rx: 1.5, fill: "#7a847f", opacity: 0.8 }, b);
+          for (let k = 0; k < 3; k++) sv("path", { d: `M${sd * (L / 2 - 1) - 6} ${-HW + k * 8} h12`, stroke: "#3f4744", "stroke-width": 0.8 }, b);
+        });
+        [-HW + 2, HW - 2].forEach(y => sv("rect", { x: -L / 2 + 2, y: y - 1.8, width: L - 4, height: 3.6, fill: "#2e2018" }, b));   // the beams under the deck
+        const n = Math.round((L - 8) / 5.2), pw = (L - 8) / n;
+        for (let i = 0; i < n; i++) {                                                          // planks, across the way you walk
+          sv("rect", { x: -L / 2 + 4 + i * pw, y: -HW, width: pw - 0.9, height: HW * 2, rx: 0.6, fill: i % 3 === 0 ? "#86644a" : i % 3 === 1 ? "#765639" : "#6b4d35", stroke: "#3a281c", "stroke-width": 0.4 }, b);
+        }
+        [-HW - 1, HW + 1].forEach(y => {                                                       // the rails, with a post every so often
+          sv("rect", { x: -L / 2 + 3, y: y + (y > 0 ? 2.2 : 0.6), width: L - 6, height: 2, fill: "#000", opacity: 0.28 }, b);
+          sv("rect", { x: -L / 2 + 3, y: y - 1.2, width: L - 6, height: 2.4, rx: 1.2, fill: "#8a6a4e" }, b);
+          for (let k = 0; k <= 4; k++) {
+            const px = -L / 2 + 5 + k * (L - 10) / 4;
+            sv("rect", { x: px - 2, y: y - 2.2, width: 4, height: 4.4, rx: 1, fill: "#5a4030" }, b);
+            sv("rect", { x: px - 1.2, y: y - 1.4, width: 2.4, height: 2.4, rx: 0.8, fill: "#a2805f" }, b);
+          }
+        });
+      });
+    }
+
+    // ── tree kit ──
+    const GREENS = ["#12332e", "#163a30", "#0f2a26", "#183f33"];
+    const AUTUMN = ["#9a5a26", "#b4742e", "#8a4a2a", "#c08a38"];
+    const pine = (g, x, base, h, fill) => {
+      const w = h * 0.3;
+      sv("rect", { x: x - 2.2, y: base - 10, width: 4.4, height: 12, fill: "#0e0b0a" }, g);
+      for (let i = 0; i < 4; i++) {
+        const ay = base - h + i * h * 0.19, hw = w * (0.5 + 0.2 * i), by = ay + h * 0.36;
+        sv("polygon", { points: `${x},${ay.toFixed(1)} ${(x - hw).toFixed(1)},${by.toFixed(1)} ${(x + hw).toFixed(1)},${by.toFixed(1)}`, fill }, g);
+      }
+      sv("polygon", { points: `${x},${(base - h).toFixed(1)} ${x},${(base - h * 0.5).toFixed(1)} ${(x + w * 0.5).toFixed(1)},${(base - h * 0.5).toFixed(1)}`, fill: "#fff", opacity: 0.04 }, g);
+    };
+    const oak = (g, x, base, r, fill) => {
+      sv("path", { d: `M${x - 3.4} ${base} Q${x - 2} ${base - r * 0.7} ${x - 1.4} ${base - r * 1.15} H${x + 1.4} Q${x + 2} ${base - r * 0.7} ${x + 3.4} ${base} Z`, fill: "#241a17" }, g);
+      sv("ellipse", { cx: x, cy: base + 1, rx: r * 0.8, ry: 3, fill: "#000", opacity: 0.25 }, g);
+      sv("circle", { cx: x, cy: base - r * 1.25, r, fill }, g);
+      sv("circle", { cx: x - r * 0.62, cy: base - r * 0.95, r: r * 0.68, fill }, g);
+      sv("circle", { cx: x + r * 0.66, cy: base - r * 1.0, r: r * 0.62, fill }, g);
+      sv("circle", { cx: x - r * 0.25, cy: base - r * 1.55, r: r * 0.5, fill: "#fff", opacity: 0.06 }, g);
+    };
+    const birch = (g, x, base, h, fill) => {
+      sv("rect", { x: x - 2.4, y: base - h, width: 4.8, height: h, fill: "#cfd3cc" }, g);
+      for (let k = 0; k < 5; k++) sv("rect", { x: x - 2.4, y: base - h * (0.12 + k * 0.18), width: 4.8 * (0.4 + rnd("bk" + x + k) * 0.5), height: 1.6, fill: "#3c3c38" }, g);
+      sv("circle", { cx: x, cy: base - h - 6, r: h * 0.2, fill }, g);
+      sv("circle", { cx: x - h * 0.15, cy: base - h * 0.84, r: h * 0.15, fill }, g);
+      sv("circle", { cx: x + h * 0.16, cy: base - h * 0.88, r: h * 0.14, fill }, g);
+    };
+    const bush = (g, x, base, r, fill) => {
+      sv("ellipse", { cx: x, cy: base + 1, rx: r * 1.3, ry: 2.6, fill: "#000", opacity: 0.25 }, g);
+      sv("circle", { cx: x - r * 0.6, cy: base - r * 0.55, r: r * 0.75, fill }, g);
+      sv("circle", { cx: x + r * 0.6, cy: base - r * 0.5, r: r * 0.7, fill }, g);
+      sv("circle", { cx: x, cy: base - r * 0.9, r: r * 0.85, fill }, g);
+      sv("circle", { cx: x - r * 0.2, cy: base - r * 1.1, r: r * 0.45, fill: "#fff", opacity: 0.05 }, g);
+    };
+    // strict: keep the crown clear of the glades, the trail and the stream (used everywhere except the dense edge columns)
+    const addTree = (x, base, s, strict, cap) => {
+      const k = rnd("tk" + s), kind = k < 0.5 ? "pine" : k < 0.82 ? "oak" : "birch", warm = rnd("tw" + s) < 0.2;
+      let size = kind === "pine" ? 78 + rnd("th" + s) * 56 : kind === "oak" ? 17 + rnd("tr" + s) * 12 : 56 + rnd("th" + s) * 26;
+      if (cap) size = Math.min(size, cap);
+      const ext = kind === "pine" ? size : kind === "oak" ? size * 2.25 : size + 14, half = kind === "pine" ? size * 0.28 : kind === "oak" ? size * 1.5 : size * 0.35;
+      if (strict) for (const f of [0.1, 0.5, 0.9]) {
+        const cy = base - ext * f;
+        if (inGlade(x, cy, 4) || inGlade(x - half * 0.6, cy, 0) || inGlade(x + half * 0.6, cy, 0) || near(TRAIL, x, cy, 22 + half * 0.6) || near(STREAM, x, cy, 12 + half * 0.5) || inPond(x, cy, 14)) return;
+      }
+      thing(base, g => {
+        const grp = sv("g", {}, g);
+        if (kind === "pine") pine(grp, x, base, size, pick(GREENS, "tc" + s));
+        else if (kind === "oak") oak(grp, x, base, size, warm ? pick(AUTUMN, "ta" + s) : pick(GREENS, "tc" + s));
+        else birch(grp, x, base, size, warm ? pick(AUTUMN, "ta" + s) : "#3c7a4a");
+      });
+    };
+
+    // edge columns: close-packed, so the glades read as clearings (the top left stays open for the way in)
+    for (let y = 150, i = 0; y < H + 20; y += 30 + rnd("ey" + i) * 12, i++) {
+      if (y > 215) addTree(-6 + rnd("el" + i) * 26, y, "L" + i, false);
+      if (y > 215 && rnd("el2" + i) < 0.7) addTree(18 + rnd("el3" + i) * 14, y + 16, "L2" + i, false, 78);
+      addTree(340 + rnd("er" + i) * 26, y + 8, "R" + i, false);
+      if (rnd("er2" + i) < 0.7) addTree(326 + rnd("er3" + i) * 14, y + 22, "R2" + i, false, 78);
+    }
+    // the belts between the glades: trees where the crown clears the clearings, low bushes everywhere else
+    for (let i = 0; i < 420; i++) {
+      const x = 20 + rnd("bx" + i) * (W - 40), y = 150 + rnd("by" + i) * (H - 120);
+      if (x < 120 && y < 200) continue;
+      if (inGlade(x, y, 6) || blocked(x, y, 0)) continue;
+      addTree(x, y, "B" + i, true);
+    }
+    for (let i = 0; i < 90; i++) {
+      const x = 14 + rnd("sx" + i) * (W - 28), y = 150 + rnd("sy" + i) * (H - 170);
+      if ((x < 120 && y < 200) || inGlade(x, y, -8) || blocked(x, y, 0)) continue;
+      thing(y, g => bush(g, x, y, 7 + rnd("sr" + i) * 6, pick(["#16382e", "#1c4234", "#143027", "#244a30"], "sc" + i)));
+    }
+    // the deep woods at the bottom: darker and closer, but only at the sides so the last glade stays open
+    for (let i = 0; i < 14; i++) {
+      const x = i % 2 ? 4 + rnd("dx" + i) * 50 : 306 + rnd("dx" + i) * 50, y = 1380 + rnd("dy" + i) * 60;
+      thing(y, g => pine(g, x, y, 110 + rnd("dh" + i) * 40, "#0a211e"));
+    }
+    for (let i = 0; i < 8; i++) {                                                                 // across the bottom, low enough to leave the last glade open
+      const x = 70 + rnd("dz" + i) * 220, y = 1415 + rnd("dw" + i) * 22;
+      if (near(TRAIL, x, y, 34)) continue;
+      thing(y, g => pine(g, x, y, 58 + rnd("dv" + i) * 22, "#0a211e"));
+    }
+
+    // ── ground clutter: tufts, ferns, leaves, mushrooms, flowers ──
+    const BLOOM = ["#e9e4f5", "#d6c4f0", "#f6e27a", "#f4c2d0"];
+    for (let i = 0; i < 260; i++) {
+      const x = 8 + rnd("gx" + i) * (W - 16), y = 130 + rnd("gy" + i) * (H - 150);
+      if (near(TRAIL, x, y, 14) || near(STREAM, x, y, 10) || inPond(x, y, 6)) continue;
+      sv("path", { d: `M${x.toFixed(1)} ${y.toFixed(1)} l-2.2 -5 M${x.toFixed(1)} ${y.toFixed(1)} l0 -7 M${x.toFixed(1)} ${y.toFixed(1)} l2.2 -5`, stroke: pick(["#3f6c4c", "#4f7a5c", "#365f45"], "gc" + i), "stroke-width": 1.3, fill: "none", "stroke-linecap": "round", opacity: 0.7 }, svg);
+    }
+    for (let i = 0; i < 46; i++) {                                                                // ferns
+      const x = 10 + rnd("fx" + i) * (W - 20), y = 150 + rnd("fy" + i) * (H - 190);
+      if (near(TRAIL, x, y, 20) || near(STREAM, x, y, 14) || inPond(x, y, 10)) continue;
+      thing(y, g => {
+        for (let k = -3; k <= 3; k++) {
+          const a = k * 0.34, L = 12 + rnd("fl" + i + k) * 6;
+          sv("path", { d: `M${x} ${y} Q${(x + Math.sin(a) * L * 0.5).toFixed(1)} ${(y - L * 0.9).toFixed(1)} ${(x + Math.sin(a) * L * 1.1).toFixed(1)} ${(y - L * 0.55).toFixed(1)}`, stroke: "#4a8a5a", "stroke-width": 1.6, fill: "none", "stroke-linecap": "round", opacity: 0.85 }, g);
+        }
+      });
+    }
+    for (let i = 0; i < 120; i++) {                                                               // fallen leaves
+      const x = rnd("lx" + i) * W, y = 130 + rnd("ly" + i) * (H - 150);
+      if (near(STREAM, x, y, 8) || inPond(x, y, 4)) continue;
+      sv("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: 2.6, ry: 1.3, fill: pick(["#b4742e", "#9a5a26", "#c08a38", "#8a4a2a", "#6a7a30"], "lc" + i), opacity: 0.75, transform: `rotate(${Math.floor(rnd("lr" + i) * 180)} ${x.toFixed(1)} ${y.toFixed(1)})` }, svg);
+    }
+    for (let i = 0; i < 40; i++) {                                                                // wildflowers
+      const x = 8 + rnd("wx" + i) * (W - 16), y = 150 + rnd("wy" + i) * (H - 190);
+      if (near(TRAIL, x, y, 16) || near(STREAM, x, y, 10) || inPond(x, y, 6) || !inGlade(x, y, 0)) continue;
+      sv("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: (1 + rnd("wr" + i) * 0.7).toFixed(2), fill: pick(BLOOM, "wc" + i), opacity: 0.85 }, svg);
+    }
+    const toadstool = (g, x, y, s, cap) => {
+      sv("rect", { x: x - 1.3 * s, y: y - 5 * s, width: 2.6 * s, height: 5 * s, rx: 1, fill: "#e8dfcf" }, g);
+      sv("path", { d: `M${x - 5 * s} ${y - 4.6 * s} a${5 * s} ${4.4 * s} 0 0 1 ${10 * s} 0 Z`, fill: cap }, g);
+      if (cap === "#c4453a") [[-2, -7], [1.5, -8], [2.8, -6]].forEach(([dx, dy]) => sv("circle", { cx: x + dx * s, cy: y + dy * s * 0.9, r: 0.8 * s, fill: "#f6ead0" }, g));
+    };
+
+    // ── glade 1: a hollow log, a ring of stumps, a fairy ring ──
+    thing(390, g => {
+      const b = sv("g", { transform: "translate(98 372) rotate(-6)" }, g);
+      sv("ellipse", { cx: 0, cy: 14, rx: 66, ry: 5, fill: "#000", opacity: 0.3 }, b);
+      sv("rect", { x: -60, y: -14, width: 120, height: 28, rx: 13, fill: "#4a3326" }, b);
+      sv("path", { d: "M-56 -8 Q0 -14 56 -8 M-56 2 Q0 -3 56 2 M-54 10 Q0 6 54 10", stroke: "#3a281c", "stroke-width": 1.2, fill: "none", opacity: 0.8 }, b);
+      [[-34, -14, 22], [8, -14, 30], [40, -13, 16]].forEach(([mx, my, mw]) => sv("ellipse", { cx: mx, cy: my + 1, rx: mw / 2, ry: 4, fill: "#4d8a52" }, b));
+      sv("ellipse", { cx: -58, cy: 0, rx: 8, ry: 13.5, fill: "#0b0807" }, b);                      // the hollow end
+      sv("ellipse", { cx: -58, cy: 0, rx: 8, ry: 13.5, fill: "none", stroke: "#5a4232", "stroke-width": 1.4 }, b);
+      sv("ellipse", { cx: 58, cy: 0, rx: 7, ry: 13.5, fill: "#b98f62" }, b);
+      [4, 8].forEach(r => sv("ellipse", { cx: 58, cy: 0, rx: r * 0.5, ry: r * 1.4, fill: "none", stroke: "#8a6a46", "stroke-width": 0.8 }, b));
+      [[18, 8], [30, 4]].forEach(([sx, sy]) => { sv("path", { d: `M${sx} ${sy} a6 4 0 0 0 10 0 Z`, fill: "#d8c7a4" }, b); });          // shelf fungi
+    });
+    [[252, 372, 15, 14], [288, 396, 11, 10], [222, 408, 12, 9]].forEach(([sx, sy, srx, sh]) => thing(sy, g => {
+      sv("ellipse", { cx: sx, cy: sy + 2, rx: srx + 4, ry: 4, fill: "#000", opacity: 0.3 }, g);
+      sv("path", { d: `M${sx - srx} ${sy - sh} V${sy} q${srx} 6 ${srx * 2} 0 V${sy - sh} Z`, fill: "#4a3326" }, g);
+      sv("path", { d: `M${sx - srx - 3} ${sy + 1} q4 -6 6 -10 M${sx + srx + 3} ${sy + 1} q-4 -6 -6 -10`, stroke: "#4a3326", "stroke-width": 3, fill: "none", "stroke-linecap": "round" }, g);
+      sv("ellipse", { cx: sx, cy: sy - sh, rx: srx, ry: srx * 0.38, fill: "#b98f62" }, g);
+      [0.65, 0.35].forEach(f => sv("ellipse", { cx: sx, cy: sy - sh, rx: srx * f, ry: srx * 0.38 * f, fill: "none", stroke: "#8a6a46", "stroke-width": 0.8 }, g));
+      sv("ellipse", { cx: sx - srx * 0.5, cy: sy - sh - 1, rx: srx * 0.4, ry: 2, fill: "#4d8a52", opacity: 0.9 }, g);
+    }));
+    for (let i = 0; i < 8; i++) {                                                                 // fairy ring
+      const a = i / 8 * Math.PI * 2, x = 244 + Math.cos(a) * 28, y = 262 + Math.sin(a) * 10;
+      thing(y, g => toadstool(g, x, y, 0.9 + rnd("ts" + i) * 0.4, "#c4453a"));
+    }
+
+    // ── glade 3: the hollow oak and the burrow mounds ──
+    thing(960, g => {
+      const x = 262, base = 958;
+      sv("ellipse", { cx: x, cy: base + 2, rx: 46, ry: 8, fill: "#000", opacity: 0.35 }, g);
+      sv("path", { d: `M${x - 44} ${base + 2} Q${x - 24} ${base - 6} ${x - 22} ${base - 30} L${x - 20} ${base - 96} H${x + 20} L${x + 22} ${base - 30} Q${x + 24} ${base - 6} ${x + 44} ${base + 2} Z`, fill: "#3a2a22" }, g);
+      sv("path", { d: `M${x - 14} ${base - 4} V${base - 48} Q${x - 14} ${base - 72} ${x} ${base - 72} Q${x + 14} ${base - 72} ${x + 14} ${base - 48} V${base - 4} Z`, fill: "#0b0807" }, g);   // the hollow
+      sv("path", { d: `M${x - 14} ${base - 4} V${base - 48} Q${x - 14} ${base - 72} ${x} ${base - 72} Q${x + 14} ${base - 72} ${x + 14} ${base - 48} V${base - 4}`, fill: "none", stroke: "#4a382c", "stroke-width": 2 }, g);
+      sv("path", { d: `M${x - 30} ${base - 20} q4 -20 2 -44 M${x + 30} ${base - 22} q-4 -20 -2 -42 M${x - 18} ${base - 80} v-14 M${x + 17} ${base - 84} v-10`, stroke: "#2a1d17", "stroke-width": 1.4, fill: "none" }, g);
+      [[-4, -92, 44], [-40, -100, 30], [38, -104, 32], [-8, -126, 34], [-52, -126, 24], [50, -128, 26]].forEach(([dx, dy, r], i) => sv("circle", { cx: x + dx, cy: base + dy, r, fill: i % 3 === 1 ? "#1d4535" : "#163a30" }, g));
+      sv("circle", { cx: x - 12, cy: base - 134, r: 22, fill: "#fff", opacity: 0.05 }, g);
+      [[-30, -128], [20, -140], [44, -112], [-44, -98]].forEach(([dx, dy]) => sv("circle", { cx: x + dx, cy: base + dy, r: 5, fill: "#b4742e", opacity: 0.85 }, g));
+      lits.push(l => sv("ellipse", { cx: x, cy: base - 30, rx: 12, ry: 24, fill: "url(#wd-glow)", opacity: 0.18 }, l));
+    });
+    [[64, 984, 1], [102, 1014, 0.85], [46, 1040, 0.95], [140, 1052, 0.7]].forEach(([mx, my, s], i) => thing(my, g => {
+      sv("ellipse", { cx: mx, cy: my + 2, rx: 24 * s, ry: 6 * s, fill: "#000", opacity: 0.3 }, g);
+      sv("path", { d: `M${mx - 24 * s} ${my} Q${mx - 14 * s} ${my - 22 * s} ${mx} ${my - 22 * s} Q${mx + 14 * s} ${my - 22 * s} ${mx + 24 * s} ${my} Z`, fill: "#4a3a2e" }, g);
+      sv("path", { d: `M${mx - 24 * s} ${my} Q${mx - 14 * s} ${my - 22 * s} ${mx} ${my - 22 * s}`, fill: "none", stroke: "#5f4c3c", "stroke-width": 1.4 }, g);
+      sv("path", { d: `M${mx - 8 * s} ${my} a8 ${9 * s} 0 0 1 ${16 * s} 0 Z`, fill: "#0b0807" }, g);
+      sv("path", { d: `M${mx - 18 * s} ${my - 6 * s} l-3 -4 M${mx + 18 * s} ${my - 7 * s} l3 -4 M${mx - 4 * s} ${my - 22 * s} l-2 -5 M${mx + 5 * s} ${my - 21 * s} l3 -4`, stroke: "#4f7a5c", "stroke-width": 1.2, fill: "none", "stroke-linecap": "round" }, g);
+      for (let k = 0; k < 6; k++) sv("ellipse", { cx: (mx + (rnd("dm" + i + k) - 0.5) * 50 * s).toFixed(1), cy: (my + 3 + rnd("dn" + i + k) * 5).toFixed(1), rx: 2.4, ry: 1.2, fill: "#5a4838", opacity: 0.8 }, g);
+    }));
+    for (let i = 0; i < 6; i++) {                                                                 // a few mushrooms near the oak's roots
+      const x = 214 + rnd("om" + i) * 22, y = 962 + rnd("on" + i) * 12;
+      thing(y, g => toadstool(g, x, y, 0.8 + rnd("oz" + i) * 0.3, i % 2 ? "#c4453a" : "#d9b27a"));
+    }
+
+    // ── glade 4: a boulder, a log pile, tall grass and the lantern ──
+    thing(1288, g => {
+      const x = 240, y = 1286;
+      sv("ellipse", { cx: x, cy: y + 3, rx: 46, ry: 8, fill: "#000", opacity: 0.35 }, g);
+      sv("path", { d: `M${x - 42} ${y} Q${x - 46} ${y - 22} ${x - 22} ${y - 34} Q${x + 4} ${y - 44} ${x + 30} ${y - 30} Q${x + 48} ${y - 16} ${x + 44} ${y} Z`, fill: "#5a6360" }, g);
+      sv("path", { d: `M${x - 22} ${y - 34} Q${x + 4} ${y - 44} ${x + 30} ${y - 30} Q${x + 10} ${y - 34} ${x - 12} ${y - 24} Z`, fill: "#7a8582", opacity: 0.7 }, g);
+      sv("path", { d: `M${x - 40} ${y - 6} Q${x - 24} ${y - 16} ${x - 6} ${y - 10} Q${x - 16} ${y - 2} ${x - 36} ${y} Z`, fill: "#4d8a52", opacity: 0.9 }, g);
+      sv("path", { d: `M${x - 4} ${y - 38} Q${x + 12} ${y - 42} ${x + 22} ${y - 32} Q${x + 8} ${y - 31} ${x - 4} ${y - 38} Z`, fill: "#4d8a52", opacity: 0.85 }, g);
+      sv("path", { d: `M${x + 10} ${y} v-14 M${x + 26} ${y} l4 -16`, stroke: "#2a3330", "stroke-width": 1, fill: "none", opacity: 0.8 }, g);
+    });
+    thing(1318, g => {
+      const x = 74, y = 1316;
+      sv("ellipse", { cx: x, cy: y + 3, rx: 44, ry: 6, fill: "#000", opacity: 0.3 }, g);
+      [[-16, -6, 44], [14, -6, 40], [0, -20, 40]].forEach(([dx, dy, L]) => {
+        sv("rect", { x: x + dx - L / 2, y: y + dy - 8, width: L, height: 14, rx: 7, fill: "#4a3326" }, g);
+        sv("ellipse", { cx: x + dx + L / 2, cy: y + dy - 1, rx: 4.5, ry: 7, fill: "#b98f62" }, g);
+        sv("ellipse", { cx: x + dx + L / 2, cy: y + dy - 1, rx: 2, ry: 3.6, fill: "none", stroke: "#8a6a46", "stroke-width": 0.7 }, g);
+      });
+      sv("ellipse", { cx: x - 8, cy: y - 27, rx: 16, ry: 3, fill: "#4d8a52" }, g);
+    });
+    thing(1232, g => {                                                                            // the lantern post by the trail
+      const x = 214, y = 1230;
+      sv("ellipse", { cx: x, cy: y + 1, rx: 6, ry: 2, fill: "#000", opacity: 0.4 }, g);
+      sv("rect", { x: x - 1.4, y: y - 46, width: 2.8, height: 46, fill: "#2c2438" }, g);
+      sv("path", { d: `M${x} ${y - 46} q10 -2 12 6`, stroke: "#2c2438", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, g);
+      sv("rect", { x: x + 8.5, y: y - 40, width: 7, height: 9, rx: 1.6, fill: "#ffd98a" }, g);
+      lits.push(l => anim(sv("circle", { cx: x + 12, cy: y - 35, r: 34, fill: "url(#wd-glow)" }, l), "animation:wdFlicker 3.2s ease-in-out infinite;"));
+    });
+    [[70, 1180], [300, 1200], [118, 1260], [304, 1292], [150, 1150], [40, 1240], [262, 1190]].forEach(([gx, gy], i) => thing(gy, g => {    // tall grass
+      for (let k = 0; k < 9; k++) {
+        const dx = (k - 4) * 3.4, h = 24 + rnd("tg" + i + k) * 16, lean = (rnd("tl" + i + k) - 0.5) * 12;
+        sv("path", { d: `M${gx + dx} ${gy} q${lean / 2} ${-h / 2} ${lean} ${-h}`, stroke: k % 3 ? "#5a8a5c" : "#7a9a5a", "stroke-width": 1.5, fill: "none", "stroke-linecap": "round", opacity: 0.9 }, g);
+      }
+    }));
+
+    // ── the way in: a gap in the hedge, a signpost and a lantern, top left ──
+    const HEDGE = ["#1f3a34", "#27473e", "#1a312c"];
+    for (let yy = 60; yy <= 190; yy += 9) {
+      if (yy >= 96 && yy <= 140) continue;
+      const hx = 12 + (rnd("hx" + yy) - 0.5) * 6;
+      thing(yy + 10, g => {
+        sv("circle", { cx: hx.toFixed(1), cy: yy, r: (11 + rnd("hr" + yy) * 3).toFixed(1), fill: pick(HEDGE, "hc" + yy) }, g);
+        sv("circle", { cx: (hx + 9).toFixed(1), cy: yy + 3, r: 8, fill: pick(HEDGE, "hd" + yy) }, g);
+      });
+    }
+    thing(160, g => {
+      const x = 74, base = 160, top = base - 44, y0 = top + 2, h = 13, w = 58;
+      sv("ellipse", { cx: x, cy: base, rx: 6, ry: 1.8, fill: "#0a0714", opacity: 0.5 }, g);
+      sv("rect", { x: x - 1.6, y: top, width: 3.2, height: 44, fill: "#3b2a22" }, g);
+      sv("path", { d: `M${x + 3} ${y0} H${x - w + 9} L${x - w} ${y0 + h / 2} L${x - w + 9} ${y0 + h} H${x + 3} Z`, fill: "#6b4a35", stroke: "#3a281c", "stroke-width": 1 }, g);
+      const t = sv("text", { x: x - w / 2 + 3, y: y0 + 9.2, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 6.4, fill: "#f3e7c8" }, g);
+      t.textContent = "Hollowbrook";
+    });
+    thing(150, g => {
+      const x = 52, y = 150;
+      sv("rect", { x: x - 1.2, y: y - 30, width: 2.4, height: 30, fill: "#2c2438" }, g);
+      sv("rect", { x: x - 3.5, y: y - 38, width: 7, height: 9, rx: 1.6, fill: "#ffd98a" }, g);
+      lits.push(l => anim(sv("circle", { cx: x, cy: y - 34, r: 26, fill: "url(#wd-glow)" }, l), "animation:wdFlicker 2.8s ease-in-out infinite;"));
+    });
+
+    // ── the animals: one for every fic you are reading ──
+    // A tracked fic that is not finished, not abandoned and that you have started. Each one gets an animal (picked from the
+    // work id, so it is always the same one) standing in a glade; they are dealt out to the four glades in turn.
+    const fmtAgo = d => d == null ? "" : d <= 0 ? "updated today" : d === 1 ? "updated yesterday" : `updated ${d}d ago`;
+    const titleOf = f => f.title || `Work ${f.workId}`;
+    const reading = (() => {
+      let all = [];
+      try { all = getTracked() || []; } catch (e) { all = []; }
+      return all.filter(f => { try { return !f.finished && isWip(f); } catch (e) { return false; } }).map(f => {
+        let read = 0; try { read = Number(readChapterFor(f)) || 0; } catch (e) { read = 0; }
+        return { f, read: read || Number(f.currentChapter) || 0 };
+      }).filter(x => x.read > 0).sort((a, b) => titleOf(a.f).localeCompare(titleOf(b.f)));
+    })();
+    const ANIMALS = {
+      fox(g) {
+        sv("ellipse", { cx: -14, cy: -11, rx: 10, ry: 4.6, fill: "#d2702f", transform: "rotate(-28 -14 -11)" }, g);
+        sv("ellipse", { cx: -21, cy: -16, rx: 3.6, ry: 2.6, fill: "#f3e8d6", transform: "rotate(-28 -21 -16)" }, g);
+        [-7, -3, 4, 8].forEach(x => sv("rect", { x: x - 1.3, y: -8, width: 2.6, height: 8, rx: 1, fill: "#3a241a" }, g));
+        sv("ellipse", { cx: 0, cy: -10, rx: 12, ry: 6, fill: "#d2702f" }, g);
+        sv("ellipse", { cx: 2, cy: -7.5, rx: 8, ry: 2.8, fill: "#f1d9b8" }, g);
+        sv("polygon", { points: "9,-19 10,-27 14.5,-20", fill: "#b9571f" }, g);
+        sv("polygon", { points: "13,-19 16.5,-26 18,-19", fill: "#b9571f" }, g);
+        sv("circle", { cx: 13, cy: -15, r: 5.2, fill: "#d9792f" }, g);
+        sv("path", { d: "M16 -16.5 L23 -13 L16 -10.5 Z", fill: "#f3e8d6" }, g);
+        sv("circle", { cx: 23, cy: -13, r: 1.1, fill: "#2a1a14" }, g);
+        sv("circle", { cx: 14.5, cy: -16.4, r: 0.9, fill: "#1a120e" }, g);
+      },
+      rabbit(g) {
+        sv("circle", { cx: -9, cy: -8, r: 3.2, fill: "#f4efe8" }, g);
+        sv("ellipse", { cx: 0, cy: -7.5, rx: 9, ry: 6.5, fill: "#cbbfb2" }, g);
+        sv("ellipse", { cx: -3, cy: -7, rx: 5.5, ry: 5.5, fill: "#bdb0a2" }, g);
+        sv("rect", { x: 4, y: -2.6, width: 5, height: 2.6, rx: 1.2, fill: "#e8e0d6" }, g);
+        [[8, -21.5, -8], [12, -21, 12]].forEach(([x, y, r]) => {
+          sv("ellipse", { cx: x, cy: y, rx: 2, ry: 6.4, fill: "#cbbfb2", transform: `rotate(${r} ${x} ${y})` }, g);
+          sv("ellipse", { cx: x, cy: y + 0.5, rx: 0.9, ry: 4.6, fill: "#e9b4b4", transform: `rotate(${r} ${x} ${y})` }, g);
+        });
+        sv("circle", { cx: 9, cy: -12, r: 4.7, fill: "#d6cbbd" }, g);
+        sv("circle", { cx: 11, cy: -12.8, r: 0.9, fill: "#1a120e" }, g);
+        sv("circle", { cx: 13.6, cy: -11.2, r: 0.9, fill: "#d98c9a" }, g);
+      },
+      fawn(g) {
+        [-8, -5, 5, 8].forEach(x => { sv("rect", { x: x - 0.9, y: -10, width: 1.8, height: 10, fill: "#8a5a30" }, g); sv("rect", { x: x - 1, y: -1.4, width: 2, height: 1.4, fill: "#2a1a14" }, g); });
+        sv("ellipse", { cx: -11, cy: -17, rx: 1.8, ry: 3, fill: "#f3e8d6", transform: "rotate(-30 -11 -17)" }, g);
+        sv("ellipse", { cx: 0, cy: -14, rx: 11, ry: 5.5, fill: "#b8804a" }, g);
+        [[-5, -16], [0, -17], [5, -15.5], [-2, -12.5], [3, -12]].forEach(([x, y]) => sv("circle", { cx: x, cy: y, r: 0.8, fill: "#f3e8d6", opacity: 0.9 }, g));
+        sv("path", { d: "M6 -16 L12 -26 L15.5 -23.5 L10 -12 Z", fill: "#b8804a" }, g);
+        sv("ellipse", { cx: 15, cy: -25.5, rx: 4.4, ry: 3.2, fill: "#c18a52", transform: "rotate(15 15 -25.5)" }, g);
+        sv("ellipse", { cx: 12.2, cy: -29, rx: 1.3, ry: 3.2, fill: "#a9733f", transform: "rotate(-25 12.2 -29)" }, g);
+        sv("circle", { cx: 19, cy: -24.2, r: 1.1, fill: "#2a1a14" }, g);
+        sv("circle", { cx: 15.5, cy: -26.2, r: 0.8, fill: "#1a120e" }, g);
+      },
+      hedgehog(g) {
+        for (let k = 0; k <= 12; k++) {
+          const a = Math.PI * (1 + k / 12), c = Math.cos(a), si = Math.sin(a);
+          sv("path", { d: `M${(c * 8).toFixed(1)} ${(-6 + si * 5.5).toFixed(1)} L${(c * 14.5).toFixed(1)} ${(-6 + si * 11).toFixed(1)}`, stroke: k % 2 ? "#3a2c20" : "#4a382a", "stroke-width": 1.5, "stroke-linecap": "round" }, g);
+        }
+        sv("ellipse", { cx: 0, cy: -6.5, rx: 11, ry: 7, fill: "#5a4636" }, g);
+        sv("ellipse", { cx: 10.5, cy: -4.5, rx: 5.2, ry: 3.6, fill: "#d9b98f" }, g);
+        sv("circle", { cx: 15, cy: -4.8, r: 1.3, fill: "#2a1a14" }, g);
+        sv("circle", { cx: 12, cy: -6.2, r: 0.8, fill: "#1a120e" }, g);
+        [-4, 5].forEach(x => sv("ellipse", { cx: x, cy: -0.8, rx: 2.4, ry: 1.1, fill: "#c9a982" }, g));
+      },
+      owl(g) {
+        sv("ellipse", { cx: 0, cy: -11, rx: 8, ry: 11, fill: "#8c6b49" }, g);
+        sv("ellipse", { cx: 0, cy: -8.5, rx: 5, ry: 7.5, fill: "#dfc9a0" }, g);
+        [-5, -2, 1, 4].forEach((y, i) => sv("path", { d: `M-2.6 ${y - 4} q2.6 2 5.2 0`, stroke: "#b69a72", "stroke-width": 0.8, fill: "none" }, g));
+        sv("ellipse", { cx: -7, cy: -10, rx: 2.6, ry: 8, fill: "#6f5238", transform: "rotate(6 -7 -10)" }, g);
+        sv("ellipse", { cx: 7, cy: -10, rx: 2.6, ry: 8, fill: "#6f5238", transform: "rotate(-6 7 -10)" }, g);
+        sv("polygon", { points: "-6.5,-19 -5.5,-26 -2,-20.5", fill: "#6f5238" }, g);
+        sv("polygon", { points: "6.5,-19 5.5,-26 2,-20.5", fill: "#6f5238" }, g);
+        [-3.4, 3.4].forEach(x => { sv("circle", { cx: x, cy: -15.5, r: 3.5, fill: "#f3e2a0" }, g); sv("circle", { cx: x, cy: -15.5, r: 1.6, fill: "#1a120e" }, g); });
+        sv("polygon", { points: "0,-14.2 -1.4,-11.8 1.4,-11.8", fill: "#d99a3a" }, g);
+        [-3, 3].forEach(x => sv("ellipse", { cx: x, cy: -0.6, rx: 2.4, ry: 1, fill: "#d99a3a" }, g));
+      },
+      squirrel(g) {
+        sv("path", { d: "M-5 -6 C-21 -3 -20 -28 -9 -29 C-1 -29 -3 -20 -6 -17 Z", fill: "#b8693a" }, g);
+        sv("path", { d: "M-9 -27 C-15 -25 -16 -14 -12 -9", stroke: "#d6935a", "stroke-width": 1.3, fill: "none", "stroke-linecap": "round", opacity: 0.8 }, g);
+        sv("ellipse", { cx: 0, cy: -9, rx: 7, ry: 6.5, fill: "#a8622f" }, g);
+        sv("ellipse", { cx: 2.5, cy: -7.5, rx: 4, ry: 4.5, fill: "#e8cfa8" }, g);
+        sv("polygon", { points: "5,-18 5.5,-23 8.5,-18.5", fill: "#8a4f26" }, g);
+        sv("circle", { cx: 7.5, cy: -15, r: 4.2, fill: "#b8693a" }, g);
+        sv("circle", { cx: 9.5, cy: -15.6, r: 0.9, fill: "#1a120e" }, g);
+        sv("circle", { cx: 11.6, cy: -14.4, r: 0.9, fill: "#2a1a14" }, g);
+        sv("ellipse", { cx: 10.5, cy: -9, rx: 2.6, ry: 3, fill: "#8a5a2a" }, g);
+        sv("path", { d: "M8.4 -11.4 q2.1 -2 4.2 0 Z", fill: "#5f4020" }, g);
+        [-3, 3].forEach(x => sv("ellipse", { cx: x, cy: -0.8, rx: 2.8, ry: 1.2, fill: "#8a4f26" }, g));
+      }
+    };
+    const SPECIES = Object.keys(ANIMALS);
+    // where animals may stand: inside a glade, off the trail, the stream, the pond, the bridge and the props
+    const AVOID = [[98, 372, 72, 24], [252, 372, 22, 18], [288, 396, 18, 14], [222, 408, 18, 14], [244, 262, 40, 18], [BR.x, BR.y, 50, 50],
+      [262, 958, 56, 40], [64, 984, 30, 18], [102, 1014, 26, 16], [46, 1040, 28, 16], [140, 1052, 22, 14], [224, 964, 24, 12],
+      [240, 1286, 50, 30], [74, 1316, 48, 26], [214, 1230, 16, 12]];
+    const standOk = (x, y) => !AVOID.some(([ax, ay, arx, ary]) => ((x - ax) / arx) ** 2 + ((y - ay) / ary) ** 2 < 1) &&
+      !near(TRAIL, x, y, 30) && !near(STREAM, x, y, 22) && !inPond(x, y, 14);
+    const placed = [];
+    let unplaced = 0;
+    reading.forEach((it, idx) => {
+      const gl = GLADES[idx % 4], key = String(it.f.workId || titleOf(it.f));
+      let spot = null;
+      for (let pass = 0; pass < 2 && !spot; pass++) {
+        for (let t = 0; t < 160 && !spot; t++) {
+          const a = rnd("an" + key + pass + "a" + t) * Math.PI * 2, d = Math.sqrt(rnd("an" + key + pass + "d" + t));
+          const x = gl[0] + Math.cos(a) * gl[2] * 0.82 * d, y = gl[1] + Math.sin(a) * gl[3] * 0.78 * d;
+          if (standOk(x, y) && !placed.some(q => Math.hypot(q.x - x, (q.y - y) * 1.4) < (pass ? 24 : 38))) spot = { x, y };
+        }
+      }
+      if (!spot) { unplaced++; return; }
+      const sp = SPECIES[Math.floor(rnd("sp" + key) * SPECIES.length)];
+      placed.push(Object.assign({ sp, flip: rnd("fl" + key) < 0.5 ? -1 : 1, sc: 0.95 + rnd("sz" + key) * 0.2 }, spot, it));
+    });
+    placed.forEach(an => thing(an.y, g => {
+      const w = sv("g", { transform: `translate(${an.x.toFixed(1)} ${an.y.toFixed(1)})` }, g);
+      sv("ellipse", { cx: 0, cy: 0.5, rx: 13 * an.sc, ry: 3.4, fill: "#000", opacity: 0.35 }, w);
+      const inner = sv("g", {}, w);
+      const body = sv("g", { transform: `scale(${(an.flip * an.sc).toFixed(2)} ${an.sc.toFixed(2)})` }, inner);
+      ANIMALS[an.sp](body);
+      anim(inner, `animation:wdBreathe ${(3.2 + rnd("br" + an.f.workId) * 1.6).toFixed(1)}s ease-in-out ${(rnd("bd" + an.f.workId) * 3).toFixed(1)}s infinite;transform-box:fill-box;transform-origin:50% 100%;`);
+      an.node = inner;
+    }));
+    // tapping: a soft ring and a small name tag at the animal, the stats in the caption
+    let picked = null;
+    const selG = sv("g", { "pointer-events": "none" });
+    const statLines = an => {
+      const f = an.f, total = Number(f.totalChapters) || 0;
+      const posted = parseInt(((f.chaptersLabel || "").split("/")[0]) || "", 10) || 0;
+      const bits1 = [];
+      if (f.author) bits1.push(f.author);
+      bits1.push(total ? `chapter ${an.read} of ${total} (${Math.min(100, Math.round(an.read / total * 100))}%)` : `chapter ${an.read}`);
+      const bits2 = [];
+      if (f.words) bits2.push(`${fmtWords(f.words)} words`);
+      if (posted > an.read) {
+        if (f.words) { try { bits2.push(`${formatReadTime(wordsToReadMinutes(f.words * (posted - an.read) / posted))} to catch up`); } catch (e) {} }
+        bits2.push(`${posted - an.read} new ${posted - an.read === 1 ? "chapter" : "chapters"} waiting`);
+      } else if (posted && posted === an.read) bits2.push("all caught up");
+      let ago = null; try { ago = fmtAgo(daysSince(f.lastUpdate)); } catch (e) { ago = ""; }
+      if (ago) bits2.push(ago);
+      if (f.avgUpdateDays) bits2.push(`about every ${f.avgUpdateDays}d`);
+      return [bits1.join(" · "), bits2.join(" · ")];
+    };
+    function renderCaption() {
+      caption.textContent = "";
+      caption.style.minHeight = "64px"; caption.style.display = "flex"; caption.style.flexDirection = "column"; caption.style.justifyContent = "center"; caption.style.gap = "3px";
+      if (!picked) {
+        caption.appendChild(el("div", "", TIMES[tI].say + (reading.length ? "" : " Nobody lives here yet: an animal turns up for each fic you start reading.")));
+        return;
+      }
+      const [l1, l2] = statLines(picked);
+      caption.appendChild(el("div", "font-style:normal;font-weight:700;font-size:13.5px;line-height:1.25;color:#f1e6c8;", titleOf(picked.f)));
+      caption.appendChild(el("div", "font-style:normal;font-size:11px;line-height:1.35;color:rgba(220,240,226,0.85);", l1));
+      if (l2) caption.appendChild(el("div", "font-style:normal;font-size:10.5px;line-height:1.35;color:rgba(220,240,226,0.62);", l2));
+    }
+    function drawSel() {
+      while (selG.firstChild) selG.removeChild(selG.firstChild);
+      if (!picked) return;
+      const an = picked;
+      sv("ellipse", { cx: an.x, cy: an.y + 1, rx: 20, ry: 6.5, fill: "none", stroke: "#ffe9a8", "stroke-width": 1.4, opacity: 0.9 }, selG);
+      sv("ellipse", { cx: an.x, cy: an.y + 1, rx: 20, ry: 6.5, fill: "#ffe9a8", opacity: 0.14 }, selG);
+      let t = titleOf(an.f); if (t.length > 28) t = t.slice(0, 27) + "…";
+      const w = Math.max(40, t.length * 4.7 + 14), top = Math.max(130, an.y - 50), bx = Math.max(6, Math.min(W - 6 - w, an.x - w / 2));
+      sv("polygon", { points: `${an.x - 4},${top + 15} ${an.x + 4},${top + 15} ${an.x},${top + 21}`, fill: "rgba(12,22,18,0.88)" }, selG);
+      sv("rect", { x: bx, y: top, width: w, height: 16, rx: 8, fill: "rgba(12,22,18,0.88)", stroke: "rgba(255,233,168,0.65)", "stroke-width": 0.8 }, selG);
+      const tx = sv("text", { x: bx + w / 2, y: top + 11, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 8.6, fill: "#f6ecd2" }, selG);
+      tx.textContent = t;
+    }
+    const pickAnimal = an => {
+      picked = picked === an ? null : an;
+      drawSel(); renderCaption();
+      if (picked && an.node && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) && an.node.animate) {
+        try { an.node.animate([{ transform: "translateY(0)" }, { transform: "translateY(-7px)" }, { transform: "translateY(0)" }], { duration: 360, easing: "ease-out" }); } catch (e) {}
+      }
+    };
+
+    // ── draw the trees and props back to front ──
+    things.sort((a, b) => a.y - b.y).forEach(t => t.fn(svg));
+
+    // ── light: rays (day, dawn, dusk), moonlit pools (night), mist ──
+    const rays = sv("g", { "pointer-events": "none" }, svg);
+    [[60, 120, 70, 360], [150, 120, 50, 420], [258, 120, 64, 380], [96, 520, 56, 330], [230, 500, 70, 360], [140, 840, 64, 340], [276, 820, 50, 330], [90, 1130, 66, 300], [224, 1140, 60, 330]].forEach(([x, y, w, L], i) => {
+      sv("polygon", { points: `${x},${y} ${x + w},${y} ${x + w + L * 0.38},${y + L} ${x + L * 0.38},${y + L}`, fill: "url(#wd-ray)", opacity: (0.12 + rnd("ry" + i) * 0.1).toFixed(2) }, rays);
+    });
+    const pools = sv("g", { "pointer-events": "none" }, svg);
+    GLADES.forEach(([cx, cy, rx, ry]) => sv("ellipse", { cx, cy, rx: rx * 0.9, ry: ry * 0.8, fill: "url(#wd-pool)", opacity: 0.55 }, pools));
+    [[110, 300, 90], [250, 540, 100], [90, 900, 100], [250, 1190, 90], [160, 1370, 110]].forEach(([mx, my, mrx], i) => anim(sv("ellipse", { cx: mx, cy: my, rx: mrx, ry: 13, fill: "#c4d8d0", opacity: 0.1 }, svg), `animation:wdMist ${10 + i * 2.5}s ease-in-out ${i}s infinite;`));
+
+    // ── everything that glows, then fireflies, the shade at the edges and the time-of-day tint ──
+    const lit = sv("g", {}, svg);
+    lits.forEach(f => f(lit));
+    const flies = sv("g", {}, svg);
+    for (let i = 0; i < 46; i++) {
+      const g = GLADES[i % 4], a = rnd("ffa" + i) * Math.PI * 2, d = Math.sqrt(rnd("ffd" + i));
+      const x = g[0] + Math.cos(a) * g[2] * 0.85 * d, y = g[1] + Math.sin(a) * g[3] * 0.8 * d;
+      sv("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 7, fill: "url(#wd-fly)", opacity: 0.35 }, flies);
+      anim(sv("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 1.5, fill: "#f2ffb0" }, flies), `animation:wdFly ${(4 + rnd("ffs" + i) * 3).toFixed(1)}s ease-in-out ${(rnd("ffl" + i) * 5).toFixed(1)}s infinite;`);
+    }
+    sv("rect", { x: 0, y: 0, width: W, height: 120, fill: "url(#wd-top)", "pointer-events": "none" }, svg);
+    sv("rect", { x: 0, y: H - 150, width: W, height: 150, fill: "url(#wd-fade)", "pointer-events": "none" }, svg);
+    const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
+    svg.appendChild(selG);
+    const hits = sv("g", {}, svg);                                          // the tap targets sit on top of the light and shade
+    placed.forEach(an => {
+      const h = sv("circle", { cx: an.x.toFixed(1), cy: (an.y - 12).toFixed(1), r: 19, fill: "transparent" }, hits);
+      h.style.cursor = "pointer";
+      h.setAttribute("role", "button"); h.setAttribute("aria-label", titleOf(an.f));
+      h.addEventListener("click", e => { e.stopPropagation(); pickAnimal(an); });
+    });
+    svg.addEventListener("click", () => { if (picked) { picked = null; drawSel(); renderCaption(); } });
+    field.appendChild(svg);
+
+    // ── time of day (same four looks as the village) ──
+    const TIMES = [
+      { label: "\u{1F319} night", name: "night", bg: "linear-gradient(180deg,#0c0a1c 0%,#14223a 45%,#14261f 100%)", lit: 1, fly: 1, pool: 0.9, rays: 0, tint: ["#000000", 0], say: "The woods at night. Plenty of room to curl up in." },
+      { label: "\u{1F307} dusk", name: "dusk", bg: "linear-gradient(180deg,#2b1b4a 0%,#8a4a60 35%,#a85a52 55%,#33203c 100%)", lit: 0.9, fly: 0.7, pool: 0.25, rays: 0.55, tint: ["#ff8a5c", 0.1], say: "Dusk. The glades fill up with long, soft light." },
+      { label: "\u{1F305} dawn", name: "dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", lit: 0.6, fly: 0.3, pool: 0.3, rays: 0.75, tint: ["#ffc9c9", 0.09], say: "Dawn. Mist in the clearings, and the first birds." },
+      { label: "☀️ day", name: "day", bg: "linear-gradient(180deg,#5fa8e8 0%,#9cccf2 35%,#d6ebf7 55%,#7f93ad 100%)", lit: 0.15, fly: 0, pool: 0, rays: 1, tint: ["#c4ecaa", 0.2], say: "Daytime. Light comes down through the leaves in long stripes." }
+    ];
+    const applyTime = () => {
+      const t = TIMES[tI];
+      box.style.background = t.bg;
+      lit.setAttribute("opacity", t.lit);
+      flies.setAttribute("opacity", t.fly);
+      pools.setAttribute("opacity", t.pool);
+      rays.setAttribute("opacity", t.rays);
+      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.tint[1]);
+      timeBtn.textContent = t.label;
+      sub.textContent = "behind Hollowbrook · " + t.name + (placed.length ? ` · ${placed.length} reading${unplaced ? " (+" + unplaced + " more)" : ""}` : "");
+      renderCaption();
+    };
+    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); });
+    const paintWx = () => { wxBtn.textContent = HK_WX[wxI][1]; hkWxOverlay(box, HK_WX[wxI][0], !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)); };
+    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
+    paintWx();
+    hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
+    pill("\u{1F3D8}️ village", "Back to Hollowbrook", () => { close(); openHollowbrook(); });
+    applyTime();
+    document.body.appendChild(back);
+  }
+
+  return { openWoods };
 };
 
 // ════════ chapel.js ════════
