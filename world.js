@@ -8663,6 +8663,11 @@
   const MR_CL = [[187, 338], [196, 337]];                 // where their two hands meet, on top of the comforter
   const MR_HOLD = { a: { R: MR_CL[0] }, b: { L: MR_CL[1] } };
   const MR_BASE = { a: { sx: 3, head: [2, 1, 4], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: -3, head: [-2, 1, -4], mood: "smile", look: -1, L: "lap", R: "lap" } };
+  // The carpet moments: Will and Mike sit cross-legged on the carpet in the lamplight in front of the bed (a moment with stage: "carpet"), a little smaller than in the bed.
+  // A carpet beat can also set: prop ("game", "comic" or "phones": what lies between them), game { w, m } (the pawns, by square 0 to 13), die (1 to 6, a roll),
+  // page (1 or 2: the comic's page) and notes: n (music notes). Hands are [x, y] on the picture as in the bed, or "lap".
+  const MRC_BASE = { a: { head: [1, 1, 2], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { head: [-1, 1, -2], mood: "smile", look: -1, L: "lap", R: "lap" } };
+  const MRC_EAR = { a: [15.2, -19], b: [14.9, -23] };                // where each one's ear sits on the head (HEADS in lib/figures.js), for the shared earphone wires
   // Going to sleep (the lamp's second tap): Will and Mike cuddle up, say goodnight and sleep, and every Hawkins scene with them in it stands empty
   // and stopped (the flag lives in hkSleep, see hawkins-kit.js) until the lamp is tapped again.
   // While they sleep (wind-down): one slow breath paces the covers, their hands and the z's; a ☾ sleep sound pill (rain, fan, snoring, crickets; saved as
@@ -8822,6 +8827,35 @@
       ["w", "AH— MIKE— okay! Okay! Truce!", { a: { mood: "cheer", eyes: "happy", blush: true }, jig: true, hearts: 2 }],
       ["m", "Truce accepted.", { b: { mood: "smile", L: "lap", blush: true } }],
       ["n", "Will is wheezing into the pillow. He’s still smiling, though, and he doesn’t move away.", { a: { lean: 5, head: [3, 2, 6] }, hearts: 3 }]] },
+    { name: "the board game", stage: "carpet", intro: "The comforter is empty. Down on the carpet, in the pool of lamplight, two people sit much too close to a game board.", beats: [
+      ["n", "The game box is open on the carpet. One piece has already rolled under the bed, and nobody is going after it.", { prop: "game", game: { w: 0, m: 0 }, a: { R: [154, 502], look: 1 }, b: { L: [204, 502], mood: "smirk", look: -1 } }],
+      ["m", "Okay. Rules. I go first, because it’s my house.", { b: { mood: "grin" } }],
+      ["w", "That’s not a rule.", { a: { mood: "smirk" } }],
+      ["m", "It’s a house rule. House rules count.", { die: 4, game: { m: 4 }, jig: true }],
+      ["w", "Fine. Fine!", { die: 6, game: { w: 6 }, a: { mood: "grin", eyes: "happy" }, jig: true }],
+      ["m", "A six? Wait. How are you ahead?", { b: { mood: "o", look: -1 } }],
+      ["w", "I’m not telling you.", { a: { mood: "smile", blush: true } }],
+      ["m", "…I want a rematch. After this one.", { die: 2, game: { m: 6 }, b: { mood: "smile", blush: true, look: 0 } }],
+      ["n", "Nobody is keeping score. Both of them are looking at the board and neither is reading it. Two pawns have ended up on the same square, and nobody has mentioned it.", { hearts: 3, a: { sx: 8, lean: 3 }, b: { sx: -8, lean: -3 } }]] },
+    { name: "same page", stage: "carpet", intro: "The comforter is empty. On the carpet in the lamplight, two heads are bent over one comic.", beats: [
+      ["n", "A comic lies open on the carpet. They’re both bent over it, heads almost touching, and neither of them has turned a page in a while.", { prop: "comic", a: { sx: 10, lean: 6, head: [3, 3, 7], R: [152, 500], look: 1 }, b: { sx: -10, lean: -6, head: [-3, 3, -7], L: [206, 500], look: -1, mood: "calm" } }],
+      ["m", "“Fear me, mortal!” That’s the villain. He has a very deep voice.", { b: { mood: "grin" } }],
+      ["w", "He has a ponytail, Mike. He’s not deep-voiced.", { a: { mood: "smirk" } }],
+      ["m", "He is on this page. The last page was a different guy.", { b: { mood: "smirk" } }],
+      ["w", "That’s the same guy. Turn the page.", { a: { mood: "grin" } }],
+      ["n", "Mike turns the page, and everything gets a good deal more colourful.", { page: 2, a: { mood: "o" }, b: { L: [182, 497], mood: "o" } }],
+      ["w", "…Oh.", { a: { mood: "calm", eyes: "happy" }, b: { L: [206, 500] } }],
+      ["m", "Told you.", { b: { mood: "smile", blush: true }, hearts: 2 }],
+      ["n", "They read it twice. Mike does every voice, badly, and Will laughs into his sleeve and doesn’t ask him to stop.", { hearts: 3 }]] },
+    { name: "one earphone each", stage: "carpet", intro: "The comforter is empty. Down on the carpet in the lamplight, two people share one tape and one tangle of wire.", beats: [
+      ["n", "Mike’s Walkman sits on the carpet between them. One earphone for him, one for Will, and a wire that is exactly as long as it needs to be.", { prop: "phones", a: { sx: 14, lean: 7, head: [4, 2, 8], mood: "calm", look: 0 }, b: { sx: -14, lean: -7, head: [-4, 2, -8], mood: "smile", look: 0 } }],
+      ["m", "Track four. Wait for it.", {}],
+      ["w", "I don’t hear anything.", { a: { mood: "o" } }],
+      ["m", "Wait for it.", { b: { eyes: "closed", mood: "smirk" } }],
+      ["n", "The chorus lifts. Will’s knee starts to bounce. He hasn’t noticed.", { notes: 3, a: { eyes: "happy", mood: "smile" } }],
+      ["w", "…Okay. That’s good.", { a: { blush: true } }],
+      ["m", "I know. Now shh. This is the best part.", { b: { blush: true, mood: "smile" }, hearts: 2 }],
+      ["n", "They sit with their heads tipped together and the whole song between them, and neither moves until it ends.", { notes: 2, hearts: 3, a: { eyes: "closed", head: [5, 3, 10] }, b: { eyes: "closed", head: [-5, 3, -10] } }]] },
     { name: "the lamp", beats: [
       ["n", "The lamp on the nightstand is still on, glowing amber over the covers.", { a: { mood: "calm" }, b: { mood: "calm" } }],
       ["w", "Mike. The lamp.", { a: { mood: "smirk" } }],
@@ -8845,7 +8879,7 @@
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hitsA = [], hitsB = [];
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    let cur = hitsA, view = "A";
+    let cur = hitsA, view = "A", stage = "bed", prop = null;                                                          // stage: where they are ("bed" or "carpet"); prop: what is between them on the carpet
     let leaving = false, nSign = 0, nCloset = 0, nHand = 0, nAsleep = 0, tid = 0;
     let scene = false, asleep = hkSleep.get();                                                                      // scene: the going-to-sleep or waking scene is playing; asleep: they are in bed asleep (saved, shared with the other scenes)
     const tm = HK_TIMES[hkTimeGet()];
@@ -9021,14 +9055,130 @@
     };
 
     // ── on the carpet: a heap of clothes at the foot of the bed and a pair of shoes by the closet, each with a shadow so it sits on the floor ──
-    sv("ellipse", { cx: 238, cy: 494, rx: 36, ry: 6, fill: "#000", opacity: 0.3 }, A);
-    sv("path", { d: "M206 492 Q208 474 224 472 Q232 462 246 470 Q262 470 268 486 Q270 494 262 496 H210 Z", fill: "#d8c9b0" }, A);
-    sv("path", { d: "M224 492 Q228 480 240 484 Q250 482 256 492 Z", fill: "#2c2a3a", opacity: 0.85 }, A);
-    sv("path", { d: "M214 486 Q226 480 236 488", stroke: "#b9a888", "stroke-width": 1, fill: "none" }, A);
+    const pileG = sv("g", {}, A);                                                                                       // the heap of clothes (out of the way while they sit on the carpet)
+    sv("ellipse", { cx: 238, cy: 494, rx: 36, ry: 6, fill: "#000", opacity: 0.3 }, pileG);
+    sv("path", { d: "M206 492 Q208 474 224 472 Q232 462 246 470 Q262 470 268 486 Q270 494 262 496 H210 Z", fill: "#d8c9b0" }, pileG);
+    sv("path", { d: "M224 492 Q228 480 240 484 Q250 482 256 492 Z", fill: "#2c2a3a", opacity: 0.85 }, pileG);
+    sv("path", { d: "M214 486 Q226 480 236 488", stroke: "#b9a888", "stroke-width": 1, fill: "none" }, pileG);
     [[286, 458, 0], [308, 462, 8]].forEach(([x, y, r]) => {
       sv("ellipse", { cx: x + 8, cy: y + 8, rx: 14, ry: 3.4, fill: "#000", opacity: 0.3 }, A);
       sv("path", { d: `M${x - 4} ${y + 4} Q${x - 4} ${y - 4} ${x + 6} ${y - 4} L${x + 12} ${y} Q${x + 20} ${y} ${x + 20} ${y + 6} V${y + 8} H${x - 4} Z`, fill: "#b89c76", transform: `rotate(${r} ${x} ${y})` }, A);
     });
+
+    // ── the carpet scenes: Will and Mike sit cross-legged in the lamplight in front of the bed (hidden until a carpet moment plays), with a board game, a comic or one
+    //    set of earphones between them. The same figures (bsKit) a little smaller, with jeans and shoes; the bed figures are hidden while these are shown (see setStage). ──
+    const FIGC = { a: { cx: 112, sy: 460, s: 0.86, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 244, sy: 458, s: 0.86, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
+    const carpetG = sv("g", { display: "none" }, A);
+    [["a", 4.2], ["b", 4.8]].forEach(([k, br]) => { const F = FIGC[k]; F.brT = br; F.g1 = sv("g", {}, carpetG); F.r1 = sv("g", {}, F.g1); F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); });
+    const propG = sv("g", {}, carpetG);
+    const wireG = sv("g", { "pointer-events": "none" }, carpetG);
+    [["a", 4.2], ["b", 4.8]].forEach(([k, br]) => { const F = FIGC[k]; F.g2 = sv("g", {}, carpetG); F.r2 = sv("g", {}, F.g2); F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`); });
+    const heartsC = sv("g", { "pointer-events": "none" }, carpetG);                                                      // hearts and notes rising from between them
+    const legs = (g, isA) => {                                                                                           // crossed legs: jeans, and the two shoes in front
+      const jean = isA ? "#3b4a73" : "#262e4c", jd = isA ? "#2c3858" : "#1a2038", shoe = isA ? "#c9b48a" : "#e8e4da", y0 = isA ? 50 : 54;
+      sv("path", { d: `M-23 ${y0} Q-46 ${y0 + 6} -45 ${y0 + 22} Q-41 ${y0 + 31} -26 ${y0 + 30} L26 ${y0 + 30} Q41 ${y0 + 31} 45 ${y0 + 22} Q46 ${y0 + 6} 23 ${y0} Z`, fill: jean, stroke: jd, "stroke-width": 0.9 }, g);
+      sv("path", { d: `M-34 ${y0 + 8} Q-24 ${y0 + 14} -12 ${y0 + 10} M34 ${y0 + 8} Q24 ${y0 + 14} 12 ${y0 + 10}`, stroke: jd, "stroke-width": 0.8, fill: "none", opacity: 0.7 }, g);
+      [-12, 12].forEach(x => sv("ellipse", { cx: x, cy: y0 + 27, rx: 15, ry: 6, fill: jean, stroke: jd, "stroke-width": 0.8 }, g));
+      [-18, 18].forEach(x => { sv("ellipse", { cx: x, cy: y0 + 30, rx: 9.5, ry: 4.6, fill: shoe, stroke: "#8a7a5a", "stroke-width": 0.7 }, g); sv("path", { d: `M${x - 7} ${y0 + 32.5} H${x + 7}`, stroke: "#8a7a5a", "stroke-width": 0.8, opacity: 0.7 }, g); });
+    };
+    const drawCarpet = (key, p) => {
+      const F = FIGC[key], isA = key === "a";
+      clear(F.b1); clear(F.b2);
+      const tr = `translate(${(F.cx + (p.sx || 0)).toFixed(1)} ${(F.sy + (p.dy || 0)).toFixed(1)}) scale(${F.s})`;
+      F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr);
+      const lean = p.lean || 0, la = lean * Math.PI / 180, lc = Math.cos(la), ls = Math.sin(la);
+      const tg = sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1);
+      const shoulder = left => { const S = left ? F.sl : F.sr, rx = S[0], ry = S[1] - 58; return [rx * lc - ry * ls, rx * ls + ry * lc + 58]; };
+      (isA ? torsoA : torsoB)(tg); (isA ? headA : headB)(tg, p);
+      legs(F.b1, isA);                                                                                                  // over the hem, under the arms
+      const cx = F.cx + (p.sx || 0), cy = F.sy + (p.dy || 0), toLocal = t => [(t[0] - cx) / F.s, (t[1] - cy) / F.s];
+      const hand = (left, t) => drawArm(F.b2, key, left, t === "lap" ? [left ? -20 : 20, 49] : toLocal(t), 0, 0, 0, shoulder(left));
+      hand(false, p.R || "lap"); hand(true, p.L || "lap");
+      if (prop === "phones") drawWire();
+    };
+    // where a head's ear ends up on the picture (the head tips about its neck, then the whole upper body leans about the hips), so the earphone wires follow the heads
+    const earPos = (key, p, sd) => {
+      const F = FIGC[key], e = MRC_EAR[key], th = p.head[2] * Math.PI / 180, c = Math.cos(th), s = Math.sin(th), ry = e[1] + 8;
+      const X = sd * e[0] * c - ry * s + p.head[0] * 0.45, Y = sd * e[0] * s + ry * c - 8 + p.head[1];
+      const la = (p.lean || 0) * Math.PI / 180, lc = Math.cos(la), ls = Math.sin(la), ly = Y - 58;
+      return [F.cx + (p.sx || 0) + (X * lc - ly * ls) * F.s, F.sy + (p.dy || 0) + (X * ls + ly * lc + 58) * F.s];
+    };
+    const drawWire = () => {
+      clear(wireG);
+      if (prop !== "phones" || !PC.a || !PC.b) return;
+      [["a", 1, 172], ["b", -1, 184]].forEach(([k, sd, jx]) => {
+        const e = earPos(k, PC[k], sd), cy = Math.max(e[1], 506) + 12;
+        sv("path", { d: `M${e[0].toFixed(1)} ${e[1].toFixed(1)} Q${((e[0] + jx) / 2).toFixed(1)} ${cy.toFixed(1)} ${jx} 505`, stroke: "#e6e2d4", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round" }, wireG);
+        sv("circle", { cx: e[0].toFixed(1), cy: e[1].toFixed(1), r: 2.3, fill: "#f4f0e4", stroke: "#a89f88", "stroke-width": 0.6 }, wireG);
+      });
+    };
+    // a patch of something lying on the carpet, in (u, v) on a flat rectangle seen from the front: u 0 to 1 left to right, v 0 to 1 far to near
+    const bp = (u, v) => [(1 - v) * (138 + 80 * u) + v * (124 + 108 * u), 496 + 32 * v];
+    const patch4 = (g, u0, v0, u1, v1, attrs) => sv("polygon", Object.assign({ points: [bp(u0, v0), bp(u1, v0), bp(u1, v1), bp(u0, v1)].map(q => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ") }, attrs), g);
+    // the board game: a ring of 14 coloured squares round a cream middle, two pawns, one die
+    const gameG = sv("g", { display: "none" }, propG);
+    sv("ellipse", { cx: 180, cy: 530, rx: 62, ry: 6, fill: "#000", opacity: 0.3 }, gameG);
+    patch4(gameG, -0.04, -0.08, 1.04, 1.1, { fill: "#1f3d4e", stroke: "#0f222e", "stroke-width": 1 });
+    const CELL = ["#c9482e", "#e0a032", "#3f7fd0", "#5aa65a"], RING = [];
+    for (let c = 0; c < 6; c++) RING.push([c, 0]);
+    RING.push([5, 1]);
+    for (let c = 5; c >= 0; c--) RING.push([c, 2]);
+    RING.push([0, 1]);
+    RING.forEach(([c, r], i) => patch4(gameG, c / 6 + 0.012, r / 3 + 0.03, (c + 1) / 6 - 0.012, (r + 1) / 3 - 0.03, { fill: CELL[i % 4] }));
+    patch4(gameG, 1 / 6 + 0.02, 1 / 3 + 0.04, 5 / 6 - 0.02, 2 / 3 - 0.04, { fill: "#efe2bf", stroke: "#b9a888", "stroke-width": 0.6 });
+    { const [mx, my] = bp(0.5, 0.5); sv("polygon", { points: `${mx},${my - 5} ${mx + 10},${my} ${mx},${my + 5} ${mx - 10},${my}`, fill: "#c9482e", opacity: 0.75 }, gameG); }
+    const pawn = col => {
+      const g = sv("g", {}, gameG);
+      sv("ellipse", { cx: 0, cy: 0, rx: 3.6, ry: 1.4, fill: "#000", opacity: 0.35 }, g);
+      sv("path", { d: "M-3 0 Q-2.2 -6 0 -7 Q2.2 -6 3 0 Z", fill: col, stroke: "#0f222e", "stroke-width": 0.5 }, g);
+      sv("circle", { cx: 0, cy: -8.6, r: 2.5, fill: col, stroke: "#0f222e", "stroke-width": 0.5 }, g);
+      return g;
+    };
+    const PAWN_T = reduce ? "none" : "transform .7s ease-in-out";
+    const pawns = { w: pawn("#e0573a"), m: pawn("#4aa3d8") };
+    const setGame = (g, still) => {                                                                                      // move the pawns to squares 0 to 13 (still: jump there, no walking)
+      if (still) pawns.w.style.transition = pawns.m.style.transition = "none";
+      ["w", "m"].forEach(k => {
+        if (g[k] == null) return;
+        const [c, r] = RING[((g[k] % RING.length) + RING.length) % RING.length], [x, y] = bp((c + 0.5) / 6, (r + 0.5) / 3), off = k === "w" ? -2.5 : 2.5;
+        pawns[k].style.transform = `translate(${(x + off).toFixed(1)}px, ${(y + 3).toFixed(1)}px)`;
+      });
+      if (still) { pawns.w.getBoundingClientRect(); pawns.w.style.transition = pawns.m.style.transition = PAWN_T; }
+    };
+    pawns.w.style.transition = pawns.m.style.transition = PAWN_T;
+    const dieO = sv("g", { display: "none", transform: `translate(${bp(0.5, 0.5)[0].toFixed(1)} ${(bp(0.5, 0.5)[1] + 1).toFixed(1)})` }, gameG), dieG = sv("g", {}, dieO);
+    const PIPS = { 1: [[0, 0]], 2: [[-2.4, -2.4], [2.4, 2.4]], 3: [[-2.4, -2.4], [0, 0], [2.4, 2.4]], 4: [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]], 5: [[-2.4, -2.4], [2.4, -2.4], [0, 0], [-2.4, 2.4], [2.4, 2.4]], 6: [[-2.4, -3], [2.4, -3], [-2.4, 0], [2.4, 0], [-2.4, 3], [2.4, 3]] };
+    const rollDie = n => {
+      clear(dieG); dieO.setAttribute("display", "");
+      sv("rect", { x: -5, y: -5, width: 10, height: 10, rx: 1.8, fill: "#f6efdc", stroke: "#8a7a5a", "stroke-width": 0.6, transform: `rotate(${Math.round(Math.random() * 30 - 15)})` }, dieG);
+      (PIPS[n] || PIPS[1]).forEach(([x, y]) => sv("circle", { cx: x, cy: y, r: 0.9, fill: "#2a2430" }, dieG));
+      if (!reduce) { try { dieG.animate([{ transform: "translateY(-12px) rotate(120deg)" }, { transform: "translateY(0) rotate(0deg)" }], { duration: 420, easing: "cubic-bezier(.3,.7,.4,1)" }); } catch {} }
+    };
+    // the comic, open on the carpet, two pages of panels
+    const comicFG = sv("g", { display: "none" }, propG);
+    sv("ellipse", { cx: 180, cy: 530, rx: 58, ry: 5, fill: "#000", opacity: 0.28 }, comicFG);
+    patch4(comicFG, 0, 0, 0.5, 1, { fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.7 });
+    patch4(comicFG, 0.5, 0, 1, 1, { fill: "#e8dfc8", stroke: "#b8ad92", "stroke-width": 0.7 });
+    const panelsG = sv("g", {}, comicFG);
+    { const t = bp(0.5, 0), b = bp(0.5, 1); sv("path", { d: `M${t[0].toFixed(1)} ${t[1]} L${b[0].toFixed(1)} ${b[1]}`, stroke: "#8a7a5a", "stroke-width": 0.9 }, comicFG); }
+    const PAGES = { 1: [[.04, .08, .46, .5, "#c9482e"], [.04, .56, .22, .93, "#3f7fd0"], [.27, .56, .46, .93, "#e0a032"], [.54, .08, .96, .4, "#2c8aa6"], [.54, .46, .73, .93, "#e0a032"], [.78, .46, .96, .93, "#c9482e"]],
+      2: [[.04, .08, .46, .93, "#3f7fd0"], [.54, .08, .74, .5, "#c9482e"], [.78, .08, .96, .5, "#e0a032"], [.54, .56, .96, .93, "#2c8aa6"]] };
+    const comicPage = n => {
+      clear(panelsG);
+      (PAGES[n] || PAGES[1]).forEach(([u0, v0, u1, v1, c]) => patch4(panelsG, u0, v0, u1, v1, { fill: c, opacity: 0.85 }));
+      if (n === 2) { const [x, y] = bp(0.25, 0.5); sv("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: 8, ry: 5.4, fill: "#fff6e0" }, panelsG); }
+    };
+    // the Walkman, in the middle (the wires from each of their ears are drawn by drawWire)
+    const playerG = sv("g", { display: "none" }, propG);
+    sv("ellipse", { cx: 178, cy: 521, rx: 17, ry: 3.4, fill: "#000", opacity: 0.32 }, playerG);
+    sv("rect", { x: 165, y: 503, width: 26, height: 17, rx: 2.4, fill: "#3a3f4c", stroke: "#1b1e27", "stroke-width": 0.8 }, playerG);
+    sv("rect", { x: 168, y: 506, width: 20, height: 8, rx: 1.4, fill: "#b9bcc4" }, playerG);
+    sv("rect", { x: 170, y: 508, width: 16, height: 4, rx: 0.8, fill: "#262a34" }, playerG);
+    [174, 182].forEach(x => { const r = anim(sv("g", { transform: `translate(${x} 510)` }, playerG), "animation:mrSpin 3s linear infinite;transform-box:fill-box;transform-origin:center;"); sv("circle", { cx: 0, cy: 0, r: 1.6, fill: "#d9d4c4" }, r); sv("path", { d: "M-1.4 0 H1.4", stroke: "#262a34", "stroke-width": 0.5 }, r); });
+    sv("rect", { x: 168, y: 516, width: 4, height: 2.4, fill: "#8a8f9c" }, playerG); sv("rect", { x: 174, y: 516, width: 4, height: 2.4, fill: "#8a8f9c" }, playerG);
+    anim(sv("circle", { cx: 187.5, cy: 517, r: 1, fill: "#ff5a4a" }, playerG), "animation:hkTwinkle 2.4s ease-in-out infinite;");
+    if (!document.getElementById("ao3-mr-css2")) { const st = document.createElement("style"); st.id = "ao3-mr-css2"; st.textContent = "@keyframes mrSpin{to{transform:rotate(360deg)}}"; (document.head || document.documentElement).appendChild(st); }
+    const PC = { a: null, b: null };                                                                                     // their poses on the carpet
 
     arrow(A, 344, 478, 1);                                                                                             // on the bed wall: the arrow to the window wall
 
@@ -9133,7 +9283,9 @@
       asleep = true; hkSleep.set(true); nLamp = 1;
       const COL = color === "blue" ? "blue" : color === "yellow" ? "yellow" : "amber";
       const gn = mrGoodnightBeats(HK_WX[hkWxGet()][0]);                                                               // tonight's goodnight (see MR_GN)
+      const back = stage === "carpet" ? [["n", "They scramble up off the carpet and back under the comforter, one after the other. It’s late.", { reset: true }]] : [];
       runBeats([
+        ...back,
         ["n", `Will reaches past Mike and clicks the lamp off. The ${COL} glow folds up into the dark.`, { reset: true, lamp: "off", a: { L: [118, 306], look: -1, mood: "calm" } }],
         ["w", "Okay. Lights out.", { a: { L: "lap", look: 1, mood: "smile" } }],
         ["m", "Come here. You’re cold.", Object.assign({ hearts: 3 }, MR_CUDDLE)],
@@ -9191,8 +9343,9 @@
     hit(MR.closet.x - 4, MR.closet.y + 8, MR.closet.w + 8, MR.closet.h - 8, "The closet", () => say(["A closet door with a mirror on it and ties hanging from the rail. One of them is very teal.", "In the mirror: a room that looks a lot like this one, but tidier."][nCloset++ % 2]));
     hit(200, 462, 70, 36, "The pile of clothes", () => say("A heap of clothes at the foot of the bed. Clean or dirty is anyone’s guess."));
     hit(120, 440, 150, 80, "The carpet", () => say("The carpet in the lamplight. The best spot in the room."));
-    hit(128, 244, 62, 82, "Will", () => next()); hit(190, 240, 72, 86, "Mike", () => next());
-    hit(170, 324, 40, 30, "Their hands", () => { if (asleep) { say("Still holding hands, even in their sleep."); return; } say(MR_SAY[nHand++ % MR_SAY.length]); puff(3); });
+    const emptyBed = () => say("The comforter is rumpled and empty. Nobody’s up there: they’re down on the carpet.");
+    hit(128, 244, 62, 82, "Will", () => stage === "carpet" ? emptyBed() : next()); hit(190, 240, 72, 86, "Mike", () => stage === "carpet" ? emptyBed() : next());
+    hit(170, 324, 40, 30, "Their hands", () => { if (stage === "carpet") { emptyBed(); return; } if (asleep) { say("Still holding hands, even in their sleep."); return; } say(MR_SAY[nHand++ % MR_SAY.length]); puff(3); });
     cur = hitsB;
     hit(2, 452, 38, 52, "Turn to the bed wall", () => setView("A"));
     hit(120, 60, 120, 124, "The window, and the way out to the lawn", goWindow);
@@ -9206,6 +9359,9 @@
     const mkHits = list => { const g = sv("g", {}, svg); list.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, g); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); }); return g; };
     const gA = mkHits(hitsA), gB = mkHits(hitsB);
     gB.style.display = "none";
+    const cHit = sv("rect", { x: 62, y: 396, width: 234, height: 140, fill: "transparent" }, gA);                       // Will and Mike on the carpet (only while they are there)
+    cHit.style.cursor = "pointer"; cHit.setAttribute("role", "button"); cHit.setAttribute("aria-label", "Will and Mike on the carpet"); cHit.style.display = "none";
+    cHit.addEventListener("click", () => next());
     const wrap = el("div", "position:relative;");
     const ov = el("div", "position:absolute;inset:0;pointer-events:none;overflow:hidden;");
     wrap.appendChild(svg); wrap.appendChild(ov); field.appendChild(wrap);
@@ -9215,29 +9371,57 @@
     const MR_SAY = ["Two hands, one comforter. Nobody is looking at them. Everybody is looking at them.", "A thumb moves, very slightly, back and forth. It is a small, serious gesture."];
     const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z", HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
     if (!document.getElementById("ao3-bf-css")) { const st = document.createElement("style"); st.id = "ao3-bf-css"; st.textContent = "@keyframes bfHeart{0%{opacity:0;transform:translate(0,0) scale(.4)}15%{opacity:.95}70%{opacity:.8}100%{opacity:0;transform:translate(var(--dx,0px),-92px) scale(1.15)}}@keyframes bfPop{0%{opacity:0;transform:translate(-50%,-100%) scale(.85)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}"; (document.head || document.documentElement).appendChild(st); }
-    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(192 + (Math.random() - 0.5) * 46).toFixed(1)} ${(256 + Math.random() * 16).toFixed(1)}) scale(${(1.1 + Math.random() * 0.6).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
+    const puff = n => { if (reduce) return; const C = stage === "carpet", px = C ? 178 : 192, py = C ? 462 : 256, grp = C ? heartsC : heartsG; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(px + (Math.random() - 0.5) * 46).toFixed(1)} ${(py + Math.random() * 16).toFixed(1)}) scale(${(1.1 + Math.random() * 0.6).toFixed(2)})` }, grp); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
     const HEADX = { w: 162, m: 220 };
+    const NOTE = "M0 0 a3 2.2 -20 1 1 .1 0 Z M2.6 -.8 V-10 q3.4 1 3.6 5";                                          // a music note
+    const notes = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(178 + (Math.random() - 0.5) * 20).toFixed(1)} ${(496 + Math.random() * 6).toFixed(1)}) scale(${(1.1 + Math.random() * 0.5).toFixed(2)})` }, heartsC); anim(sv("path", { d: NOTE, fill: i % 2 ? "#ffd98a" : "#cfe0ff", stroke: i % 2 ? "#ffd98a" : "#cfe0ff", "stroke-width": 0.9, "stroke-linecap": "round" }, w), `--dx:${((Math.random() - 0.5) * 50).toFixed(0)}px;opacity:0;animation:bfHeart 3s ease-out 1 both;`); later(() => w.remove(), 3200); }, i * 420); };
+    const setProp = k => {                                                                                              // what lies on the carpet between them (null: nothing)
+      prop = k;
+      gameG.setAttribute("display", k === "game" ? "" : "none"); comicFG.setAttribute("display", k === "comic" ? "" : "none"); playerG.setAttribute("display", k === "phones" ? "" : "none");
+      dieO.setAttribute("display", "none");
+      if (k === "game") setGame({ w: 0, m: 0 }, true);
+      if (k === "comic") comicPage(1);
+      drawWire();
+    };
+    const setStage = st => {                                                                                            // "bed" or "carpet": where Will and Mike are (the other place is left empty)
+      const toC = st === "carpet", wasC = stage === "carpet";
+      stage = st;
+      [FIG.a, FIG.b].forEach(F => { F.g1.style.display = F.g2.style.display = toC ? "none" : ""; });
+      carpetG.setAttribute("display", toC ? "" : "none"); cHit.style.display = toC ? "" : "none"; pileG.setAttribute("display", toC ? "none" : "");
+      if (toC) {
+        PC.a = Object.assign({}, MRC_BASE.a); PC.b = Object.assign({}, MRC_BASE.b);
+        setProp(null); clear(heartsC); drawCarpet("a", PC.a); drawCarpet("b", PC.b);
+        if (!wasC && !reduce) { try { carpetG.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500 }); } catch {} }
+      } else setProp(null);
+    };
     let bub = null;
     const hideBubble = () => { if (bub) { bub.remove(); bub = null; } };
     const speak = (who, text) => {
       hideBubble();
-      const anchor = who === "w" ? 32 : 68, headPct = HEADX[who] / W * 100, cw = wrap.clientWidth || 360;
-      bub = el("div", `position:absolute;left:${anchor}%;top:${(238 / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.45);${reduce ? "" : "animation:bfPop .22s ease-out both;"}`, text);
+      const C = stage === "carpet", k = who === "w" ? "a" : "b", anchor = who === "w" ? 32 : 68, cw = wrap.clientWidth || 360;
+      const headPct = (C ? FIGC[k].cx + (PC[k].sx || 0) + PC[k].head[0] * 0.45 * FIGC[k].s : HEADX[who]) / W * 100;
+      bub = el("div", `position:absolute;left:${anchor}%;top:${((C ? 398 : 238) / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.45);${reduce ? "" : "animation:bfPop .22s ease-out both;"}`, text);
       const tail = el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((headPct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`);
       bub.appendChild(tail); ov.appendChild(bub);
     };
     const P = { a: null, b: null };
     const setPose = patch => {
-      if (patch.reset) { P.a = Object.assign({}, MR_BASE.a); P.b = Object.assign({}, MR_BASE.b); comicG.setAttribute("display", "none"); drawFig("a", P.a); drawFig("b", P.b); }   // back to sitting up, from whatever the last moment left
+      if (patch.reset) { setStage("bed"); P.a = Object.assign({}, MR_BASE.a); P.b = Object.assign({}, MR_BASE.b); comicG.setAttribute("display", "none"); drawFig("a", P.a); drawFig("b", P.b); }   // back to sitting up in the bed, from wherever the last moment left them
       if (patch.lamp) setLamp(patch.lamp);
       if ("zz" in patch) setZz(patch.zz);
-      ["a", "b"].forEach(k => { if (patch[k]) P[k] = Object.assign({}, P[k], patch[k]); });
+      if ("prop" in patch) setProp(patch.prop);
+      const C = stage === "carpet", PP = C ? PC : P, dr = C ? drawCarpet : drawFig, FS = C ? FIGC : FIG;
+      ["a", "b"].forEach(k => { if (patch[k]) PP[k] = Object.assign({}, PP[k], patch[k]); });
       if ("comic" in patch) comicG.setAttribute("display", patch.comic ? "" : "none");
-      ["a", "b"].forEach(k => { if (patch[k]) drawFig(k, P[k]); });
-      if (patch.jig && !reduce) ["a", "b"].forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-3px)" }, { transform: "translateY(0)" }, { transform: "translateY(-1.5px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
+      ["a", "b"].forEach(k => { if (patch[k]) dr(k, PP[k]); });
+      if (patch.game) setGame(patch.game);
+      if (patch.die) rollDie(patch.die);
+      if (patch.page) comicPage(patch.page);
+      if (patch.jig && !reduce) ["a", "b"].forEach(k => [FS[k].r1, FS[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-3px)" }, { transform: "translateY(0)" }, { transform: "translateY(-1.5px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
       if (patch.hearts) puff(patch.hearts);
+      if (patch.notes) notes(patch.notes);
     };
-    const start = () => { P.a = Object.assign({}, MR_BASE.a); P.b = Object.assign({}, MR_BASE.b); comicG.setAttribute("display", "none"); drawFig("a", P.a); drawFig("b", P.b); };
+    const start = st => { setStage(st === "carpet" ? "carpet" : "bed"); P.a = Object.assign({}, MR_BASE.a); P.b = Object.assign({}, MR_BASE.b); comicG.setAttribute("display", "none"); drawFig("a", P.a); drawFig("b", P.b); };   // carpet: they come down onto the carpet; bed: they are in the bed
     let mi = 0, bi = 0, playing = false;
     const readTime = t => 2600 + t.length * 48;
     const step = () => {
@@ -9250,7 +9434,7 @@
       if (who === "n") { hideBubble(); say(text); } else speak(who, text);
       tid = setTimeout(step, readTime(text));
     };
-    const play = i => { if (asleep || scene) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(MR_KEY, String(mi)); } catch {} say("Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const play = i => { if (asleep || scene) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); const M = MR_MOMENTS[mi]; start(M.stage); try { localStorage.setItem(MR_KEY, String(mi)); } catch {} say(M.intro || "Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
     const another = () => { let n = Math.floor(Math.random() * (MR_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
     const next = () => {
       if (leaving || view !== "A" || scene) return;
