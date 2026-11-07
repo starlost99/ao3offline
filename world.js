@@ -179,13 +179,51 @@
       say: { map: "Daytime. Bikes everywhere, and nobody is where they should be.", house: "Daytime. The porch light is off for once." } }
   ];
   // ── the live environment: real time of day, and weather that rolls once an hour ──
-  // Every Hawkins scene reads these, so all the windows agree. Time of day follows the clock (dawn 5-8, day 8-17, dusk 17-20, night after).
-  // Weather is picked from the date and hour, so it holds for about an hour and is the same in every scene, and it leans on the season.
+  // Every scene on the map reads these (Hawkins, the village, the grounds), so all the windows agree. Time of day and weather are Prague's, for real (see hkLiveRefresh).
   // The buttons set an override that lasts an hour, then the live values take over again. Kept in one small key, ao3-hk-env.
   const ENV_KEY = "ao3-hk-env", HOUR = 3600000;
   const hkEnvRead = () => { try { return JSON.parse(localStorage.getItem(ENV_KEY) || "{}") || {}; } catch { return {}; } };
   const hkEnvWrite = patch => { try { localStorage.setItem(ENV_KEY, JSON.stringify(Object.assign(hkEnvRead(), patch))); } catch {} };
-  const hkLiveTime = () => { const h = new Date().getHours(); return h >= 5 && h < 8 ? 2 : h >= 8 && h < 17 ? 3 : h >= 17 && h < 20 ? 1 : 0; };
+  // Prague clock (Europe/Prague, whatever the phone's own zone says). Prague date as YYYY-MM-DD and minutes since midnight.
+  const hkPrague = (at) => {
+    const p = {};
+    try { new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(at || new Date()).forEach(x => { if (x.type !== "literal") p[x.type] = Number(x.value); }); } catch {}
+    if (!p.year) { const d = at || new Date(); return { date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`, min: d.getHours() * 60 + d.getMinutes(), month: d.getMonth() }; }
+    return { date: `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`, min: p.hour * 60 + p.minute, month: p.month - 1 };
+  };
+  // Real Prague sky: current weather and today's sunrise and sunset from Open-Meteo (free, no key), cached in ao3-hk-live and refreshed every
+  // 20 minutes. Offline or before the first answer: the old fixed clock bands and the seasonal dice are the fallback.
+  const LIVE_KEY = "ao3-hk-live", LIVE_FRESH = 20 * 60000, LIVE_MAX = 3 * HOUR;
+  const hkLiveRead = () => { try { return JSON.parse(localStorage.getItem(LIVE_KEY) || "null"); } catch { return null; } };
+  let liveBusy = false, liveRetry = 0;
+  function hkLiveRefresh() {
+    const c = hkLiveRead();
+    if (liveBusy || Date.now() < liveRetry || (c && Date.now() - c.at < LIVE_FRESH)) return;
+    liveBusy = true;
+    const toMin = t => { const m = /T(\d\d):(\d\d)/.exec(t || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current=weather_code,wind_speed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague&forecast_days=2")
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(j => {
+        const sun = {};
+        ((j.daily && j.daily.time) || []).forEach((d, i) => { sun[d] = [toMin(j.daily.sunrise[i]), toMin(j.daily.sunset[i])]; });
+        if (!j.current || typeof j.current.weather_code !== "number") throw 0;
+        localStorage.setItem(LIVE_KEY, JSON.stringify({ at: Date.now(), code: j.current.weather_code, wind: j.current.wind_speed_10m || 0, sun }));
+      })
+      .catch(() => { liveRetry = Date.now() + 5 * 60000; })
+      .then(() => { liveBusy = false; });
+  }
+  const hkLiveData = () => { hkLiveRefresh(); const c = hkLiveRead(); return c && Date.now() - c.at < LIVE_MAX ? c : null; };
+  // night 0, dusk 1, dawn 2, day 3. With real sun times: dawn runs from 45 min before sunrise to 60 min after, dusk from 60 min before sunset to 45 min after.
+  const hkLiveTime = () => {
+    const now = hkPrague(), c = hkLiveData(), s = c && c.sun && c.sun[now.date], m = now.min;
+    if (s && s[0] != null && s[1] != null) {
+      if (m >= s[0] - 45 && m < s[0] + 60) return 2;
+      if (m >= s[0] + 60 && m < s[1] - 60) return 3;
+      if (m >= s[1] - 60 && m < s[1] + 45) return 1;
+      return 0;
+    }
+    const h = Math.floor(m / 60); return h >= 5 && h < 8 ? 2 : h >= 8 && h < 17 ? 3 : h >= 17 && h < 20 ? 1 : 0;
+  };
   const hkTimeGet = () => { const e = hkEnvRead(); return (e.tmUntil > Date.now() && e.tm >= 0 && e.tm < HK_TIMES.length) ? e.tm | 0 : hkLiveTime(); };
   const hkTimeSet = i => hkEnvWrite({ tm: i, tmUntil: Date.now() + HOUR });
   const HK_TIME_ORDER = [0, 2, 3, 1];                                                  // night, dawn, day, dusk: the order the button goes round
@@ -305,7 +343,17 @@
   //                               clear rain fog snow leaves storm
   const WX_WEIGHTS = { winter: [30, 10, 14, 36, 0, 2], spring: [40, 30, 10, 0, 6, 12], summer: [58, 16, 4, 0, 0, 14], autumn: [30, 22, 14, 3, 25, 6], halloween: [24, 14, 26, 0, 28, 8] };
   function hkLiveWx() {
-    const d = new Date(), key = `hkwx|${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+    const c = hkLiveData();
+    if (c) {                                                                          // the real Prague sky, from the WMO weather code
+      const k = c.code;
+      if (k >= 95) return 5;                                                          // storm
+      if (k === 45 || k === 48) return 2;                                             // fog
+      if ((k >= 71 && k <= 77) || k === 85 || k === 86) return 3;                    // snow
+      if ((k >= 51 && k <= 67) || (k >= 80 && k <= 82)) return 1;                    // drizzle, rain, showers
+      const sea = hkSeason();
+      return (c.wind >= 25 && (sea === "autumn" || sea === "halloween")) ? 4 : 0;    // a windy autumn day: leaves
+    }
+    const d = hkPrague(), key = `hkwx|${d.date}-${Math.floor(d.min / 60)}`;
     const x = Math.sin(gyHash(key) * 12.9898) * 43758.5453, r = x - Math.floor(x);
     const w = WX_WEIGHTS[hkSeason()] || WX_WEIGHTS.autumn, tot = w.reduce((a, c) => a + c, 0);
     let t = r * tot;
@@ -316,7 +364,7 @@
   const hkWxSet = i => hkEnvWrite({ wx: i, wxUntil: Date.now() + HOUR });
   const HK_SEASON_TAG = { halloween: "\u{1F383} spooky season", winter: "\u2744\uFE0F winter", spring: "\u{1F338} spring", summer: "\u2600\uFE0F summer", autumn: "\u{1F342} autumn" };
   function hkSeason() {
-    const m = new Date().getMonth(), p = hkPrefs();
+    const m = hkPrague().month, p = hkPrefs();
     const hw = p.hw === true ? true : p.hw === false ? false : m === 9;
     return hw ? "halloween" : (m === 11 || m <= 1) ? "winter" : m <= 4 ? "spring" : m <= 7 ? "summer" : "autumn";
   }
@@ -687,7 +735,51 @@
     set: on => { try { if (on) localStorage.setItem(SLEEP_KEY, "1"); else localStorage.removeItem(SLEEP_KEY); } catch {} }
   };
 
-  return { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound };
+  // ── weather over a whole scene (the village and the town map; the lawn, house and grounds paint their own) ──
+  // Draws rain, storm, fog, snow or falling leaves in a see-through layer over `host` (a positioned box). Replaces any earlier layer; never takes taps.
+  function hkWxOverlay(host, kind, reduce) {
+    if (!document.getElementById("ao3-hk-fxcss")) {
+      const st = document.createElement("style");
+      st.id = "ao3-hk-fxcss";
+      st.textContent = `@keyframes hkFxFall{from{transform:translate(0,-30px)}to{transform:translate(0,740px)}}
+        @keyframes hkFxSnow{from{transform:translate(0,-30px)}to{transform:translate(26px,740px)}}
+        @keyframes hkFxLeaf{0%{transform:translate(0,-30px) rotate(0)}50%{transform:translate(50px,360px) rotate(200deg)}100%{transform:translate(-20px,740px) rotate(420deg)}}
+        @keyframes hkFxFog{0%,100%{opacity:.14;transform:translateX(-16px)}50%{opacity:.3;transform:translateX(16px)}}
+        @keyframes hkFxFlash{0%,86%,100%{opacity:0}88%{opacity:.5}90%{opacity:.05}92%{opacity:.38}95%{opacity:0}}
+        @media (prefers-reduced-motion: reduce){.hk-fx{animation:none !important}}`;
+      (document.head || document.documentElement).appendChild(st);
+    }
+    const old = host.querySelector(".hk-wxlayer"); if (old) old.remove();
+    if (!["rain", "storm", "fog", "snow", "leaves"].includes(kind)) return;
+    const NS = "http://www.w3.org/2000/svg", W = 360, H = 700;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "hk-wxlayer"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;";
+    const mk = (tag, a, css) => { const e = document.createElementNS(NS, tag); Object.keys(a).forEach(k => e.setAttribute(k, a[k])); e.setAttribute("class", "hk-fx"); if (css) e.style.cssText = css; svg.appendChild(e); return e; };
+    const r = (i, k) => { const x = Math.sin((i + 1) * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+    if (kind === "rain" || kind === "storm") {
+      const n = kind === "storm" ? 150 : 90;
+      for (let i = 0; i < n; i++) { const x = r(i, 1) * (W + 20); mk("line", { x1: x.toFixed(1), y1: 0, x2: (x - 3).toFixed(1), y2: 10, stroke: "#a9bcff", "stroke-width": 1, opacity: 0.4 }, `animation:hkFxFall ${(0.55 + r(i, 2) * 0.45).toFixed(2)}s linear -${(r(i, 3) * 1.5).toFixed(2)}s infinite;`); }
+      if (kind === "storm") mk("rect", { x: 0, y: 0, width: W, height: H, fill: "#dfe6ff", opacity: 0 }, "animation:hkFxFlash 11s linear infinite;");
+    } else if (kind === "snow") {
+      for (let i = 0; i < 80; i++) mk("circle", { cx: (r(i, 1) * W).toFixed(1), cy: 0, r: (1 + r(i, 2) * 1.3).toFixed(1), fill: "#fff", opacity: 0.8 }, `animation:hkFxSnow ${(6 + r(i, 3) * 6).toFixed(1)}s linear -${(r(i, 4) * 10).toFixed(1)}s infinite;`);
+    } else if (kind === "leaves") {
+      const cols = ["#d9822b", "#b5521e", "#e0b13a", "#9c3d1b"];
+      for (let i = 0; i < 26; i++) mk("ellipse", { cx: (r(i, 1) * W).toFixed(1), cy: 0, rx: 3.2, ry: 1.7, fill: cols[i % 4], opacity: 0.85 }, `animation:hkFxLeaf ${(7 + r(i, 3) * 6).toFixed(1)}s linear -${(r(i, 4) * 10).toFixed(1)}s infinite;`);
+    } else {
+      for (let i = 0; i < 7; i++) mk("ellipse", { cx: (r(i, 1) * W).toFixed(1), cy: ((i + 0.5) * H / 7).toFixed(1), rx: 200, ry: 50, fill: "#c8bee6", opacity: 0.2 }, `animation:hkFxFog ${(10 + i % 4 * 3)}s ease-in-out infinite;`);
+    }
+    host.appendChild(svg);
+  }
+  // Keeps a scene in step with the live values if you stay (a new hour, fresh weather, an override running out). Stops when `box` leaves the page.
+  function hkEnvWatch(box, onChange) {
+    const tick = () => { if (!document.body.contains(box)) { clearInterval(iv); return; } onChange(hkTimeGet(), hkWxGet()); };
+    const iv = setInterval(tick, 60000);
+    setTimeout(tick, 2500);                                                         // the first live answer may land just after the scene opens
+  }
+  hkLiveRefresh();                                                                  // warm the cache as soon as the world loads
+
+  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound };
 };
 
 // ════════ lib/figures.js ════════
@@ -1383,6 +1475,7 @@
   const {
     abandonedFics, gyRec, gyTotal, gyAgo, gyEpitaph, gyLeft, GY_FLOWERS, gyAddFlower, gyLight
   } = ctx.lib["graveyard-store"];
+  const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet } = ctx.lib["hawkins-kit"], { hkEnvWatch } = ctx.lib["hawkins-kit"];
   const { bellUnlock, startHourToll, bellStrike, BELL_HOUR, BELL_WORDS } = ctx.lib["bell-audio"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -2233,7 +2326,7 @@
         if (prefs.wc) add(`You\u2019re carrying ${plural(prefs.wc, "wisp")} over from yesterday. Sensible. They keep.`);
         if (prefs.wishes) add(`${plural(prefs.wishes, "wish")} down the well, and it\u2019s never once granted mine.`);
         // about the moment
-        add(["The moon\u2019s good company. Better than most readers.", "Dusk. My favourite hour. The lamps just starting to matter.", "Dawn already? I never did sleep."][tI]);
+        add(["The moon\u2019s good company. Better than most readers.", "Dusk. My favourite hour. The lamps just starting to matter.", "Dawn already? I never did sleep.", "Daylight. Odd, being looked at."][tI]);
         const wk = WX[wxI][0];
         if (wk === "rain") add("Rain again. Good for the moss, bad for my hat.");
         if (wk === "fog") add("Can\u2019t see my own lantern in this. Mind your feet.");
@@ -3063,7 +3156,8 @@
     }
     const WX = [["clear", "\u2600\uFE0F clear"], ["rain", "\u{1F327}\uFE0F rain"], ["fog", "\u{1F32B}\uFE0F fog"], ["snow", "\u2744\uFE0F snow"]];
     const WX_SAY = { clear: "The sky clears.", rain: "Rain patters on the stones. Somewhere, distant thunder.", fog: "A thick fog rolls in between the graves.", snow: "Soft snow begins to fall." };
-    let wxI = Math.max(0, Math.min(WX.length - 1, prefs.wx | 0));
+    const HK_TO_GG = [0, 1, 2, 3, 0, 1];                // the map's six weathers onto the grounds' four: leaves are the grounds' usual autumn bits, a storm is rain with its flashes
+    let wxI = HK_TO_GG[hkWxGet()];                      // the real Prague weather unless a button set one in the last hour
     const paintWeather = () => {
       if (keeperOnWeather) keeperOnWeather();
       wxG.textContent = "";
@@ -3096,9 +3190,10 @@
     const TIMES = [
       { label: "\u{1F319} night", bg: "linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%)", stars: 1, orb: "#efe6bd", dy: 0, say: "Night again. The moon is out." },
       { label: "\u{1F307} dusk", bg: "linear-gradient(180deg,#2b1b4a 0%,#6a3566 35%,#a85a52 55%,#33203c 100%)", stars: 0.3, orb: "#ffb067", dy: 34, say: "Dusk. The lamps are just starting to matter." },
-      { label: "\u{1F305} dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, say: "Dawn. Even the graveyard looks hopeful." }
+      { label: "\u{1F305} dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, say: "Dawn. Even the graveyard looks hopeful." },
+      { label: "\u2600\uFE0F day", bg: "linear-gradient(180deg,#5fa8e8 0%,#9cccf2 32%,#d6ebf7 52%,#6f7f8f 100%)", stars: 0, orb: "#fff3b0", dy: 10, say: "Daytime. The graveyard looks almost cheerful." }
     ];
-    let tI = Math.max(0, Math.min(TIMES.length - 1, prefs.tm | 0));
+    let tI = hkTimeGet();                                // the real Prague time of day unless a button set one in the last hour
     const applyTime = () => {
       const t = TIMES[tI];
       box.style.background = t.bg;
@@ -3114,8 +3209,8 @@
       const b = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);color:#e6dcf5;border-radius:999px;padding:5px 11px;font:500 12px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", label);
       b.type = "button"; b.title = title; b.onclick = fn; tools.appendChild(b); return b;
     };
-    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; prefs.tm = tI; savePrefs(); applyTime(); say(TIMES[tI].say); });
-    const wxBtn = pill(WX[wxI][1], "Change the weather", () => { wxI = (wxI + 1) % WX.length; prefs.wx = wxI; savePrefs(); wxBtn.textContent = WX[wxI][1]; paintWeather(); say(WX_SAY[WX[wxI][0]]); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); say(TIMES[tI].say); });
+    const wxBtn = pill(WX[wxI][1], "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % WX.length; hkWxSet(wxI); wxBtn.textContent = WX[wxI][1]; paintWeather(); say(WX_SAY[WX[wxI][0]]); });
     // Halloween on / off any time of year (October is automatic; this only stores an override)
     const hwBtn = pill("\u{1F383} halloween", hwOn ? "Halloween is on. Tap to turn it off" : "Halloween is off. Tap to turn it on", () => {
       const next = !hwOn;
@@ -3170,6 +3265,7 @@
     box.insertBefore(finder, field);
 
     applyTime(); paintWeather(); updateSub();
+    hkEnvWatch(box, (t, w) => { const g = HK_TO_GG[w]; if (t !== tI) { tI = t; applyTime(); } if (g !== wxI) { wxI = g; wxBtn.textContent = WX[wxI][1]; paintWeather(); } });
     if (month === 9 && now.getDate() === 31) say("Happy Halloween. Tonight, the graves are almost lively.");
 
     field.appendChild(svg);
@@ -5444,6 +5540,7 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["village"] = function (ctx) {
   'use strict';
   const { gyHash } = ctx.shared;
+  const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
   const openChapel = (...args) => world.openChapel(...args);
@@ -5494,13 +5591,8 @@
     const anim = (node, css) => { node.setAttribute("class", "hb-anim"); node.style.cssText += css; return node; };
     const rnd = seed => { const x = Math.sin(gyHash(String(seed)) * 12.9898) * 43758.5453; return x - Math.floor(x); };
 
-    // time of day: the grounds keep it in ao3-gg-prefs ("tm"); read and write only that one value
-    const PKEY = "ao3-gg-prefs";
-    let tI = 0;
-    try { const p = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; tI = Math.max(0, Math.min(2, p.tm | 0)); } catch {}
-    const saveTime = () => {
-      try { const p = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; p.tm = tI; localStorage.setItem(PKEY, JSON.stringify(p)); } catch {}
-    };
+    // time of day and weather: the real Prague ones, shared by every scene on the map (the buttons override them for an hour; see hawkins-kit)
+    let tI = hkTimeGet(), wxI = hkWxGet();
 
     // ── shell (same look as the grounds) ──
     const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000002;");
@@ -5914,11 +6006,12 @@
     }
     field.appendChild(svg);
 
-    // ── time of day (same three looks as the grounds) ──
+    // ── time of day (night, dusk, dawn, day: same looks as the grounds) ──
     const TIMES = [
       { label: "\u{1F319} night", name: "night", bg: "linear-gradient(180deg,#0c0a1c 0%,#1a1330 45%,#231a38 100%)", stars: 1, orb: "#efe6bd", dy: 0, lit: 1, tint: ["#000000", 0], say: "Night in Hollowbrook. The bell has stopped; the lamps haven’t." },
       { label: "\u{1F307} dusk", name: "dusk", bg: "linear-gradient(180deg,#2b1b4a 0%,#6a3566 35%,#a85a52 55%,#33203c 100%)", stars: 0.3, orb: "#ffb067", dy: 34, lit: 0.9, tint: ["#ff8a5c", 0.1], say: "Dusk. Every window is deciding whether to light up." },
-      { label: "\u{1F305} dawn", name: "dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, lit: 0.6, tint: ["#ffc9c9", 0.09], say: "Dawn. The first chimneys are already smoking." }
+      { label: "\u{1F305} dawn", name: "dawn", bg: "linear-gradient(180deg,#27356a 0%,#6e75b0 32%,#d9a0a0 55%,#42354f 100%)", stars: 0.12, orb: "#fff1c9", dy: 24, lit: 0.6, tint: ["#ffc9c9", 0.09], say: "Dawn. The first chimneys are already smoking." },
+      { label: "\u2600\uFE0F day", name: "day", bg: "linear-gradient(180deg,#5fa8e8 0%,#9cccf2 35%,#d6ebf7 55%,#7f93ad 100%)", stars: 0, orb: "#fff3b0", dy: 10, lit: 0.15, tint: ["#e6f2ff", 0.08], say: "Daytime in Hollowbrook. The lamps are off and the bell has the whole sky to itself." }
     ];
     const applyTime = () => {
       const t = TIMES[tI];
@@ -5932,7 +6025,11 @@
       sub.textContent = "village · " + t.name;
       caption.textContent = t.say;
     };
-    const timeBtn = pill("", "Change the time of day", () => { tI = (tI + 1) % TIMES.length; saveTime(); applyTime(); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); });
+    const paintWx = () => { wxBtn.textContent = HK_WX[wxI][1]; hkWxOverlay(box, HK_WX[wxI][0], !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)); };
+    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
+    paintWx();
+    hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u26EA chapel", "Step inside the chapel", () => { close(); openChapel(); });
     pill("\u{1F514} bell tower", "Walk up to the bell tower", () => { close(); openBellTower(); });
     pill("\u{1F68C} bus", "Catch the bus to Hawkins", askBus);
@@ -6747,7 +6844,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["hawkins"] = function (ctx) {
   'use strict';
-  const { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
   const openWheelers = (...args) => world.openWheelers(...args);
@@ -6771,7 +6868,7 @@
     const { el, sv, rnd, anim } = sh.kit;
     const { box, sub, field, caption, pill, later, close } = sh;
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    let tI = hkTimeGet();
+    let tI = hkTimeGet(), wxI = hkWxGet();
 
     const W = 360, H = 600;
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
@@ -6899,6 +6996,10 @@
       if (announce) caption.textContent = t.say.map;
     };
     const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const paintWx = () => { wxBtn.textContent = HK_WX[wxI][1]; hkWxOverlay(box, HK_WX[wxI][0], reduce); };
+    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
+    paintWx();
+    hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(false); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u{1F3E1} Wheelers\u2019", "Walk up to the Wheelers\u2019 house", () => { close(); openWheelers(); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
     applyTime(true);
@@ -9617,6 +9718,7 @@ window.__ao3WorldInit = function (core) {
   const PUBLIC = ["openGraveyard", "openGraveyardGrounds", "openCelebration", "openConstellation", "openAquarium", "openBookshelf", "openGarden", "openStainedGlass", "openHollowbrook", "openChapel", "openBellTower", "openHawkins", "openWheelers", "openBasement", "openBasementFort", "openFortInside"];
   const missing = PUBLIC.filter(n => typeof world[n] !== "function");
   if (missing.length) throw new Error("world: missing " + missing.join(", ") + ". Load every file listed in manifest.json before calling __ao3WorldInit.");
+  try { void ctx.lib["hawkins-kit"]; } catch (e) {}      // start the shared environment now so the real Prague weather is fetched before any scene opens
   const api = {};
   PUBLIC.forEach(n => { api[n] = world[n]; });
   return api;
