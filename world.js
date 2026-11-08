@@ -5109,7 +5109,11 @@
   // the swimmers chase. "hide finished" takes the finished fish out of the tank (that one
   // preference is remembered). Otherwise it's all for show: nothing else is stored or changed.
   // Reached from a faint link at the bottom of the tracker, next to "constellation".
-  function openAquarium() {
+  // Pond mode: openAquarium({ pond: true, onClose }) shows the same fish as a pond seen from above (grass, stones, reeds, lily pads,
+  // ripples instead of bubbles, fish turning to any heading). Opened by tapping the pond in the woods; onClose is called when it closes.
+  function openAquarium(opts) {
+    const pond = !!(opts && opts.pond);
+    let onDone = opts && typeof opts.onClose === "function" ? opts.onClose : null;
     const old = document.getElementById("ao3-aquarium");
     if (old) old.remove();
     nvEnsureCss(); // provides the .nv-anim reduced-motion rule
@@ -5170,7 +5174,7 @@
         color: PAL[kind][gyHash("c" + f.workId) % PAL[kind].length],
         speed: (a + rnd("sp" + f.workId) * (b - a)) * calm,
         x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, next: 0, lookAt: 0,
-        dir: rnd("d" + f.workId) < 0.5 ? 1 : -1,
+        dir: rnd("d" + f.workId) < 0.5 ? 1 : -1, ang: rnd("an" + f.workId) * 6.28 - 3.14,
         ph: rnd("ph" + f.workId) * 6.28,
         g: null, tail: null, chase: null,
       };
@@ -5181,11 +5185,12 @@
     const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000002;");
     back.id = "ao3-aquarium";
     const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;font-family:inherit;color:#e8f6ff;background:linear-gradient(180deg,#0f4c75 0%,#0b3a5e 45%,#07223d 100%);border:1px solid rgba(160,220,255,0.28);box-shadow:0 12px 40px rgba(0,0,0,0.6);");
+    if (pond) { box.style.background = "radial-gradient(ellipse at 50% 45%,#2a4a2c 0%,#1d3a24 55%,#10261a 100%)"; box.style.border = "1px solid rgba(170,220,160,0.28)"; }
     back.appendChild(box);
 
     const topbar = el("div", "position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(160,220,255,0.2);background:rgba(4,22,40,0.5);");
     const ttl = el("div", "display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;");
-    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#d6f0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", "🐠 Fic Aquarium"));
+    ttl.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:#d6f0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;", pond ? "🪷 The Pond" : "🐠 Fic Aquarium"));
     const subEl = el("div", "font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:0.04em;color:rgba(214,240,255,0.65);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;",
       `${fish.length} fish \u00B7 ${count("lively")} lively`);
     ttl.appendChild(subEl);
@@ -5222,6 +5227,7 @@
       window.removeEventListener("resize", onResize);
       document.removeEventListener("keydown", onKey);
       back.remove();
+      if (onDone) { const f = onDone; onDone = null; try { f(); } catch {} }
     };
     xBtn.onclick = close;
     back.addEventListener("click", e => { if (e.target === back) close(); });
@@ -5230,8 +5236,8 @@
     if (!fish.length) {
       const empty = el("div", "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;");
       empty.appendChild(el("div", "font-size:34px;", "🫧"));
-      empty.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#d6f0ff;margin-top:8px;", "An empty tank."));
-      empty.appendChild(el("div", "font-size:12px;color:rgba(214,240,255,0.65);margin-top:4px;", "Track a fic and a fish will move in."));
+      empty.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#d6f0ff;margin-top:8px;", pond ? "An empty pond." : "An empty tank."));
+      empty.appendChild(el("div", "font-size:12px;color:rgba(214,240,255,0.65);margin-top:4px;", pond ? "Track a fic and a fish will find its way here." : "Track a fic and a fish will move in."));
       sky.appendChild(empty);
       feedBtn.style.display = "none"; finBtn.style.display = "none";
       document.body.appendChild(back);
@@ -5246,7 +5252,9 @@
     const fishLayer = sv("g");
     const flakeLayer = sv("g");
     const bubbleLayer = sv("g");
-    svg.appendChild(scn); svg.appendChild(fishLayer); svg.appendChild(flakeLayer); svg.appendChild(bubbleLayer);
+    const surf = sv("g");       // pond mode: lily pads and reeds float above the fish (rebuilt on resize)
+    surf.setAttribute("pointer-events", "none");
+    svg.appendChild(scn); svg.appendChild(fishLayer); svg.appendChild(flakeLayer); svg.appendChild(bubbleLayer); svg.appendChild(surf);
     sky.appendChild(svg);
 
     const caption = el("div", "position:absolute;left:0;right:0;bottom:46px;text-align:center;padding:0 16px;pointer-events:none;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;color:#f4fbff;text-shadow:0 1px 6px rgba(0,0,0,0.8);min-height:36px;");
@@ -5271,9 +5279,75 @@
     legend.appendChild(el("span", "", "bigger = more words"));
     sky.appendChild(legend);
 
+    // pond geometry: the swimmable water is an ellipse a little smaller than the drawn (slightly wobbly) edge
+    let PX = 0, PY = 0, PRX = 1, PRY = 1;
+    const pondInside = (x, y, m) => ((x - PX) / Math.max(8, PRX * 0.9 - m)) ** 2 + ((y - PY) / Math.max(8, PRY * 0.9 - m)) ** 2;
+    const pondPt = (m, a, r) => { a = a == null ? Math.random() * 6.283 : a; r = Math.sqrt(r == null ? Math.random() : r); return [PX + Math.cos(a) * r * Math.max(8, PRX * 0.9 - m), PY + Math.sin(a) * r * Math.max(8, PRY * 0.9 - m)]; };
+    const pondEdge = k => { let pts = ""; for (let i = 0; i < 64; i++) { const a = i / 64 * 6.2832, r = 1 + 0.045 * Math.sin(3 * a + 0.7) + 0.035 * Math.sin(5 * a + 2.1) + 0.02 * Math.sin(8 * a + 4); pts += `${(PX + Math.cos(a) * PRX * r * k).toFixed(1)},${(PY + Math.sin(a) * PRY * r * k).toFixed(1)} `; } return pts; };
+    const edgeAt = (a, k) => { const r = 1 + 0.045 * Math.sin(3 * a + 0.7) + 0.035 * Math.sin(5 * a + 2.1) + 0.02 * Math.sin(8 * a + 4); return [PX + Math.cos(a) * PRX * r * k, PY + Math.sin(a) * PRY * r * k]; };
+    const buildPond = () => {
+      scn.innerHTML = ""; surf.innerHTML = ""; kelp.length = 0;
+      PX = W / 2; PY = H * 0.5 + 8; PRX = W * 0.44; PRY = Math.min(H * 0.36, W * 0.7);
+      const defs = sv("defs");
+      const grad = sv("radialGradient", { id: "aq-pw", cx: "50%", cy: "45%", r: "60%" });
+      [["0%", "#4a9a9a"], ["55%", "#2c6f78"], ["100%", "#17454f"]].forEach(([o, c]) => grad.appendChild(sv("stop", { offset: o, "stop-color": c })));
+      defs.appendChild(grad); scn.appendChild(defs);
+      for (let i = 0; i < 70; i++) {                                    // grass tufts
+        const x = rnd("gx" + i) * W, y = rnd("gy" + i) * H;
+        if (pondInside(x, y, -PRX * 0.25) < 1.5) continue;
+        scn.appendChild(sv("path", { d: `M${x.toFixed(1)} ${y.toFixed(1)} l-2 -5 M${x.toFixed(1)} ${y.toFixed(1)} l0.5 -6 M${x.toFixed(1)} ${y.toFixed(1)} l3 -4`, stroke: i % 3 ? "#3f7a3f" : "#5a9a4a", "stroke-width": "1.2", "stroke-linecap": "round", fill: "none", "stroke-opacity": "0.8" }));
+      }
+      for (let i = 0; i < 5; i++) {                                     // a few wildflowers
+        const x = rnd("fx" + i) * W, y = rnd("fy" + i) * H;
+        if (pondInside(x, y, -PRX * 0.3) < 1.6) continue;
+        scn.appendChild(sv("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: "2.2", fill: ["#f6e27a", "#f6c8dc", "#fff"][i % 3] }));
+      }
+      scn.appendChild(sv("polygon", { points: pondEdge(1.14), fill: "#3a2f22", opacity: "0.9" }));      // the muddy bank
+      scn.appendChild(sv("polygon", { points: pondEdge(1.05), fill: "#14343c" }));                      // the dark rim of the water
+      scn.appendChild(sv("polygon", { points: pondEdge(1), fill: "url(#aq-pw)" }));                     // the water
+      for (let i = 0; i < 14; i++) {                                    // pebbles on the bottom, seen through the water
+        const a = rnd("bpa" + i) * 6.283, r = 0.2 + rnd("bpr" + i) * 0.7;
+        scn.appendChild(sv("ellipse", { cx: (PX + Math.cos(a) * PRX * r).toFixed(1), cy: (PY + Math.sin(a) * PRY * r).toFixed(1), rx: (3 + rnd("bps" + i) * 5).toFixed(1), ry: (2 + rnd("bpt" + i) * 3).toFixed(1), fill: i % 2 ? "#8ab5a8" : "#1b4a52", opacity: "0.22" }));
+      }
+      for (let i = 0; i < 3; i++) {                                     // light drifting on the water
+        const c = sv("ellipse", { cx: (PX + (rnd("lx" + i) - 0.5) * PRX), cy: (PY + (rnd("ly" + i) - 0.5) * PRY), rx: (30 + i * 10), ry: (10 + i * 3), fill: "#d6f3f0" });
+        c.setAttribute("opacity", "0.06"); c.setAttribute("class", "nv-anim");
+        c.style.animation = `aqRay ${(6 + i * 2.1).toFixed(1)}s ease-in-out ${(i * 1.4).toFixed(1)}s infinite`;
+        scn.appendChild(c);
+      }
+      for (let i = 0; i < 26; i++) {                                    // stones round the edge, a few gaps for reeds
+        const a = i / 26 * 6.2832 + rnd("sa" + i) * 0.12;
+        const [ex, ey] = edgeAt(a, 1.1);
+        scn.appendChild(sv("ellipse", { cx: ex.toFixed(1), cy: ey.toFixed(1), rx: (4 + rnd("sw" + i) * 5).toFixed(1), ry: (3 + rnd("sh" + i) * 3).toFixed(1), fill: ["#7b8580", "#656f6a", "#8d9690"][i % 3], stroke: "#3c4541", "stroke-width": "0.6", transform: `rotate(${(a * 57.3).toFixed(0)} ${ex.toFixed(1)} ${ey.toFixed(1)})` }));
+      }
+      [[0.35, 0.8], [2.2, 0.8], [4.2, 0.9], [5.4, 0.8]].forEach(([a, k], i) => {     // reeds and cattails on the bank
+        const [ex, ey] = edgeAt(a, 1.08);
+        const g = sv("g", { transform: `translate(${ex.toFixed(1)} ${ey.toFixed(1)})` });
+        for (let j = 0; j < 7; j++) {
+          const ang = (rnd("ra" + i + j) - 0.5) * 2.4 - 1.57, len = 16 + rnd("rl" + i + j) * 16;
+          g.appendChild(sv("path", { d: `M0 0 Q${(Math.cos(ang) * len * 0.5).toFixed(1)} ${(Math.sin(ang) * len * 0.5 - 3).toFixed(1)} ${(Math.cos(ang) * len).toFixed(1)} ${(Math.sin(ang) * len).toFixed(1)}`, stroke: j % 2 ? "#4f8a4a" : "#6aa35a", "stroke-width": "1.8", fill: "none", "stroke-linecap": "round" }));
+          if (j % 3 === 0) g.appendChild(sv("ellipse", { cx: (Math.cos(ang) * len).toFixed(1), cy: (Math.sin(ang) * len).toFixed(1), rx: "1.8", ry: "4.5", fill: "#6b4a35", transform: `rotate(${(ang * 57.3 + 90).toFixed(0)} ${(Math.cos(ang) * len).toFixed(1)} ${(Math.sin(ang) * len).toFixed(1)})` }));
+        }
+        surf.appendChild(g);
+      });
+      for (let i = 0; i < 6; i++) {                                     // lily pads above the fish, swaying a touch
+        const a = rnd("pa" + i) * 6.283, r = 0.35 + rnd("pr2" + i) * 0.5, lr = 11 + rnd("pl" + i) * 9;
+        const x = PX + Math.cos(a) * PRX * r * 0.9, y = PY + Math.sin(a) * PRY * r * 0.9;
+        const outer = sv("g", { transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})` });
+        const inner = sv("g");
+        const notch = rnd("pn" + i) * 6.28;
+        inner.appendChild(sv("path", { d: `M0 0 L${(Math.cos(notch) * lr).toFixed(1)} ${(Math.sin(notch) * lr).toFixed(1)} A${lr} ${lr} 0 1 1 ${(Math.cos(notch + 0.5) * lr).toFixed(1)} ${(Math.sin(notch + 0.5) * lr).toFixed(1)} Z`, fill: i % 2 ? "#3f8a55" : "#4d9a5a", stroke: "#2c6a3f", "stroke-width": "0.6" }));
+        inner.appendChild(sv("path", { d: `M0 0 L${(Math.cos(notch + 3) * lr * 0.8).toFixed(1)} ${(Math.sin(notch + 3) * lr * 0.8).toFixed(1)}`, stroke: "#2c6a3f", "stroke-width": "0.6", "stroke-opacity": "0.6" }));
+        if (i % 3 === 1) { inner.appendChild(sv("circle", { cx: 0, cy: 0, r: "3.4", fill: "#f6c8dc" })); inner.appendChild(sv("circle", { cx: 0, cy: 0, r: "1.3", fill: "#f6e27a" })); }
+        outer.appendChild(inner); surf.appendChild(outer);
+        kelp.push({ inner, ph: rnd("pp" + i) * 6.28, amp: 5 + rnd("pq" + i) * 6 });
+      }
+    };
+
     // scenery: light rays, kelp, sand. Rebuilt whenever the tank is resized.
     const kelp = [];
     const buildScenery = () => {
+      if (pond) { buildPond(); return; }
       scn.innerHTML = ""; kelp.length = 0;
       floorY = H - 30;
       for (let i = 0; i < 3; i++) {
@@ -5340,7 +5414,32 @@
       fi.g = g; fi.tail = tail;
       fishLayer.appendChild(g);
     };
-    fish.forEach(drawFish);
+    // seen from above (pond mode): body, forked tail, two side fins, two eyes, a shadow on the bottom; faces right, rotated to its heading
+    const drawFishTop = fi => {
+      const { L, color } = fi;
+      const g = sv("g"), tail = sv("g");
+      g.appendChild(sv("ellipse", { cx: L * 0.04, cy: L * 0.16, rx: L * 0.42, ry: L * 0.2, fill: "#06222a", opacity: "0.25" }));
+      tail.appendChild(sv("path", { d: `M ${-L * 0.28} 0 L ${-L * 0.66} ${-L * 0.24} Q ${-L * 0.5} 0 ${-L * 0.66} ${L * 0.24} Z`, fill: color, "fill-opacity": "0.9" }));
+      g.appendChild(tail);
+      [-1, 1].forEach(sd => g.appendChild(sv("ellipse", { cx: L * 0.1, cy: sd * L * 0.25, rx: L * 0.13, ry: L * 0.06, fill: color, "fill-opacity": "0.8", transform: `rotate(${sd * -28} ${L * 0.1} ${sd * L * 0.25})` })));
+      g.appendChild(sv("ellipse", { cx: 0, cy: 0, rx: L * 0.4, ry: L * 0.2, fill: color }));
+      g.appendChild(sv("ellipse", { cx: -L * 0.02, cy: 0, rx: L * 0.3, ry: L * 0.07, fill: "#fff", "fill-opacity": "0.2" }));
+      if (gyHash("s" + fi.f.workId) % 3 === 0) g.appendChild(sv("ellipse", { cx: -L * 0.08, cy: -L * 0.05, rx: L * 0.13, ry: L * 0.09, fill: "#fff", "fill-opacity": "0.5" }));
+      if (fi.kind === "abandoned") g.setAttribute("opacity", "0.75");
+      else [-1, 1].forEach(sd => { const er = Math.max(1.2, L * 0.05); g.appendChild(sv("circle", { cx: L * 0.28, cy: sd * L * 0.12, r: er, fill: "#fff" })); g.appendChild(sv("circle", { cx: L * 0.295, cy: sd * L * 0.12, r: Math.max(0.7, L * 0.026), fill: "#12202b" })); });
+      const hit = sv("circle", { cx: 0, cy: 0, r: Math.max(L * 0.55, 15), fill: "transparent" });
+      hit.style.cursor = "pointer";
+      hit.addEventListener("click", e => {
+        e.stopPropagation();
+        const w = fi.f.words ? ` \u00B7 ${fmtWords(fi.f.words)} words` : "";
+        say(`${titleOf(fi.f)}${w} \u00B7 ${LABEL[fi.kind]}`, 5000);
+        for (let i = 0; i < 3; i++) spawnBubble(fi.x + Math.cos(fi.ang) * fi.L * 0.4, fi.y + Math.sin(fi.ang) * fi.L * 0.4);
+      });
+      g.appendChild(hit);
+      fi.g = g; fi.tail = tail;
+      fishLayer.appendChild(g);
+    };
+    fish.forEach(pond ? drawFishTop : drawFish);
     const paintFinished = () => {
       fish.forEach(fi => {
         if (fi.kind !== "finished") return;
@@ -5365,6 +5464,12 @@
     const bubbles = [];
     const spawnBubble = (x, y) => {
       if (bubbles.length > 45) return;
+      if (pond) {                                                      // a ripple instead of a bubble: a ring that widens and fades
+        const c = sv("circle", { cx: x, cy: y, r: "2", fill: "none", stroke: "#e8f6ff", "stroke-opacity": "0", "stroke-width": "1" });
+        bubbleLayer.appendChild(c);
+        bubbles.push({ el: c, x, y, ripple: true, age: -Math.random() * 0.5, v: 0, ph: 0 });
+        return;
+      }
       const r = 1.5 + Math.random() * 2.5;
       const c = sv("circle", { cx: x, cy: y, r: r.toFixed(1), fill: "none", stroke: "#e8f6ff", "stroke-opacity": "0.6", "stroke-width": "0.9" });
       bubbleLayer.appendChild(c);
@@ -5373,12 +5478,14 @@
 
     // ── flakes ("feeding" is purely for show) ──
     const flakes = [];
-    const feedLines = ["Nom nom nom.", "They seem pleased.", "Nothing has changed, but everyone looks happier.", "Fed. The ledger remains unchanged."];
+    const feedLinesPond = ["Plip. Plip. Plip.", "The ripples spread. Everyone looks hopeful.", "A heron is not impressed.", "Fed. The ledger remains unchanged."];
+    const feedLines = pond ? feedLinesPond : ["Nom nom nom.", "They seem pleased.", "Nothing has changed, but everyone looks happier.", "Fed. The ledger remains unchanged."];
     feedBtn.onclick = () => {
       for (let i = 0; i < 10; i++) {
         const c = sv("circle", { cx: 0, cy: -6, r: "2.2", fill: "#f3d9a4" });
         c.setAttribute("opacity", "0");
         flakeLayer.appendChild(c);
+        if (pond) { const [fx, fy] = pondPt(10); flakes.push({ el: c, x: fx, y: fy, vy: 0, delay: i * 0.12, ph: Math.random() * 6.28, show: false, rest: true, age: 0, dead: false }); continue; }   // crumbs float on the water
         flakes.push({ el: c, x: 20 + Math.random() * (W - 40), y: -6, vy: 26 + Math.random() * 14, delay: i * 0.12, ph: Math.random() * 6.28, show: false, rest: false, age: 0, dead: false });
       }
       try { if (navigator.vibrate) navigator.vibrate(10); } catch {}
@@ -5390,7 +5497,12 @@
     let T = 0;
     const retarget = fi => {
       const m = fi.L * 0.7;
-      if (fi.kind === "slow") {
+      if (pond) {
+        let p;
+        if (fi.kind === "slow") { p = [fi.x + (Math.random() - 0.5) * 110, fi.y + (Math.random() - 0.5) * 70]; if (pondInside(p[0], p[1], fi.L * 0.6) > 1) p = pondPt(fi.L * 0.6); }
+        else p = pondPt(fi.L * 0.6);
+        fi.tx = p[0]; fi.ty = p[1];
+      } else if (fi.kind === "slow") {
         // inch along: small hops from where it already is
         fi.tx = Math.max(m, Math.min(W - m, fi.x + (Math.random() - 0.5) * 160));
         fi.ty = Math.max(H * 0.3, Math.min(floorY - 24, fi.y + (Math.random() - 0.5) * 80));
@@ -5406,6 +5518,15 @@
     const restFish = () => {
       // asleep fish lie along the sand, spread out and slightly tilted
       const sleepers = fish.filter(x => x.kind === "abandoned");
+      if (pond) {                                                      // resting fish lie still along the bottom of the pond, near the bank
+        sleepers.forEach((fi, i) => {
+          const a = 0.25 + (i + 0.5) / sleepers.length * 2.6 + (rnd("rx" + fi.f.workId) - 0.5) * 0.3;
+          const [x, y] = pondPt(fi.L * 0.5, a, 0.7);
+          fi.x = x; fi.y = y; fi.ang = a + 1.57 + (rnd("ry" + fi.f.workId) - 0.5) * 0.6;
+          fi.g.setAttribute("transform", `translate(${fi.x.toFixed(1)} ${fi.y.toFixed(1)}) rotate(${(fi.ang * 57.3).toFixed(1)})`);
+        });
+        return;
+      }
       sleepers.forEach((fi, i) => {
         const fx = (i + 0.5 + (rnd("rx" + fi.f.workId) - 0.5) * 0.6) / sleepers.length;
         fi.x = Math.max(fi.L * 0.6, Math.min(W - fi.L * 0.6, fx * W));
@@ -5424,6 +5545,7 @@
         placed = true;
         fish.forEach(fi => {
           if (fi.kind === "abandoned") return;
+          if (pond) { const [x, y] = pondPt(fi.L * 0.6, rnd("ia" + fi.f.workId) * 6.283, rnd("ir" + fi.f.workId)); fi.x = x; fi.y = y; retarget(fi); return; }
           fi.x = fi.L + rnd("ix" + fi.f.workId) * (W - 2 * fi.L);
           const lo = fi.kind === "finished" ? H * 0.2 : 40, hi = fi.kind === "finished" ? H * 0.65 : floorY - 24;
           fi.y = lo + rnd("iy" + fi.f.workId) * Math.max(10, hi - lo);
@@ -5432,6 +5554,7 @@
       } else {
         fish.forEach(fi => {
           if (fi.kind === "abandoned") return;
+          if (pond) { const n = pondInside(fi.x, fi.y, fi.L * 0.6); if (n > 1) { const s = 1 / Math.sqrt(n); fi.x = PX + (fi.x - PX) * s; fi.y = PY + (fi.y - PY) * s; } return; }
           fi.x = Math.max(fi.L * 0.6, Math.min(W - fi.L * 0.6, fi.x));
           fi.y = Math.min(floorY - 12, fi.y);
         });
@@ -5457,8 +5580,8 @@
           if (k.y >= floorY + 4) { k.y = floorY + 4; k.rest = true; }
         } else {
           k.age += dt;
-          k.el.setAttribute("opacity", Math.max(0, 1 - k.age / 4).toFixed(2));
-          if (k.age >= 4) { killFlake(k); flakes.splice(i, 1); continue; }
+          k.el.setAttribute("opacity", Math.max(0, 1 - k.age / (pond ? 6 : 4)).toFixed(2));
+          if (k.age >= (pond ? 6 : 4)) { killFlake(k); flakes.splice(i, 1); continue; }
         }
         k.el.setAttribute("cx", k.x.toFixed(1)); k.el.setAttribute("cy", k.y.toFixed(1));
       }
@@ -5498,6 +5621,16 @@
         fi.vy += (dy / d * sp * arrive - fi.vy) * ease;
         fi.x += fi.vx * dt; fi.y += fi.vy * dt;
         const m = fi.L * 0.6;
+        if (pond) {                                                    // keep to the water: slide back inside the ellipse and turn away from the bank
+          const n = pondInside(fi.x, fi.y, m);
+          if (n > 1) { const s = 1 / Math.sqrt(n); fi.x = PX + (fi.x - PX) * s; fi.y = PY + (fi.y - PY) * s; fi.vx = (PX - fi.x) * 0.4; fi.vy = (PY - fi.y) * 0.4; if (!fi.chase) retarget(fi); }
+          const spd0 = Math.hypot(fi.vx, fi.vy);
+          if (spd0 > 4) { const da0 = Math.atan2(fi.vy, fi.vx) - fi.ang, da = Math.atan2(Math.sin(da0), Math.cos(da0)); fi.ang += da * Math.min(1, dt * 5); }
+          fi.g.setAttribute("transform", `translate(${fi.x.toFixed(1)} ${fi.y.toFixed(1)}) rotate(${(fi.ang * 57.3).toFixed(1)})`);
+          fi.tail.setAttribute("transform", `rotate(${(Math.sin(T * (2.2 + spd0 / 22) + fi.ph) * (8 + Math.min(10, spd0 / 7)) * (reduced ? 0.5 : 1)).toFixed(1)} ${(-fi.L * 0.28).toFixed(1)} 0)`);
+          if (fi.kind === "lively" && Math.random() < dt * 0.05) spawnBubble(fi.x + Math.cos(fi.ang) * fi.L * 0.4, fi.y + Math.sin(fi.ang) * fi.L * 0.4);
+          return;
+        }
         if (fi.x < m) { fi.x = m; fi.vx = Math.abs(fi.vx); } else if (fi.x > W - m) { fi.x = W - m; fi.vx = -Math.abs(fi.vx); }
         if (fi.y < 10) { fi.y = 10; fi.vy = Math.abs(fi.vy); } else if (fi.y > floorY - 8) { fi.y = floorY - 8; fi.vy = -Math.abs(fi.vy); }
         if (Math.abs(fi.vx) > 3) fi.dir = fi.vx > 0 ? 1 : -1;
@@ -5511,9 +5644,17 @@
       });
 
       // ambient bubbles off the sand
-      if (Math.random() < dt * 0.9) spawnBubble(Math.random() * W, floorY);
+      if (pond) { if (Math.random() < dt * 0.45) { const [rx, ry] = pondPt(10); spawnBubble(rx, ry); } }
+      else if (Math.random() < dt * 0.9) spawnBubble(Math.random() * W, floorY);
       for (let i = bubbles.length - 1; i >= 0; i--) {
         const b = bubbles[i];
+        if (b.ripple) {
+          b.age += dt;
+          if (b.age < 0) continue;
+          if (b.age > 1.8) { b.el.remove(); bubbles.splice(i, 1); continue; }
+          b.el.setAttribute("r", (2 + b.age * 15 * calm).toFixed(1)); b.el.setAttribute("stroke-opacity", (0.5 * (1 - b.age / 1.8)).toFixed(2));
+          continue;
+        }
         b.y -= b.v * dt * calm; b.x += Math.sin(T * 3 + b.ph) * 8 * dt;
         if (b.y < -6) { b.el.remove(); bubbles.splice(i, 1); continue; }
         b.el.setAttribute("cx", b.x.toFixed(1)); b.el.setAttribute("cy", b.y.toFixed(1));
@@ -7153,7 +7294,7 @@
       if (!picked) {
         const any = everyone.some(i => i.state !== "new");
         caption.appendChild(el("div", "", TIMES[tI].say + (any ? "" : " Nobody lives here yet: an animal turns up for each fic you start reading.")));
-        if (any) caption.appendChild(el("div", sm, "Tap an animal, a pair of eyes or a set of tracks. Hold one to change its animal."));
+        if (any) caption.appendChild(el("div", sm, "Tap an animal, a pair of eyes or a set of tracks. Hold one to change its animal. Tap the pond to look in."));
         return;
       }
       if (picked.kind === "gate") {
@@ -7363,6 +7504,11 @@
     const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
     svg.appendChild(selG);
     const hits = sv("g", {}, svg);                                          // the tap targets sit on top of the light and shade
+    {                                                                    // the pond opens as a pond (the fic aquarium, seen from above); closing it brings you back here, music still going
+      const ph = sv("ellipse", { cx: POND[0], cy: POND[1], rx: POND[2] + 4, ry: POND[3] + 4, fill: "transparent" }, hits);
+      ph.style.cursor = "pointer"; ph.setAttribute("role", "button"); ph.setAttribute("aria-label", "The pond");
+      ph.addEventListener("click", e => { e.stopPropagation(); restoreScroll = field.scrollTop; bgKeep = true; close(); world.openAquarium({ pond: true, onClose: () => openWoods() }); });
+    }
     targets.forEach(t => {
       const h = sv("circle", { cx: t.x.toFixed(1), cy: (t.y + (t.hitDy || 0)).toFixed(1), r: t.hit, fill: "transparent" }, hits);
       h.style.cursor = "pointer"; t.hitEl = h;
