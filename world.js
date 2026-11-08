@@ -6075,6 +6075,63 @@
   // plank bridge; 3 a hollow oak with burrow mounds; 4 a wide meadow with a boulder, a lantern and tall grass, and the side
   // path to the graveyard gate. Trees crowd the edges and the belts between glades, and thin out toward the bottom.
   // Time of day and weather are the shared live ones (see lib/hawkins-kit.js), the same as in the village.
+  // ── animal sounds: made with the Web Audio API (no sound files), played when you tap an animal. Rough, friendly imitations ──
+  // Browsers only allow sound after a tap, so the sound is made inside the tap itself. One tiny setting (ao3-wd-mute) is saved.
+  const MUTE_KEY = "ao3-wd-mute";
+  const wdMuted = () => { try { return localStorage.getItem(MUTE_KEY) === "1"; } catch (e) { return false; } };
+  const wdSetMuted = m => { try { m ? localStorage.setItem(MUTE_KEY, "1") : localStorage.removeItem(MUTE_KEY); } catch (e) {} };
+  const voices = (() => {
+    const noiseBuf = ac => ac._wdN || (ac._wdN = (() => { const b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })());
+    const shape = (g, t, dur, vol, atk) => { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + atk); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); };
+    // a pitched sound: o.f = [[Hz, seconds from start], ...] glides between the points; vib = [rate, depth in Hz]; filt = [type, Hz, Q]
+    const tone = (ac, out, t, o) => {
+      const osc = ac.createOscillator(), g = ac.createGain(); osc.type = o.type || "sine";
+      osc.frequency.setValueAtTime(o.f[0][0], t); for (let i = 1; i < o.f.length; i++) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f[i][0]), t + o.f[i][1]);
+      let node = osc;
+      if (o.filt) { const f = ac.createBiquadFilter(); f.type = o.filt[0]; f.frequency.value = o.filt[1]; f.Q.value = o.filt[2] || 1; osc.connect(f); node = f; }
+      node.connect(g); g.connect(out); shape(g, t, o.dur, o.vol, o.atk || 0.012);
+      if (o.vib) { const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = o.vib[0]; lg.gain.value = o.vib[1]; l.connect(lg); lg.connect(osc.frequency); l.start(t); l.stop(t + o.dur + 0.05); }
+      osc.start(t); osc.stop(t + o.dur + 0.05);
+    };
+    // a breathy sound: filtered noise, optionally wobbled in volume (am = Hz)
+    const noise = (ac, out, t, o) => {
+      const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); src.buffer = noiseBuf(ac); src.loop = true;
+      f.type = o.type || "bandpass"; f.frequency.value = o.hz; f.Q.value = o.q || 1; src.connect(f); f.connect(g); g.connect(out); shape(g, t, o.dur, o.vol, o.atk || 0.008);
+      if (o.am) { const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = o.am; lg.gain.value = o.vol * 0.9; l.connect(lg); lg.connect(g.gain); l.start(t); l.stop(t + o.dur + 0.05); }
+      src.start(t); src.stop(t + o.dur + 0.05);
+    };
+    const R = (a, b) => a + Math.random() * (b - a);
+    return {
+      fox(ac, o, t, v, p) { [0, 0.23].forEach((d, i) => tone(ac, o, t + d, { type: "sawtooth", f: [[600 * p * (1 + i * 0.1), 0], [900 * p * (1 + i * 0.1), 0.05], [510 * p, 0.16]], dur: 0.18, vol: 0.5 * v, filt: ["bandpass", 1100, 1.6] })); tone(ac, o, t + 0.5, { type: "triangle", f: [[1400 * p, 0], [1950 * p, 0.09]], dur: 0.13, vol: 0.22 * v }); },
+      rabbit(ac, o, t, v, p) { [0, 0.17].forEach(d => { tone(ac, o, t + d, { f: [[135 * p, 0], [55, 0.09]], dur: 0.12, vol: 0.9 * v }); noise(ac, o, t + d, { type: "lowpass", hz: 320, dur: 0.05, vol: 0.3 * v }); }); },
+      fawn(ac, o, t, v, p) { tone(ac, o, t, { type: "sawtooth", f: [[440 * p, 0], [340 * p, 0.42]], dur: 0.46, vol: 0.42 * v, atk: 0.04, vib: [28, 18], filt: ["bandpass", 850, 1.2] }); },
+      hedgehog(ac, o, t, v, p) { [0, 0.1, 0.22].forEach(d => noise(ac, o, t + d, { hz: 2600 * p, q: 3, dur: 0.08, vol: 0.4 * v })); tone(ac, o, t + 0.36, { f: [[2000 * p, 0], [2700 * p, 0.1]], dur: 0.13, vol: 0.12 * v }); },
+      owl(ac, o, t, v, p) { [[0, 0.3, 0.28], [0.4, 0.3, 0.28], [0.85, 0.62, 0.55]].forEach(([d, dur, gl], i) => { tone(ac, o, t + d, { f: [[(i < 2 ? 390 : 370) * p, 0], [(i < 2 ? 335 : 295) * p, gl]], dur, vol: 0.6 * v, atk: 0.05, vib: [5, 5], filt: ["lowpass", 950, 0.8] }); tone(ac, o, t + d, { f: [[780 * p, 0], [670 * p, gl]], dur, vol: 0.1 * v, atk: 0.05, filt: ["lowpass", 1500, 0.8] }); }); },
+      squirrel(ac, o, t, v, p) { let d = 0; for (let i = 0; i < 7; i++) { tone(ac, o, t + d, { type: "square", f: [[R(2000, 2500) * p, 0], [R(2700, 3200) * p, 0.03]], dur: 0.04, vol: 0.2 * v, atk: 0.004, filt: ["bandpass", 2600, 2] }); d += R(0.05, 0.075); } },
+      badger(ac, o, t, v, p) { noise(ac, o, t, { hz: 700 * p, q: 0.8, dur: 0.6, vol: 0.5 * v, atk: 0.05, am: 22 }); tone(ac, o, t, { type: "sawtooth", f: [[88 * p, 0], [68 * p, 0.55]], dur: 0.6, vol: 0.4 * v, atk: 0.05, filt: ["lowpass", 420, 1] }); },
+      raccoon(ac, o, t, v, p) { tone(ac, o, t, { type: "triangle", f: [[900 * p, 0], [1100 * p, 0.2], [800 * p, 0.42]], dur: 0.44, vol: 0.34 * v, atk: 0.03, vib: [38, 150] }); tone(ac, o, t + 0.52, { type: "triangle", f: [[1000 * p, 0], [1250 * p, 0.14], [900 * p, 0.28]], dur: 0.3, vol: 0.28 * v, atk: 0.03, vib: [40, 150] }); },
+      mouse(ac, o, t, v, p) { [[0, 0.24], [0.14, 0.2], [0.33, 0.12]].forEach(([d, vl]) => tone(ac, o, t + d, { f: [[3400 * p, 0], [4800 * p, 0.05], [3800 * p, 0.09]], dur: 0.1, vol: vl * v, atk: 0.006 })); },
+      bear(ac, o, t, v, p) { tone(ac, o, t, { type: "sawtooth", f: [[215 * p, 0], [150 * p, 0.58]], dur: 0.64, vol: 0.5 * v, atk: 0.07, vib: [9, 10], filt: ["lowpass", 650, 1] }); noise(ac, o, t, { type: "lowpass", hz: 420, dur: 0.55, vol: 0.14 * v, atk: 0.08 }); },
+      otter(ac, o, t, v, p) { [[0, 1], [0.27, 1.08], [0.5, 1.18]].forEach(([d, k], i) => tone(ac, o, t + d, { f: [[1500 * p * k, 0], [2400 * p * k, 0.09], [1700 * p * k, 0.19]], dur: i < 2 ? 0.2 : 0.14, vol: 0.34 * v, atk: 0.01 })); },
+      wolf(ac, o, t, v, p) { tone(ac, o, t, { f: [[480 * p, 0], [870 * p, 0.38], [760 * p, 0.85], [560 * p, 1.3]], dur: 1.35, vol: 0.45 * v, atk: 0.09, vib: [5.5, 14], filt: ["lowpass", 2200, 0.8] }); tone(ac, o, t, { f: [[960 * p, 0], [1740 * p, 0.38], [1520 * p, 0.85], [1120 * p, 1.3]], dur: 1.35, vol: 0.09 * v, atk: 0.09, vib: [5.5, 28], filt: ["lowpass", 3000, 0.8] }); },
+      mole(ac, o, t, v, p) { [0, 0.07, 0.15].forEach(d => noise(ac, o, t + d, { hz: 3200 * p, q: 4, dur: 0.02, vol: 0.45 * v, atk: 0.002 })); noise(ac, o, t + 0.3, { type: "lowpass", hz: 720, dur: 0.14, vol: 0.28 * v, atk: 0.02 }); tone(ac, o, t + 0.3, { f: [[125 * p, 0], [85, 0.14]], dur: 0.15, vol: 0.3 * v, atk: 0.02 }); },
+      duck(ac, o, t, v, p) { [[0, 1, 1], [0.21, 0.94, 0.85], [0.42, 0.9, 0.65]].forEach(([d, k, vl]) => tone(ac, o, t + d, { type: "sawtooth", f: [[570 * p * k, 0], [360 * p * k, 0.12]], dur: 0.16, vol: 0.46 * vl * v, atk: 0.008, filt: ["bandpass", 1500, 2.2] })); }
+    };
+  })();
+  // each voice is scaled to about the same loudness (measured by rendering them, so the hedgehog is not drowned out by the owl)
+  const LEVEL = { fox: 2.4, rabbit: 0.8, fawn: 2.3, hedgehog: 4, owl: 0.95, squirrel: 3.1, badger: 1.1, raccoon: 2.2, mouse: 2.9, bear: 1.5, otter: 2, wolf: 1.3, mole: 1.9, duck: 3.1 };
+  let wdAC = null;
+  // species: which voice; v: loudness (1 = full); pitch: 1 = as designed (each tap varies a little so it never sounds canned)
+  function wdPlay(species, v, pitch) {
+    if (wdMuted() || !voices[species]) return;
+    try {
+      if (!wdAC) wdAC = new (window.AudioContext || window.webkitAudioContext)();
+      if (wdAC.state === "suspended") wdAC.resume();
+      const out = wdAC.createGain(), comp = wdAC.createDynamicsCompressor(); out.gain.value = 0.5; out.connect(comp); comp.connect(wdAC.destination);
+      voices[species](wdAC, out, wdAC.currentTime + 0.03, (v == null ? 1 : v) * (LEVEL[species] || 1), (pitch || 1) * (0.95 + Math.random() * 0.1));
+    } catch (e) {}
+  }
+
   let restoreScroll = null;                                         // after switching an animal the woods reopen at the same spot
   const OVR_KEY = "ao3-wd-species";                                 // { work id: species } the animals you chose yourself (long-press)
   const ovrGet = () => { try { const o = JSON.parse(localStorage.getItem(OVR_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } };
@@ -6195,8 +6252,12 @@
     // the quiet side path to the graveyard gate, leaving the trail at the bottom of the last glade, going right
     const GATE = [302, 1352];
     const GPATH = (() => {
-      const ts = TRAIL.reduce((b, p) => Math.abs(p[1] - 1296) < Math.abs(b[1] - 1296) ? p : b);
-      return catmull([[ts[0] + 4, ts[1]], [ts[0] + 36, ts[1] + 30], [232, 1346], [GATE[0] - 17, GATE[1] - 3]]);
+      // forks off the trail a little above the bottom of the last glade, heading down and slightly right (about 45 degrees off
+      // the trail's own line) so it reads as a Y and not a hook; it starts inside the trail, which is drawn over its first stretch
+      let ti = 3, bd = 1e9; TRAIL.forEach((q, i) => { const d = Math.abs(q[1] - 1272); if (i > 2 && i < TRAIL.length - 3 && d < bd) { bd = d; ti = i; } });
+      const T0 = TRAIL[ti], a = TRAIL[ti - 3], c = TRAIL[ti + 3], tl = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1, tx = (c[0] - a[0]) / tl, ty = (c[1] - a[1]) / tl;
+      const dl = Math.hypot(0.36, 0.93), d1 = [0.36 / dl, 0.93 / dl];
+      return catmull([[T0[0] - tx * 12, T0[1] - ty * 12], T0, [T0[0] + d1[0] * 28, T0[1] + d1[1] * 28], [T0[0] + 46, 1326], [240, 1343], [GATE[0] - 17, GATE[1] - 3]]);
     })();
     const GLADES = [[180, 336, 146, 124], [180, 646, 150, 120], [180, 944, 150, 130], [180, 1236, 150, 132]];
     const POND = [272, 630, 54, 32];
@@ -6265,8 +6326,34 @@
 
     // ── the stream, the trail ──
     sv("path", { d: lineD(STREAM), fill: "none", stroke: "#0c1a1a", "stroke-width": 24, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.5 }, svg);
+    sv("path", { d: lineD(STREAM), fill: "none", stroke: "#5b9aa0", "stroke-width": 19.5, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.22 }, svg);     // a thin lighter rim: the water's edge
     sv("path", { d: lineD(STREAM), fill: "none", stroke: "#1f4c58", "stroke-width": 17, "stroke-linecap": "round", "stroke-linejoin": "round" }, svg);
-    sv("path", { d: lineD(STREAM), fill: "none", stroke: "#3b7d8a", "stroke-width": 5, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.4, "stroke-dasharray": "10 14" }, svg);
+    sv("path", { d: lineD(STREAM), fill: "none", stroke: "#2c6a78", "stroke-width": 9, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.5 }, svg);          // deeper, brighter water down the middle
+    for (let i = 3; i < STREAM.length - 3; i += 2) {                // short, uneven glints along the current (regular dashes read as a road)
+      const [x, y] = STREAM[i];
+      if (underBridge(x, y, 8) || rnd("sg" + i) < 0.35) continue;
+      const a = STREAM[i + 2], b = STREAM[i - 2], dx = a[0] - b[0], dy = a[1] - b[1], dl = Math.hypot(dx, dy) || 1, off = (rnd("so" + i) - 0.5) * 8;
+      const cx = (x - dy / dl * off).toFixed(1), cy = (y + dx / dl * off).toFixed(1);
+      const g = sv("ellipse", { cx, cy, rx: (3 + rnd("sw" + i) * 7).toFixed(1), ry: (0.55 + rnd("sh" + i) * 0.7).toFixed(2), fill: "#cfeaf0", opacity: 0.3, transform: `rotate(${(Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1)} ${cx} ${cy})` }, svg);
+      anim(g, `animation:wdGlint ${(3 + rnd("sd" + i) * 4).toFixed(1)}s ease-in-out ${(rnd("sl" + i) * 5).toFixed(1)}s infinite;`);
+    }
+    for (let i = 4; i < STREAM.length - 4; i += 5) {                // a few pebbles on the banks
+      const [x, y] = STREAM[i];
+      if (underBridge(x, y, 10)) continue;
+      const a = STREAM[i + 1], b = STREAM[i - 1], dx = a[0] - b[0], dy = a[1] - b[1], dl = Math.hypot(dx, dy) || 1, sd = rnd("pe" + i) < 0.5 ? 1 : -1, d = 10.5 + rnd("pd" + i) * 2.5;
+      sv("ellipse", { cx: (x - dy / dl * d * sd).toFixed(1), cy: (y + dx / dl * d * sd).toFixed(1), rx: (1.8 + rnd("pw" + i) * 2.2).toFixed(1), ry: (1.2 + rnd("ph" + i) * 1.2).toFixed(1), fill: pick(["#6f7a74", "#5a655f", "#838d86"], "pc" + i), opacity: 0.85 }, svg);
+    }
+    // ── the side path to the graveyard (glade 4, bottom right): drawn under the trail, so it grows out of it; the first stretch is wider and tapers ──
+    {
+      const cum = [0]; for (let i = 1; i < GPATH.length; i++) cum.push(cum[i - 1] + Math.hypot(GPATH[i][0] - GPATH[i - 1][0], GPATH[i][1] - GPATH[i - 1][1]));
+      [[20, "#0c1512", 0.35], [13, "#3a2d29", 1], [8, "#54423a", 0.8]].forEach(([w, c, o], li) => {
+        const g = sv("g", { opacity: o }, svg);
+        for (let i = 1; i < GPATH.length; i++) {
+          const k = Math.max(0, 1 - Math.max(0, cum[i] - 14) / 52), wi = w * (1 + 0.85 * k * k);
+          sv("line", { x1: GPATH[i - 1][0].toFixed(1), y1: GPATH[i - 1][1].toFixed(1), x2: GPATH[i][0].toFixed(1), y2: GPATH[i][1].toFixed(1), stroke: c, "stroke-width": wi.toFixed(1), "stroke-linecap": "round" }, g);
+        }
+      });
+    }
     TRAIL_PIECES.forEach(pc => {                                  // two pieces: the trail stops at the bridge on each side
       sv("path", { d: lineD(pc), fill: "none", stroke: "#0c1512", "stroke-width": 50, "stroke-linecap": "butt", "stroke-linejoin": "round", opacity: 0.35 }, svg);
       sv("path", { d: lineD(pc), fill: "none", stroke: "#3a2d29", "stroke-width": 36, "stroke-linecap": "butt", "stroke-linejoin": "round" }, svg);
@@ -6289,9 +6376,6 @@
         sv("ellipse", { cx: (x + (rnd(sd) - 0.5) * 30).toFixed(1), cy: (y + (rnd(sd + "y") - 0.5) * 12).toFixed(1), rx: (1.4 + rnd(sd + "w") * 2.2).toFixed(1), ry: (1 + rnd(sd + "h") * 1.4).toFixed(1), fill: pick(["#7a6a5e", "#6a5a50", "#8a7a6c", "#5a4a42"], sd + "c"), opacity: 0.6 }, svg);
       }
     }
-
-    // ── the side path to the graveyard (glade 4, bottom right) ──
-    [[20, "#0c1512", 0.35], [13, "#3a2d29", 1], [8, "#54423a", 0.8]].forEach(([w, c, o]) => sv("path", { d: lineD(GPATH), fill: "none", stroke: c, "stroke-width": w, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: o }, svg));
 
     // ── the pond (glade 2) ──
     {
@@ -7046,8 +7130,6 @@
       selG.removeAttribute("transform");
       if (!picked) return;
       const t = picked, r = t.ring;
-      sv("ellipse", { cx: r.cx, cy: r.cy, rx: r.rx, ry: r.ry, fill: "none", stroke: "#ffe9a8", "stroke-width": 1.4, opacity: 0.9 }, selG);
-      sv("ellipse", { cx: r.cx, cy: r.cy, rx: r.rx, ry: r.ry, fill: "#ffe9a8", opacity: 0.14 }, selG);
       let s = t.kind === "gate" ? "Graveyard" : t.kind === "howl" ? "A distant howl" : titleOf(t.it.f); if (s.length > 28) s = s.slice(0, 27) + "…";
       const tx0 = t.hx != null ? t.hx : t.x, ty0 = t.hy != null ? t.hy : t.y;
       const w = Math.max(40, s.length * 4.7 + 14), top = t.tagTop != null ? t.tagTop : Math.max(130, ty0 - 50), bx = Math.max(6, Math.min(W - 6 - w, tx0 - w / 2));
@@ -7060,6 +7142,11 @@
       if (t.kind === "gate" && picked === t) { close(); openGraveyardGrounds(); return; }
       picked = picked === t ? null : t;
       drawSel(); renderCaption();
+      if (picked) {                                                   // the animal's own sound: quieter and lower if it is asleep or only eyes in the dark; a wolf pup's howl for the howl in the distance
+        if (picked.kind === "animal") wdPlay(picked.it.species, picked.it.asleep ? 0.55 : 1, picked.it.asleep ? 0.88 : 1);
+        else if (picked.kind === "eyes") wdPlay(picked.it.species, 0.5, 0.9);
+        else if (picked.kind === "howl") wdPlay("wolf", 0.5, 0.78);
+      }
       if (picked && picked.node && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) && picked.node.animate) {
         try { picked.node.animate([{ transform: "translateY(0)" }, { transform: "translateY(-7px)" }, { transform: "translateY(0)" }], { duration: 360, easing: "ease-out" }); } catch (e) {}
       }
@@ -7233,12 +7320,15 @@
       h.style.cursor = "pointer"; t.hitEl = h;
       h.setAttribute("role", "button"); h.setAttribute("aria-label", t.kind === "gate" ? "Graveyard gate" : t.kind === "howl" ? "A distant howl" : titleOf(t.it.f));
       let lp = null, sx = 0, sy = 0, longDone = false;
-      const stopLp = () => { if (lp) { clearTimeout(lp); lp = null; } };
+      const stopLp = () => { if (lp) { clearTimeout(lp); lp = null; } document.removeEventListener("pointermove", onMv, true); document.removeEventListener("pointerup", stopLp, true); document.removeEventListener("pointercancel", stopLp, true); };
+      const onMv = e => { if (lp && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) stopLp(); };   // watched on the document: a moving animal can slide out from under a still finger
       if (t.it) {                                                      // animals, eyes and leaving prints: hold to switch the animal
         h.style.webkitTouchCallout = "none"; h.style.webkitUserSelect = "none"; h.style.userSelect = "none";
-        h.addEventListener("pointerdown", e => { longDone = false; sx = e.clientX; sy = e.clientY; stopLp(); lp = setTimeout(() => { lp = null; longDone = true; try { navigator.vibrate && navigator.vibrate(15); } catch (er) {} openSwitcher(t.it); }, 550); });
-        h.addEventListener("pointermove", e => { if (lp && Math.hypot(e.clientX - sx, e.clientY - sy) > 8) stopLp(); });
-        ["pointerup", "pointercancel", "pointerleave"].forEach(ev => h.addEventListener(ev, stopLp));
+        h.addEventListener("pointerdown", e => {
+          longDone = false; sx = e.clientX; sy = e.clientY; stopLp();
+          document.addEventListener("pointermove", onMv, true); document.addEventListener("pointerup", stopLp, true); document.addEventListener("pointercancel", stopLp, true);
+          lp = setTimeout(() => { lp = null; longDone = true; stopLp(); try { navigator.vibrate && navigator.vibrate(15); } catch (er) {} openSwitcher(t.it); }, 550);
+        });
         h.addEventListener("contextmenu", e => e.preventDefault());
       }
       h.addEventListener("click", e => { e.stopPropagation(); if (longDone) { longDone = false; return; } pickThing(t); });
@@ -7275,6 +7365,9 @@
     const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
     paintWx();
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
+    const soundBtn = pill("", "Turn the animal sounds on or off", () => { wdSetMuted(!wdMuted()); syncSound(); });
+    const syncSound = () => { soundBtn.textContent = wdMuted() ? "\u{1F515} sound off" : "\u{1F509} sound on"; };
+    syncSound();
     pill("\u{1F3D8}️ village", "Back to Hollowbrook", () => { close(); openHollowbrook(); });
     pill("\u{1FAA6} graveyard", "Follow the quiet path to the graveyard", () => { close(); openGraveyardGrounds(); });
     applyTime();
@@ -7283,7 +7376,7 @@
     if (restoreScroll != null) { field.scrollTop = restoreScroll; restoreScroll = null; }
   }
 
-  return { openWoods };
+  return { openWoods, __voices: voices, __level: LEVEL };
 };
 
 // ════════ chapel.js ════════
