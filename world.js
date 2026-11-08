@@ -6132,6 +6132,54 @@
     } catch (e) {}
   }
 
+  // ── background sound: a YouTube link you paste once (hold the sound pill to set or change it) plays quietly while the woods are open ──
+  // The link is saved as ao3-wd-bgurl. The same sound pill mutes it together with the animals. Leaving the woods stops it; switching an animal (which reopens the scene) lets it carry on.
+  const BG_KEY = "ao3-wd-bgurl", BG_VOL = 55;
+  const bgUrl = () => { try { return localStorage.getItem(BG_KEY) || ""; } catch (e) { return ""; } };
+  const bgParse = u => {
+    try {
+      const x = new URL(String(u).trim()), list = x.searchParams.get("list"); let id = null;
+      if (x.hostname.indexOf("youtu.be") >= 0) id = x.pathname.slice(1).split("/")[0];
+      else if (x.pathname.indexOf("/watch") === 0) id = x.searchParams.get("v");
+      else { const m = x.pathname.match(/^\/(shorts|embed|live|v)\/([\w-]{6,})/); if (m) id = m[2]; }
+      if (id || list) return { id, list };
+    } catch (e) {}
+    return null;
+  };
+  let bgHost = null, bgP = null, bgReady = false, bgState = -1, bgKeep = false;
+  function bgStop() {
+    try { if (bgP) bgP.destroy(); } catch (e) {}
+    bgP = null; bgReady = false; bgState = -1;
+    if (bgHost) { bgHost.remove(); bgHost = null; }
+  }
+  function bgPlay() { try { if (bgP && bgReady && !wdMuted()) bgP.playVideo(); } catch (e) {} }
+  function bgStart() {
+    if (wdMuted()) return;
+    if (bgP && bgHost && bgHost.isConnected) { bgPlay(); return; }        // already there (the scene was only reopened)
+    const p = bgParse(bgUrl()); if (!p) return;
+    bgStop();
+    bgHost = document.createElement("div");
+    bgHost.style.cssText = "position:fixed;left:-400px;top:0;width:200px;height:200px;opacity:0;pointer-events:none;overflow:hidden;";
+    const mount = document.createElement("div"); bgHost.appendChild(mount);
+    document.body.appendChild(bgHost);
+    const make = () => {
+      if (!bgHost || !bgHost.isConnected) return;
+      const vars = { playsinline: 1, controls: 0, rel: 0, loop: 1, autoplay: 1 };
+      const cfg = { width: "200", height: "200", playerVars: vars, events: {
+        onReady: () => { bgReady = true; try { bgP.setVolume(BG_VOL); } catch (e) {} bgPlay(); },
+        onStateChange: e => { bgState = e.data; }
+      } };
+      if (p.id) { cfg.videoId = p.id; if (p.list) vars.list = p.list; else vars.playlist = p.id; } else { vars.listType = "playlist"; vars.list = p.list; }
+      try { bgP = new window.YT.Player(mount, cfg); } catch (e) {}
+    };
+    if (window.YT && window.YT.Player) make();
+    else {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { try { if (prev) prev(); } catch (e) {} make(); };
+      if (!document.getElementById("ao3-yt-api")) { const sc = document.createElement("script"); sc.id = "ao3-yt-api"; sc.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(sc); }
+    }
+  }
+
   let restoreScroll = null;                                         // after switching an animal the woods reopen at the same spot
   const OVR_KEY = "ao3-wd-species";                                 // { work id: species } the animals you chose yourself (long-press)
   const ovrGet = () => { try { const o = JSON.parse(localStorage.getItem(OVR_KEY) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } };
@@ -6203,7 +6251,7 @@
     box.appendChild(caption);
 
     const onKey = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); close(); } };
-    const close = () => { try { cancelAnimationFrame(moveRaf); } catch (e) {} back.remove(); document.removeEventListener("keydown", onKey, true); };
+    const close = () => { try { cancelAnimationFrame(moveRaf); } catch (e) {} if (!bgKeep) bgStop(); bgKeep = false; back.remove(); document.removeEventListener("keydown", onKey, true); };
     xBtn.onclick = close;
     back.addEventListener("click", e => { if (e.target === back) close(); });
     document.addEventListener("keydown", onKey, true);
@@ -6714,8 +6762,8 @@
     } catch (e) {}
     const ANIMALS = {
       fox(g) {
-        sv("ellipse", { cx: -14, cy: -11, rx: 10, ry: 4.6, fill: "#d2702f", transform: "rotate(-28 -14 -11)" }, g);
-        sv("ellipse", { cx: -21, cy: -16, rx: 3.6, ry: 2.6, fill: "#f3e8d6", transform: "rotate(-28 -21 -16)" }, g);
+        sv("ellipse", { cx: -14, cy: -11, rx: 10, ry: 4.6, fill: "#d2702f", transform: "rotate(28 -14 -11)" }, g);          // the tail rises up and back, its white tip at the end
+        sv("ellipse", { cx: -21.5, cy: -15.2, rx: 3.6, ry: 2.6, fill: "#f3e8d6", transform: "rotate(28 -21.5 -15.2)" }, g);
         [-7, -3, 4, 8].forEach(x => sv("rect", { x: x - 1.3, y: -8, width: 2.6, height: 8, rx: 1, fill: "#3a241a" }, g));
         sv("ellipse", { cx: 0, cy: -10, rx: 12, ry: 6, fill: "#d2702f" }, g);
         sv("ellipse", { cx: 2, cy: -7.5, rx: 8, ry: 2.8, fill: "#f1d9b8" }, g);
@@ -7162,7 +7210,7 @@
       sheet.appendChild(el("div", "font-family:Georgia,serif;font-weight:700;font-size:13px;color:#f1e6c8;line-height:1.25;", t));
       sheet.appendChild(el("div", "font-size:10.5px;color:rgba(220,240,226,0.6);margin:2px 0 10px;", chosen ? "Your pick. Choose another, or Auto to let the woods decide." : "Choose its animal. Auto lets the woods decide."));
       const grid = el("div", "display:grid;grid-template-columns:repeat(4,1fr);gap:7px;");
-      const choose = sp => { ovrSet(it.id, sp); restoreScroll = field.scrollTop; close(); openWoods(); };
+      const choose = sp => { ovrSet(it.id, sp); restoreScroll = field.scrollTop; bgKeep = true; close(); openWoods(); };
       SPECIES.forEach(sp => {
         const b = el("button", `border:1px solid ${sp === cur ? "#ffe9a8" : "rgba(160,210,170,0.22)"};background:${sp === cur ? "rgba(255,233,168,0.12)" : "rgba(255,255,255,0.04)"};border-radius:10px;padding:2px 2px 4px;color:#d3ecd9;font-family:Georgia,serif;font-size:9.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0;`);
         b.type = "button"; b.setAttribute("aria-label", sp);
@@ -7365,13 +7413,38 @@
     const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
     paintWx();
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
-    const soundBtn = pill("", "Turn the animal sounds on or off", () => { wdSetMuted(!wdMuted()); syncSound(); });
+    const soundBtn = pill("", "Tap: sounds on or off. Hold: set the background sound link (YouTube)", null);
     const syncSound = () => { soundBtn.textContent = wdMuted() ? "\u{1F515} sound off" : "\u{1F509} sound on"; };
     syncSound();
+    {
+      let lp = null, longDone = false;
+      const setLink = () => {
+        const v = window.prompt("Paste a YouTube link for the woods' background sound (a video or a playlist). Leave empty to remove it:", bgUrl());
+        if (v === null) return;
+        if (!v.trim()) { try { localStorage.removeItem(BG_KEY); } catch (e) {} bgStop(); caption.textContent = "The woods go back to being quiet."; return; }
+        if (!bgParse(v)) { caption.textContent = "That doesn\u2019t look like a YouTube link, so nothing changed."; return; }
+        try { localStorage.setItem(BG_KEY, v.trim()); } catch (e) {}
+        bgStop();
+        if (wdMuted()) { wdSetMuted(false); syncSound(); }
+        bgStart(); caption.textContent = "A new sound drifts in through the trees. If it stays silent, tap anywhere in the woods.";
+      };
+      const stopLp = () => { if (lp) { clearTimeout(lp); lp = null; } };
+      soundBtn.addEventListener("pointerdown", () => { longDone = false; stopLp(); lp = setTimeout(() => { lp = null; longDone = true; try { navigator.vibrate && navigator.vibrate(15); } catch (e) {} setLink(); }, 550); });
+      ["pointerup", "pointerleave", "pointercancel"].forEach(ev => soundBtn.addEventListener(ev, stopLp));
+      soundBtn.addEventListener("contextmenu", e => e.preventDefault());
+      soundBtn.addEventListener("click", () => {
+        if (longDone) { longDone = false; return; }
+        const m = !wdMuted(); wdSetMuted(m); syncSound();
+        if (m) { try { if (bgP && bgReady) bgP.pauseVideo(); } catch (e) {} } else if (bgP) bgPlay(); else bgStart();
+      });
+      // phones may block a sound that starts by itself: the first tap anywhere in the woods starts it if it is not playing yet
+      back.addEventListener("pointerdown", () => { if (bgP && bgReady && bgState !== 1 && !wdMuted()) bgPlay(); }, true);
+    }
     pill("\u{1F3D8}️ village", "Back to Hollowbrook", () => { close(); openHollowbrook(); });
     pill("\u{1FAA6} graveyard", "Follow the quiet path to the graveyard", () => { close(); openGraveyardGrounds(); });
     applyTime();
     document.body.appendChild(back);
+    bgStart();
     if (!reduceMotion && movers.length) moveRaf = requestAnimationFrame(moveTick);
     if (restoreScroll != null) { field.scrollTop = restoreScroll; restoreScroll = null; }
   }
