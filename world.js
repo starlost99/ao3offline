@@ -161,7 +161,7 @@
 };
 
 // ════════ lib/hawkins-kit.js ════════
-// lib/hawkins-kit.js — shared Hawkins scaffolding: live time of day and hourly weather, season, the shell, sound effects (knock, radio, thunder, weather ambience, bikes), the fade-to-black.
+// lib/hawkins-kit.js — shared Hawkins scaffolding: live time of day and hourly weather, season, the shell, sound effects (knock, Karen's voice through the walls, radio, thunder, weather ambience, bikes), the fade-to-black.
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/hawkins-kit"] = function (ctx) {
   'use strict';
@@ -329,6 +329,54 @@
         o.connect(g); g.connect(ac.destination); o.start(t0 + d); o.stop(t0 + d + 0.14);
       });
     } catch {}
+  }
+
+  // a voice heard through the walls: Karen Wheeler calling up the stairs, "Mi-chael! Break-fast!" (obeys the bell tower's sound setting).
+  // Made live with the Web Audio API (no sound files): a buzzing source (the pitch of the call) shaped by three vowel bands, then the same dark lowpass
+  // the weather gets indoors (hkAmbience muffled), so the pitch and the rhythm of the call come through but never the words; the scene's caption carries those.
+  // Returns { stop } (the call lasts about 1.8 s), or null when the sound is off. All the numbers are in KAREN, to tune by ear.
+  const KAREN = {
+    vol: 0.16,                                                                                    // loudness of the call (the weather bed indoors is far lower; the knock is 0.25)
+    wall: [450, 600],                                                                             // two lowpass stages: the wall
+    gains: [1, 0.45, 0.2],                                                                        // the three vowel bands
+    // [start s, length s, pitch Hz start, pitch Hz end, vowel bands at the start, vowel bands at the end]
+    syl: [
+      [0.00, 0.20, 226, 250, [700, 1250, 2600], [360, 2150, 2800]],                              // Mi-
+      [0.23, 0.41, 318, 262, [540, 1750, 2600], [430, 1000, 2500]],                              // -chael!
+      [0.98, 0.20, 232, 256, [560, 1800, 2550], [600, 1750, 2550]],                              // Break-
+      [1.21, 0.45, 308, 226, [680, 1350, 2500], [500, 1500, 2500]]                               // -fast!
+    ]
+  };
+  function hkVoice() {
+    const ac = bellUnlock();
+    if (!ac || ac.state !== "running" || bellMuted()) return null;
+    try {
+      const t0 = ac.currentTime + 0.05, end = t0 + 1.8, K = KAREN;
+      const out = ac.createGain(); out.gain.value = K.vol;
+      const w1 = ac.createBiquadFilter(), w2 = ac.createBiquadFilter();
+      w1.type = w2.type = "lowpass"; w1.frequency.value = K.wall[0]; w2.frequency.value = K.wall[1]; w1.Q.value = w2.Q.value = 0.5;
+      out.connect(w1); w1.connect(w2); w2.connect(ac.destination);
+      const src = ac.createOscillator(); src.type = "sawtooth";
+      const lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = 5.2; lg.gain.value = 3; lfo.connect(lg); lg.connect(src.frequency);   // a little vibrato
+      const amp = ac.createGain(); amp.gain.value = 0.0001; src.connect(amp);
+      const bands = [7, 8, 9].map((q, i) => {
+        const bp = ac.createBiquadFilter(), g = ac.createGain();
+        bp.type = "bandpass"; bp.Q.value = q; g.gain.value = K.gains[i];
+        amp.connect(bp); bp.connect(g); g.connect(out); return bp;
+      });
+      K.syl.forEach(([s, d, f0, f1, v0, v1]) => {
+        const t = t0 + s;
+        src.frequency.setValueAtTime(f0, t); src.frequency.linearRampToValueAtTime(f1, t + d);
+        bands.forEach((bp, i) => { bp.frequency.setValueAtTime(v0[i], t); bp.frequency.linearRampToValueAtTime(v1[i], t + d); });
+        amp.gain.setValueAtTime(0.0001, t); amp.gain.linearRampToValueAtTime(0.9, t + 0.03);
+        amp.gain.setValueAtTime(0.8, t + d - 0.07); amp.gain.linearRampToValueAtTime(0.0001, t + d);
+      });
+      src.start(t0); lfo.start(t0); src.stop(end); lfo.stop(end);
+      let done = false;
+      const clean = () => { if (done) return; done = true; [src, lfo, lg, amp, out, w1, w2].concat(bands).forEach(n => { try { n.disconnect(); } catch {} }); };
+      const tm = setTimeout(clean, 2300);
+      return { stop() { try { const t = ac.currentTime; out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(0.0001, t + 0.08); src.stop(t + 0.1); lfo.stop(t + 0.1); } catch {} clearTimeout(tm); setTimeout(clean, 300); } };
+    } catch { return null; }
   }
 
   // the grounds' own preferences, read the way the grounds read them (time of day, weather, Halloween override),
@@ -779,7 +827,7 @@
   }
   hkLiveRefresh();                                                                  // warm the cache as soon as the world loads
 
-  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound };
+  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound };
 };
 
 // ════════ lib/figures.js ════════
@@ -5170,9 +5218,9 @@
       const [a, b] = SPEED[kind];
       return {
         f, kind,
-        L: Math.min(46, 16 + Math.sqrt((f.words || 0) / 1000) * 2.2),
+        L: pond ? Math.min(58, 26 + Math.sqrt((f.words || 0) / 1000) * 2.4) : Math.min(46, 16 + Math.sqrt((f.words || 0) / 1000) * 2.2),
         color: PAL[kind][gyHash("c" + f.workId) % PAL[kind].length],
-        speed: (a + rnd("sp" + f.workId) * (b - a)) * calm,
+        speed: (a + rnd("sp" + f.workId) * (b - a)) * calm * (pond ? 0.35 : 1),
         x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, next: 0, lookAt: 0,
         dir: rnd("d" + f.workId) < 0.5 ? 1 : -1, ang: rnd("an" + f.workId) * 6.28 - 3.14,
         ph: rnd("ph" + f.workId) * 6.28,
@@ -5417,23 +5465,32 @@
     // seen from above (pond mode): body, forked tail, two side fins, two eyes, a shadow on the bottom; faces right, rotated to its heading
     const drawFishTop = fi => {
       const { L, color } = fi;
+      const h = gyHash("s" + fi.f.workId);
       const g = sv("g"), tail = sv("g");
-      g.appendChild(sv("ellipse", { cx: L * 0.04, cy: L * 0.16, rx: L * 0.42, ry: L * 0.2, fill: "#06222a", opacity: "0.25" }));
-      tail.appendChild(sv("path", { d: `M ${-L * 0.28} 0 L ${-L * 0.66} ${-L * 0.24} Q ${-L * 0.5} 0 ${-L * 0.66} ${L * 0.24} Z`, fill: color, "fill-opacity": "0.9" }));
+      g.appendChild(sv("ellipse", { cx: L * 0.04, cy: L * 0.16, rx: L * 0.44, ry: L * 0.22, fill: "#06222a", opacity: "0.18" }));
+      // long, soft, flowing tail
+      tail.appendChild(sv("path", { d: `M ${-L * 0.3} 0 Q ${-L * 0.55} ${-L * 0.3} ${-L * 0.85} ${-L * 0.22} Q ${-L * 0.68} 0 ${-L * 0.85} ${L * 0.22} Q ${-L * 0.55} ${L * 0.3} ${-L * 0.3} 0 Z`, fill: color, "fill-opacity": "0.55" }));
       g.appendChild(tail);
-      [-1, 1].forEach(sd => g.appendChild(sv("ellipse", { cx: L * 0.1, cy: sd * L * 0.25, rx: L * 0.13, ry: L * 0.06, fill: color, "fill-opacity": "0.8", transform: `rotate(${sd * -28} ${L * 0.1} ${sd * L * 0.25})` })));
-      g.appendChild(sv("ellipse", { cx: 0, cy: 0, rx: L * 0.4, ry: L * 0.2, fill: color }));
-      g.appendChild(sv("ellipse", { cx: -L * 0.02, cy: 0, rx: L * 0.3, ry: L * 0.07, fill: "#fff", "fill-opacity": "0.2" }));
-      if (gyHash("s" + fi.f.workId) % 3 === 0) g.appendChild(sv("ellipse", { cx: -L * 0.08, cy: -L * 0.05, rx: L * 0.13, ry: L * 0.09, fill: "#fff", "fill-opacity": "0.5" }));
-      if (fi.kind === "abandoned") g.setAttribute("opacity", "0.75");
-      else [-1, 1].forEach(sd => { const er = Math.max(1.2, L * 0.05); g.appendChild(sv("circle", { cx: L * 0.28, cy: sd * L * 0.12, r: er, fill: "#fff" })); g.appendChild(sv("circle", { cx: L * 0.295, cy: sd * L * 0.12, r: Math.max(0.7, L * 0.026), fill: "#12202b" })); });
-      const hit = sv("circle", { cx: 0, cy: 0, r: Math.max(L * 0.55, 15), fill: "transparent" });
+      [-1, 1].forEach(sd => g.appendChild(sv("path", { d: `M ${L * 0.12} ${sd * L * 0.16} Q ${L * 0.02} ${sd * L * 0.4} ${-L * 0.1} ${sd * L * 0.34} Q ${L * 0.02} ${sd * L * 0.22} ${L * 0.12} ${sd * L * 0.16} Z`, fill: color, "fill-opacity": "0.5" })));
+      g.appendChild(sv("path", { d: `M ${L * 0.46} 0 Q ${L * 0.4} ${-L * 0.26} ${-L * 0.1} ${-L * 0.24} Q ${-L * 0.36} ${-L * 0.12} ${-L * 0.4} 0 Q ${-L * 0.36} ${L * 0.12} ${-L * 0.1} ${L * 0.24} Q ${L * 0.4} ${L * 0.26} ${L * 0.46} 0 Z`, fill: color }));
+      if (fi.kind !== "abandoned") {
+        // a pattern of its own (koi-style patches) so each fic's fish is easy to tell apart
+        const patchCols = ["#ffffff", "#fff3dc", "#ff9a5c", "#2c3440"];
+        const n = 2 + (h % 3);
+        for (let k = 0; k < n; k++) {
+          const px = (0.28 - k * (0.5 / n) - rnd("px" + fi.f.workId + k) * 0.06) * L, py = (rnd("py" + fi.f.workId + k) - 0.5) * L * 0.16;
+          g.appendChild(sv("ellipse", { cx: px.toFixed(1), cy: py.toFixed(1), rx: (L * (0.1 + rnd("pw" + fi.f.workId + k) * 0.08)).toFixed(1), ry: (L * (0.07 + rnd("ph" + fi.f.workId + k) * 0.05)).toFixed(1), fill: patchCols[(h + k) % patchCols.length], "fill-opacity": "0.75" }));
+        }
+        g.appendChild(sv("ellipse", { cx: -L * 0.02, cy: 0, rx: L * 0.3, ry: L * 0.05, fill: "#fff", "fill-opacity": "0.12" }));
+        [-1, 1].forEach(sd => g.appendChild(sv("circle", { cx: L * 0.33, cy: sd * L * 0.11, r: Math.max(1, L * 0.028), fill: "#0d1b22", "fill-opacity": "0.8" })));   // small dark eyes, no whites
+      } else g.setAttribute("opacity", "0.7");
+      const hit = sv("circle", { cx: 0, cy: 0, r: Math.max(L * 0.6, 18), fill: "transparent" });
       hit.style.cursor = "pointer";
       hit.addEventListener("click", e => {
         e.stopPropagation();
         const w = fi.f.words ? ` \u00B7 ${fmtWords(fi.f.words)} words` : "";
         say(`${titleOf(fi.f)}${w} \u00B7 ${LABEL[fi.kind]}`, 5000);
-        for (let i = 0; i < 3; i++) spawnBubble(fi.x + Math.cos(fi.ang) * fi.L * 0.4, fi.y + Math.sin(fi.ang) * fi.L * 0.4);
+        spawnBubble(fi.x, fi.y);
       });
       g.appendChild(hit);
       fi.g = g; fi.tail = tail;
@@ -5625,9 +5682,9 @@
           const n = pondInside(fi.x, fi.y, m);
           if (n > 1) { const s = 1 / Math.sqrt(n); fi.x = PX + (fi.x - PX) * s; fi.y = PY + (fi.y - PY) * s; fi.vx = (PX - fi.x) * 0.4; fi.vy = (PY - fi.y) * 0.4; if (!fi.chase) retarget(fi); }
           const spd0 = Math.hypot(fi.vx, fi.vy);
-          if (spd0 > 4) { const da0 = Math.atan2(fi.vy, fi.vx) - fi.ang, da = Math.atan2(Math.sin(da0), Math.cos(da0)); fi.ang += da * Math.min(1, dt * 5); }
+          if (spd0 > 4) { const da0 = Math.atan2(fi.vy, fi.vx) - fi.ang, da = Math.atan2(Math.sin(da0), Math.cos(da0)); fi.ang += da * Math.min(1, dt * 2.2); }
           fi.g.setAttribute("transform", `translate(${fi.x.toFixed(1)} ${fi.y.toFixed(1)}) rotate(${(fi.ang * 57.3).toFixed(1)})`);
-          fi.tail.setAttribute("transform", `rotate(${(Math.sin(T * (2.2 + spd0 / 22) + fi.ph) * (8 + Math.min(10, spd0 / 7)) * (reduced ? 0.5 : 1)).toFixed(1)} ${(-fi.L * 0.28).toFixed(1)} 0)`);
+          fi.tail.setAttribute("transform", `rotate(${(Math.sin(T * (1.6 + spd0 / 30) + fi.ph) * (7 + Math.min(6, spd0 / 6)) * (reduced ? 0.5 : 1)).toFixed(1)} ${(-fi.L * 0.28).toFixed(1)} 0)`);
           if (fi.kind === "lively" && Math.random() < dt * 0.05) spawnBubble(fi.x + Math.cos(fi.ang) * fi.L * 0.4, fi.y + Math.sin(fi.ang) * fi.L * 0.4);
           return;
         }
@@ -10286,7 +10343,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["mikes-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkSeason } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkSeason, hkVoice } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const { bsKit } = ctx.lib["figures"];
   const { gyHash } = ctx.shared;
@@ -10971,7 +11028,9 @@
         ["n", "The lamp clicks back on, warm amber. Two heads surface from under the comforter, squinting.", { reset: true, lamp: "base", zz: false, a: { mood: "o", look: -1 }, b: { mood: "o", look: 1 } }],
         ["w", "…Mike? Is it morning?", { a: { mood: "calm", look: 1 } }],
         ["m", "I don’t know. It’s bright. Five more minutes?", { b: { mood: "smirk", look: -1 } }],
-        ["w", "Five more minutes.", { a: { mood: "smile", eyes: "happy", blush: true }, hearts: 2 }],
+        ["n", "Up through the floor, muffled by the walls, comes Mrs. Wheeler: “Michael! Breakfast!”", { voice: "karen", a: { look: -1 }, b: { mood: "o", look: 1 } }],
+        ["m", "…We didn’t hear that.", { b: { mood: "smirk", look: -1 } }],
+        ["w", "Mike. We definitely heard that. Five more minutes, though.", { a: { mood: "smile", eyes: "happy", blush: true, look: 1 }, hearts: 2 }],
         ["n", "Not asleep any more, not getting up either. The whole house wakes up around them.", {}]
       ], () => { tid = setTimeout(another, reduce ? 400 : 1600); });
     };
@@ -11062,11 +11121,13 @@
       const tail = el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((headPct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`);
       bub.appendChild(tail); ov.appendChild(bub);
     };
+    let voice = null;                                                                                                   // Karen's call from downstairs, while it plays (see hkVoice)
     const P = { a: null, b: null };
     const setPose = patch => {
       if (patch.reset) { setStage("bed"); P.a = Object.assign({}, MR_BASE.a); P.b = Object.assign({}, MR_BASE.b); comicG.setAttribute("display", "none"); drawFig("a", P.a); drawFig("b", P.b); }   // back to sitting up in the bed, from wherever the last moment left them
       if (patch.lamp) setLamp(patch.lamp);
       if ("zz" in patch) setZz(patch.zz);
+      if (patch.voice) { if (voice) voice.stop(); voice = hkVoice(patch.voice); }                                      // a voice through the walls (beat key `voice: "karen"`); silent when the sound is off, the caption still carries the words
       if ("prop" in patch) setProp(patch.prop);
       const C = stage === "carpet", PP = C ? PC : P, dr = C ? drawCarpet : drawFig, FS = C ? FIGC : FIG;
       ["a", "b"].forEach(k => { if (patch[k]) PP[k] = Object.assign({}, PP[k], patch[k]); });
@@ -11181,7 +11242,7 @@
       if (reduce) { zzOne(true); zzOne(true); zzOne(true); const t = () => { if (!zzOn) return; snd.breath(); later(t, BREATH * 1000); }; later(t, BREATH * 400); }   // no motion: still z's, and the snores keep their own time
       else onBreath();                                                                                                  // the first z, on the first exhale
     };
-    sh.onClose = () => { clearTimeout(tid); clearTimeout(tmTick); clearTimeout(tmDone); hideBubble(); amb.stop(); snd.stop(); };
+    sh.onClose = () => { clearTimeout(tid); clearTimeout(tmTick); clearTimeout(tmDone); hideBubble(); if (voice) voice.stop(); amb.stop(); snd.stop(); };
     if (asleep) { P.a = Object.assign({}, MR_BASE.a, MR_SLEEP.a); P.b = Object.assign({}, MR_BASE.b, MR_SLEEP.b); drawFig("a", P.a); drawFig("b", P.b); setLamp("off"); setZz(true); }   // still asleep from last time: lamp out, z's rising
     else start();                                                                                                      // otherwise they are in the bed from the moment you walk in
     let first = Math.floor(Math.random() * MR_MOMENTS.length);
