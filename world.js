@@ -5157,8 +5157,9 @@
   // the swimmers chase. "hide finished" takes the finished fish out of the tank (that one
   // preference is remembered). Otherwise it's all for show: nothing else is stored or changed.
   // Reached from a faint link at the bottom of the tracker, next to "constellation".
-  // Pond mode: openAquarium({ pond: true, onClose }) shows the same fish as a pond seen from above (grass, stones, reeds, lily pads,
-  // ripples instead of bubbles, fish turning to any heading). Opened by tapping the pond in the woods; onClose is called when it closes.
+  // Pond mode: openAquarium({ pond: true, onClose }) shows the same fish as a pond seen from the side, like the tank: a strip of
+  // grass hills above the surface, lily pads floating on it, reeds at the edges, a muddy bottom with stones and pondweed, soft
+  // koi-style fish. Opened by tapping the pond in the woods; onClose is called when it closes.
   function openAquarium(opts) {
     const pond = !!(opts && opts.pond);
     let onDone = opts && typeof opts.onClose === "function" ? opts.onClose : null;
@@ -5233,7 +5234,7 @@
     const back = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000002;");
     back.id = "ao3-aquarium";
     const box = el("div", "position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);left:8px;right:8px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;font-family:inherit;color:#e8f6ff;background:linear-gradient(180deg,#0f4c75 0%,#0b3a5e 45%,#07223d 100%);border:1px solid rgba(160,220,255,0.28);box-shadow:0 12px 40px rgba(0,0,0,0.6);");
-    if (pond) { box.style.background = "radial-gradient(ellipse at 50% 45%,#2a4a2c 0%,#1d3a24 55%,#10261a 100%)"; box.style.border = "1px solid rgba(170,220,160,0.28)"; }
+    if (pond) { box.style.background = "linear-gradient(180deg,#27493a 0%,#1d4a52 20%,#17454f 55%,#0f2e36 100%)"; box.style.border = "1px solid rgba(170,220,160,0.28)"; }
     back.appendChild(box);
 
     const topbar = el("div", "position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(160,220,255,0.2);background:rgba(4,22,40,0.5);");
@@ -5293,14 +5294,14 @@
     }
 
     // ── the tank ──
-    let W = 400, H = 600, floorY = H - 30;
+    let W = 400, H = 600, floorY = H - 30, surfY = 0;   // surfY: where the water starts (pond mode only)
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" });
     svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation;";
     const scn = sv("g");        // rays, kelp, sand (rebuilt on resize)
     const fishLayer = sv("g");
     const flakeLayer = sv("g");
     const bubbleLayer = sv("g");
-    const surf = sv("g");       // pond mode: lily pads and reeds float above the fish (rebuilt on resize)
+    const surf = sv("g");       // pond mode: lily pads and reeds in front of the fish (rebuilt on resize)
     surf.setAttribute("pointer-events", "none");
     svg.appendChild(scn); svg.appendChild(fishLayer); svg.appendChild(flakeLayer); svg.appendChild(bubbleLayer); svg.appendChild(surf);
     sky.appendChild(svg);
@@ -5327,68 +5328,75 @@
     legend.appendChild(el("span", "", "bigger = more words"));
     sky.appendChild(legend);
 
-    // pond geometry: the swimmable water is an ellipse a little smaller than the drawn (slightly wobbly) edge
-    let PX = 0, PY = 0, PRX = 1, PRY = 1;
-    const pondInside = (x, y, m) => ((x - PX) / Math.max(8, PRX * 0.9 - m)) ** 2 + ((y - PY) / Math.max(8, PRY * 0.9 - m)) ** 2;
-    const pondPt = (m, a, r) => { a = a == null ? Math.random() * 6.283 : a; r = Math.sqrt(r == null ? Math.random() : r); return [PX + Math.cos(a) * r * Math.max(8, PRX * 0.9 - m), PY + Math.sin(a) * r * Math.max(8, PRY * 0.9 - m)]; };
-    const pondEdge = k => { let pts = ""; for (let i = 0; i < 64; i++) { const a = i / 64 * 6.2832, r = 1 + 0.045 * Math.sin(3 * a + 0.7) + 0.035 * Math.sin(5 * a + 2.1) + 0.02 * Math.sin(8 * a + 4); pts += `${(PX + Math.cos(a) * PRX * r * k).toFixed(1)},${(PY + Math.sin(a) * PRY * r * k).toFixed(1)} `; } return pts; };
-    const edgeAt = (a, k) => { const r = 1 + 0.045 * Math.sin(3 * a + 0.7) + 0.035 * Math.sin(5 * a + 2.1) + 0.02 * Math.sin(8 * a + 4); return [PX + Math.cos(a) * PRX * r * k, PY + Math.sin(a) * PRY * r * k]; };
+    // the pond, seen from the side: grass hills, the water surface, pads, reeds, mud, stones, pondweed
     const buildPond = () => {
       scn.innerHTML = ""; surf.innerHTML = ""; kelp.length = 0;
-      PX = W / 2; PY = H * 0.5 + 8; PRX = W * 0.44; PRY = Math.min(H * 0.36, W * 0.7);
+      surfY = 64; floorY = H - 30;
       const defs = sv("defs");
-      const grad = sv("radialGradient", { id: "aq-pw", cx: "50%", cy: "45%", r: "60%" });
-      [["0%", "#4a9a9a"], ["55%", "#2c6f78"], ["100%", "#17454f"]].forEach(([o, c]) => grad.appendChild(sv("stop", { offset: o, "stop-color": c })));
-      defs.appendChild(grad); scn.appendChild(defs);
-      for (let i = 0; i < 70; i++) {                                    // grass tufts
-        const x = rnd("gx" + i) * W, y = rnd("gy" + i) * H;
-        if (pondInside(x, y, -PRX * 0.25) < 1.5) continue;
-        scn.appendChild(sv("path", { d: `M${x.toFixed(1)} ${y.toFixed(1)} l-2 -5 M${x.toFixed(1)} ${y.toFixed(1)} l0.5 -6 M${x.toFixed(1)} ${y.toFixed(1)} l3 -4`, stroke: i % 3 ? "#3f7a3f" : "#5a9a4a", "stroke-width": "1.2", "stroke-linecap": "round", fill: "none", "stroke-opacity": "0.8" }));
+      const grad = (id, stops) => { const g = sv("linearGradient", { id, x1: "0", y1: "0", x2: "0", y2: "1" }); stops.forEach(([o, c]) => g.appendChild(sv("stop", { offset: o, "stop-color": c }))); defs.appendChild(g); };
+      grad("aq-air", [["0%", "#1b3326"], ["100%", "#35603f"]]);
+      grad("aq-wat", [["0%", "#4a9a98"], ["30%", "#2f7078"], ["75%", "#1a4a54"], ["100%", "#0f2e36"]]);
+      scn.appendChild(defs);
+      scn.appendChild(sv("rect", { x: 0, y: 0, width: W, height: surfY + 2, fill: "url(#aq-air)" }));
+      const hy = x => surfY - 6 - 6 * (1 + Math.sin(x * 0.028 + 0.5)) - 4 * (1 + Math.sin(x * 0.07 + 2));
+      let hills = `M0 ${surfY + 2}`;
+      for (let x = 0; x <= W + 10; x += 10) hills += ` L${x} ${hy(x).toFixed(1)}`;
+      scn.appendChild(sv("path", { d: hills + ` L${W} ${surfY + 2} Z`, fill: "#2a5430" }));
+      for (let i = 0; i < 34; i++) {                                    // grass tufts along the far bank
+        const x = rnd("gx" + i) * W, y = hy(x) + 1;
+        scn.appendChild(sv("path", { d: `M${x.toFixed(1)} ${y.toFixed(1)} l-2 -5 M${x.toFixed(1)} ${y.toFixed(1)} l0.5 -6 M${x.toFixed(1)} ${y.toFixed(1)} l3 -4`, stroke: i % 3 ? "#4a8a46" : "#6aa956", "stroke-width": "1.2", "stroke-linecap": "round", fill: "none", "stroke-opacity": "0.85" }));
       }
-      for (let i = 0; i < 5; i++) {                                     // a few wildflowers
-        const x = rnd("fx" + i) * W, y = rnd("fy" + i) * H;
-        if (pondInside(x, y, -PRX * 0.3) < 1.6) continue;
-        scn.appendChild(sv("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: "2.2", fill: ["#f6e27a", "#f6c8dc", "#fff"][i % 3] }));
+      for (let i = 0; i < 6; i++) {                                     // a few wildflowers
+        const x = rnd("fx" + i) * W;
+        scn.appendChild(sv("circle", { cx: x.toFixed(1), cy: (hy(x) - 1).toFixed(1), r: "2", fill: ["#f6e27a", "#f6c8dc", "#fff"][i % 3] }));
       }
-      scn.appendChild(sv("polygon", { points: pondEdge(1.14), fill: "#3a2f22", opacity: "0.9" }));      // the muddy bank
-      scn.appendChild(sv("polygon", { points: pondEdge(1.05), fill: "#14343c" }));                      // the dark rim of the water
-      scn.appendChild(sv("polygon", { points: pondEdge(1), fill: "url(#aq-pw)" }));                     // the water
-      for (let i = 0; i < 14; i++) {                                    // pebbles on the bottom, seen through the water
-        const a = rnd("bpa" + i) * 6.283, r = 0.2 + rnd("bpr" + i) * 0.7;
-        scn.appendChild(sv("ellipse", { cx: (PX + Math.cos(a) * PRX * r).toFixed(1), cy: (PY + Math.sin(a) * PRY * r).toFixed(1), rx: (3 + rnd("bps" + i) * 5).toFixed(1), ry: (2 + rnd("bpt" + i) * 3).toFixed(1), fill: i % 2 ? "#8ab5a8" : "#1b4a52", opacity: "0.22" }));
+      scn.appendChild(sv("rect", { x: 0, y: surfY, width: W, height: H - surfY, fill: "url(#aq-wat)" }));
+      for (let i = 0; i < 3; i++) {                                     // light coming down through the water
+        const x0 = W * (0.15 + i * 0.32 + rnd("ray" + i) * 0.08);
+        const ray = sv("polygon", { points: `${x0 - 14},${surfY} ${x0 + 22},${surfY} ${x0 + 90},${floorY} ${x0 + 20},${floorY}`, fill: "#d6f3f0" });
+        ray.setAttribute("opacity", "0.06"); ray.setAttribute("class", "nv-anim");
+        ray.style.animation = `aqRay ${(7 + i * 2.3).toFixed(1)}s ease-in-out ${(i * 1.7).toFixed(1)}s infinite`;
+        scn.appendChild(ray);
       }
-      for (let i = 0; i < 3; i++) {                                     // light drifting on the water
-        const c = sv("ellipse", { cx: (PX + (rnd("lx" + i) - 0.5) * PRX), cy: (PY + (rnd("ly" + i) - 0.5) * PRY), rx: (30 + i * 10), ry: (10 + i * 3), fill: "#d6f3f0" });
-        c.setAttribute("opacity", "0.06"); c.setAttribute("class", "nv-anim");
-        c.style.animation = `aqRay ${(6 + i * 2.1).toFixed(1)}s ease-in-out ${(i * 1.4).toFixed(1)}s infinite`;
-        scn.appendChild(c);
+      scn.appendChild(sv("rect", { x: 0, y: surfY, width: W, height: 7, fill: "#bfe9e6", opacity: "0.13" }));
+      let wave = `M0 ${surfY}`;
+      for (let x = 0; x <= W + 10; x += 10) wave += ` L${x} ${(surfY + Math.sin(x * 0.09) * 1.2).toFixed(1)}`;
+      scn.appendChild(sv("path", { d: wave, stroke: "#d6f3f0", "stroke-opacity": "0.55", "stroke-width": "1.6", fill: "none" }));
+      const nW = Math.max(4, Math.round(W / 60));                       // pondweed
+      for (let i = 0; i < nW; i++) {
+        const x = (i + 0.3 + rnd("kx" + i) * 0.5) * (W / nW), h = 50 + rnd("kh" + i) * 70;
+        const outer = sv("g", { transform: `translate(${x.toFixed(1)} ${floorY + 4})` }), inner = sv("g");
+        const d = `M0 0 C -8 ${(-h * 0.25).toFixed(0)}, 8 ${(-h * 0.55).toFixed(0)}, 0 ${(-h * 0.75).toFixed(0)} S -6 ${(-h * 0.95).toFixed(0)}, 0 ${(-h).toFixed(0)}`;
+        inner.appendChild(sv("path", { d, fill: "none", stroke: i % 2 ? "#3f8a4a" : "#55a35a", "stroke-width": "3.5", "stroke-linecap": "round", "stroke-opacity": "0.8" }));
+        outer.appendChild(inner); scn.appendChild(outer);
+        kelp.push({ inner, ph: rnd("kp" + i) * 6.28, amp: 3 + rnd("ka" + i) * 4 });
       }
-      for (let i = 0; i < 26; i++) {                                    // stones round the edge, a few gaps for reeds
-        const a = i / 26 * 6.2832 + rnd("sa" + i) * 0.12;
-        const [ex, ey] = edgeAt(a, 1.1);
-        scn.appendChild(sv("ellipse", { cx: ex.toFixed(1), cy: ey.toFixed(1), rx: (4 + rnd("sw" + i) * 5).toFixed(1), ry: (3 + rnd("sh" + i) * 3).toFixed(1), fill: ["#7b8580", "#656f6a", "#8d9690"][i % 3], stroke: "#3c4541", "stroke-width": "0.6", transform: `rotate(${(a * 57.3).toFixed(0)} ${ex.toFixed(1)} ${ey.toFixed(1)})` }));
+      let mud = `0,${H}`;                                               // the muddy bottom
+      for (let x = 0; x <= W + 20; x += 20) mud += ` ${x},${(floorY + 8 + Math.sin(x * 0.045) * 3).toFixed(1)}`;
+      scn.appendChild(sv("polygon", { points: mud + ` ${W},${H}`, fill: "#5b4630" }));
+      scn.appendChild(sv("rect", { x: 0, y: H - 10, width: W, height: 10, fill: "#3f3122" }));
+      for (let i = 0; i < Math.round(W / 38); i++) {
+        scn.appendChild(sv("ellipse", { cx: (rnd("pb" + i) * W).toFixed(1), cy: (floorY + 14 + rnd("pc" + i) * 10).toFixed(1), rx: (2 + rnd("pr" + i) * 3).toFixed(1), ry: "1.8", fill: i % 2 ? "#8a9a90" : "#4d4030" }));
       }
-      [[0.35, 0.8], [2.2, 0.8], [4.2, 0.9], [5.4, 0.8]].forEach(([a, k], i) => {     // reeds and cattails on the bank
-        const [ex, ey] = edgeAt(a, 1.08);
-        const g = sv("g", { transform: `translate(${ex.toFixed(1)} ${ey.toFixed(1)})` });
-        for (let j = 0; j < 7; j++) {
-          const ang = (rnd("ra" + i + j) - 0.5) * 2.4 - 1.57, len = 16 + rnd("rl" + i + j) * 16;
-          g.appendChild(sv("path", { d: `M0 0 Q${(Math.cos(ang) * len * 0.5).toFixed(1)} ${(Math.sin(ang) * len * 0.5 - 3).toFixed(1)} ${(Math.cos(ang) * len).toFixed(1)} ${(Math.sin(ang) * len).toFixed(1)}`, stroke: j % 2 ? "#4f8a4a" : "#6aa35a", "stroke-width": "1.8", fill: "none", "stroke-linecap": "round" }));
-          if (j % 3 === 0) g.appendChild(sv("ellipse", { cx: (Math.cos(ang) * len).toFixed(1), cy: (Math.sin(ang) * len).toFixed(1), rx: "1.8", ry: "4.5", fill: "#6b4a35", transform: `rotate(${(ang * 57.3 + 90).toFixed(0)} ${(Math.cos(ang) * len).toFixed(1)} ${(Math.sin(ang) * len).toFixed(1)})` }));
-        }
-        surf.appendChild(g);
-      });
-      for (let i = 0; i < 6; i++) {                                     // lily pads above the fish, swaying a touch
-        const a = rnd("pa" + i) * 6.283, r = 0.35 + rnd("pr2" + i) * 0.5, lr = 11 + rnd("pl" + i) * 9;
-        const x = PX + Math.cos(a) * PRX * r * 0.9, y = PY + Math.sin(a) * PRY * r * 0.9;
-        const outer = sv("g", { transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})` });
-        const inner = sv("g");
-        const notch = rnd("pn" + i) * 6.28;
-        inner.appendChild(sv("path", { d: `M0 0 L${(Math.cos(notch) * lr).toFixed(1)} ${(Math.sin(notch) * lr).toFixed(1)} A${lr} ${lr} 0 1 1 ${(Math.cos(notch + 0.5) * lr).toFixed(1)} ${(Math.sin(notch + 0.5) * lr).toFixed(1)} Z`, fill: i % 2 ? "#3f8a55" : "#4d9a5a", stroke: "#2c6a3f", "stroke-width": "0.6" }));
-        inner.appendChild(sv("path", { d: `M0 0 L${(Math.cos(notch + 3) * lr * 0.8).toFixed(1)} ${(Math.sin(notch + 3) * lr * 0.8).toFixed(1)}`, stroke: "#2c6a3f", "stroke-width": "0.6", "stroke-opacity": "0.6" }));
-        if (i % 3 === 1) { inner.appendChild(sv("circle", { cx: 0, cy: 0, r: "3.4", fill: "#f6c8dc" })); inner.appendChild(sv("circle", { cx: 0, cy: 0, r: "1.3", fill: "#f6e27a" })); }
+      for (let i = 0; i < 5; i++) {                                     // bigger stones, half buried
+        scn.appendChild(sv("ellipse", { cx: (rnd("bsx" + i) * W).toFixed(1), cy: (floorY + 12 + rnd("bsy" + i) * 4).toFixed(1), rx: (8 + rnd("bsw" + i) * 9).toFixed(1), ry: (4.5 + rnd("bsh" + i) * 3.5).toFixed(1), fill: ["#7b8580", "#656f6a", "#8d9690"][i % 3], stroke: "#3c4541", "stroke-width": "0.7" }));
+      }
+      [10, 24, 38, W - 10, W - 25, W - 40].forEach((x, i) => {          // reeds and cattails at the edges, in front of the fish
+        const len = floorY + 6 - (surfY - 16 - rnd("rl" + i) * 16), bend = (rnd("rb" + i) - 0.5) * 14;
+        const outer = sv("g", { transform: `translate(${x.toFixed(1)} ${floorY + 6})` }), inner = sv("g");
+        inner.appendChild(sv("path", { d: `M0 0 Q ${bend.toFixed(1)} ${(-len / 2).toFixed(1)} ${(bend * 1.4).toFixed(1)} ${(-len).toFixed(1)}`, stroke: i % 2 ? "#4f8a4a" : "#6aa35a", "stroke-width": "2.2", fill: "none", "stroke-linecap": "round" }));
+        if (i % 2 === 0) inner.appendChild(sv("ellipse", { cx: (bend * 1.4).toFixed(1), cy: (-len - 2).toFixed(1), rx: "2.8", ry: "8", fill: "#6b4a35" }));
         outer.appendChild(inner); surf.appendChild(outer);
-        kelp.push({ inner, ph: rnd("pp" + i) * 6.28, amp: 5 + rnd("pq" + i) * 6 });
+        kelp.push({ inner, ph: rnd("rp" + i) * 6.28, amp: 1.5 + rnd("ra" + i) * 1.5 });
+      });
+      for (let i = 0; i < 6; i++) {                                     // lily pads floating on the surface, bobbing a touch
+        const x = 28 + rnd("pa" + i) * (W - 56), lr = 12 + rnd("pl" + i) * 8;
+        const outer = sv("g", { transform: `translate(${x.toFixed(1)} ${(surfY + 1).toFixed(1)})` }), inner = sv("g");
+        inner.appendChild(sv("ellipse", { cx: 0, cy: 0, rx: lr.toFixed(1), ry: (lr * 0.3).toFixed(1), fill: i % 2 ? "#3f8a55" : "#4d9a5a", stroke: "#2c6a3f", "stroke-width": "0.6" }));
+        inner.appendChild(sv("path", { d: `M0 0 L${(lr * 0.95).toFixed(1)} ${(-lr * 0.06).toFixed(1)}`, stroke: "#2c6a3f", "stroke-width": "0.7", "stroke-opacity": "0.7" }));
+        if (i % 3 === 1) { inner.appendChild(sv("circle", { cx: (lr * 0.1).toFixed(1), cy: "-4", r: "3.4", fill: "#f6c8dc" })); inner.appendChild(sv("circle", { cx: (lr * 0.1).toFixed(1), cy: "-4.5", r: "1.3", fill: "#f6e27a" })); }
+        outer.appendChild(inner); surf.appendChild(outer);
+        kelp.push({ inner, ph: rnd("pp" + i) * 6.28, amp: 1 + rnd("pq" + i) * 1.5 });
       }
     };
 
@@ -5462,41 +5470,49 @@
       fi.g = g; fi.tail = tail;
       fishLayer.appendChild(g);
     };
-    // seen from above (pond mode): body, forked tail, two side fins, two eyes, a shadow on the bottom; faces right, rotated to its heading
-    const drawFishTop = fi => {
+    // seen from the side (pond mode): a soft koi with a long flowing tail, its own patches, small dark eyes; faces right
+    const drawFishSide = fi => {
       const { L, color } = fi;
-      const h = gyHash("s" + fi.f.workId);
+      const h = gyHash("s" + fi.f.workId), idx = fish.indexOf(fi);
       const g = sv("g"), tail = sv("g");
-      g.appendChild(sv("ellipse", { cx: L * 0.04, cy: L * 0.16, rx: L * 0.44, ry: L * 0.22, fill: "#06222a", opacity: "0.18" }));
-      // long, soft, flowing tail
-      tail.appendChild(sv("path", { d: `M ${-L * 0.3} 0 Q ${-L * 0.55} ${-L * 0.3} ${-L * 0.85} ${-L * 0.22} Q ${-L * 0.68} 0 ${-L * 0.85} ${L * 0.22} Q ${-L * 0.55} ${L * 0.3} ${-L * 0.3} 0 Z`, fill: color, "fill-opacity": "0.55" }));
+      tail.appendChild(sv("path", { d: `M ${-L * 0.3} 0 Q ${-L * 0.55} ${-L * 0.3} ${-L * 0.88} ${-L * 0.24} Q ${-L * 0.68} 0 ${-L * 0.88} ${L * 0.24} Q ${-L * 0.55} ${L * 0.3} ${-L * 0.3} 0 Z`, fill: color, "fill-opacity": "0.55" }));
       g.appendChild(tail);
-      [-1, 1].forEach(sd => g.appendChild(sv("path", { d: `M ${L * 0.12} ${sd * L * 0.16} Q ${L * 0.02} ${sd * L * 0.4} ${-L * 0.1} ${sd * L * 0.34} Q ${L * 0.02} ${sd * L * 0.22} ${L * 0.12} ${sd * L * 0.16} Z`, fill: color, "fill-opacity": "0.5" })));
-      g.appendChild(sv("path", { d: `M ${L * 0.46} 0 Q ${L * 0.4} ${-L * 0.26} ${-L * 0.1} ${-L * 0.24} Q ${-L * 0.36} ${-L * 0.12} ${-L * 0.4} 0 Q ${-L * 0.36} ${L * 0.12} ${-L * 0.1} ${L * 0.24} Q ${L * 0.4} ${L * 0.26} ${L * 0.46} 0 Z`, fill: color }));
+      g.appendChild(sv("path", { d: `M ${-L * 0.14} ${-L * 0.18} Q ${L * 0.02} ${-L * 0.46} ${L * 0.2} ${-L * 0.18} Z`, fill: color, "fill-opacity": "0.6" }));
+      g.appendChild(sv("ellipse", { cx: 0, cy: 0, rx: L * 0.4, ry: L * 0.22, fill: color }));
       if (fi.kind !== "abandoned") {
-        // a pattern of its own (koi-style patches) so each fic's fish is easy to tell apart
+        // a pattern of its own (koi-style patches), clipped to the body, so each fic's fish is easy to tell apart
+        const cid = "aq-pc" + idx, cp = sv("clipPath", { id: cid });
+        cp.appendChild(sv("ellipse", { cx: 0, cy: 0, rx: L * 0.4, ry: L * 0.22 }));
+        g.appendChild(cp);
+        const pg = sv("g", { "clip-path": `url(#${cid})` });
         const patchCols = ["#ffffff", "#fff3dc", "#ff9a5c", "#2c3440"];
         const n = 2 + (h % 3);
         for (let k = 0; k < n; k++) {
-          const px = (0.28 - k * (0.5 / n) - rnd("px" + fi.f.workId + k) * 0.06) * L, py = (rnd("py" + fi.f.workId + k) - 0.5) * L * 0.16;
-          g.appendChild(sv("ellipse", { cx: px.toFixed(1), cy: py.toFixed(1), rx: (L * (0.1 + rnd("pw" + fi.f.workId + k) * 0.08)).toFixed(1), ry: (L * (0.07 + rnd("ph" + fi.f.workId + k) * 0.05)).toFixed(1), fill: patchCols[(h + k) % patchCols.length], "fill-opacity": "0.75" }));
+          const px = (0.3 - k * (0.55 / n) - rnd("px" + fi.f.workId + k) * 0.06) * L, py = (rnd("py" + fi.f.workId + k) - 0.5) * L * 0.2;
+          pg.appendChild(sv("ellipse", { cx: px.toFixed(1), cy: py.toFixed(1), rx: (L * (0.09 + rnd("pw" + fi.f.workId + k) * 0.08)).toFixed(1), ry: (L * (0.07 + rnd("ph" + fi.f.workId + k) * 0.05)).toFixed(1), fill: patchCols[(h + k) % patchCols.length], "fill-opacity": "0.75" }));
         }
-        g.appendChild(sv("ellipse", { cx: -L * 0.02, cy: 0, rx: L * 0.3, ry: L * 0.05, fill: "#fff", "fill-opacity": "0.12" }));
-        [-1, 1].forEach(sd => g.appendChild(sv("circle", { cx: L * 0.33, cy: sd * L * 0.11, r: Math.max(1, L * 0.028), fill: "#0d1b22", "fill-opacity": "0.8" })));   // small dark eyes, no whites
-      } else g.setAttribute("opacity", "0.7");
+        g.appendChild(pg);
+      }
+      g.appendChild(sv("ellipse", { cx: -L * 0.02, cy: L * 0.1, rx: L * 0.28, ry: L * 0.07, fill: "#fff", "fill-opacity": "0.14" }));
+      g.appendChild(sv("path", { d: `M ${L * 0.08} ${L * 0.06} Q ${-L * 0.04} ${L * 0.24} ${-L * 0.14} ${L * 0.2} Q ${-L * 0.02} ${L * 0.1} ${L * 0.08} ${L * 0.06} Z`, fill: color, "fill-opacity": "0.7" }));
+      const er = Math.max(1.2, L * 0.032);
+      if (fi.kind === "abandoned") {
+        g.appendChild(sv("path", { d: `M ${L * 0.24 - er} ${-L * 0.05} Q ${L * 0.24} ${-L * 0.05 + er} ${L * 0.24 + er} ${-L * 0.05}`, stroke: "#12202b", "stroke-width": "1.1", fill: "none", "stroke-linecap": "round" }));
+        g.setAttribute("opacity", "0.75");
+      } else g.appendChild(sv("circle", { cx: L * 0.24, cy: -L * 0.05, r: er, fill: "#0d1b22", "fill-opacity": "0.85" }));   // small dark eye, no white
       const hit = sv("circle", { cx: 0, cy: 0, r: Math.max(L * 0.6, 18), fill: "transparent" });
       hit.style.cursor = "pointer";
       hit.addEventListener("click", e => {
         e.stopPropagation();
         const w = fi.f.words ? ` \u00B7 ${fmtWords(fi.f.words)} words` : "";
         say(`${titleOf(fi.f)}${w} \u00B7 ${LABEL[fi.kind]}`, 5000);
-        spawnBubble(fi.x, fi.y);
+        for (let i = 0; i < 3; i++) spawnBubble(fi.x + fi.dir * fi.L * 0.4, fi.y - 2);
       });
       g.appendChild(hit);
       fi.g = g; fi.tail = tail;
       fishLayer.appendChild(g);
     };
-    fish.forEach(pond ? drawFishTop : drawFish);
+    fish.forEach(pond ? drawFishSide : drawFish);
     const paintFinished = () => {
       fish.forEach(fi => {
         if (fi.kind !== "finished") return;
@@ -5521,16 +5537,18 @@
     const bubbles = [];
     const spawnBubble = (x, y) => {
       if (bubbles.length > 45) return;
-      if (pond) {                                                      // a ripple instead of a bubble: a ring that widens and fades
-        const c = sv("circle", { cx: x, cy: y, r: "2", fill: "none", stroke: "#e8f6ff", "stroke-opacity": "0", "stroke-width": "1" });
-        bubbleLayer.appendChild(c);
-        bubbles.push({ el: c, x, y, ripple: true, age: -Math.random() * 0.5, v: 0, ph: 0 });
-        return;
-      }
       const r = 1.5 + Math.random() * 2.5;
       const c = sv("circle", { cx: x, cy: y, r: r.toFixed(1), fill: "none", stroke: "#e8f6ff", "stroke-opacity": "0.6", "stroke-width": "0.9" });
       bubbleLayer.appendChild(c);
       bubbles.push({ el: c, x, y, v: 22 + Math.random() * 26, ph: Math.random() * 6.28 });
+    };
+
+    // pond mode: a bubble that reaches the surface leaves a ring that widens and fades
+    const spawnRipple = x => {
+      if (bubbles.length > 60) return;
+      const c = sv("ellipse", { cx: x, cy: surfY + 1, rx: "2", ry: "0.6", fill: "none", stroke: "#e8f6ff", "stroke-opacity": "0.5", "stroke-width": "1" });
+      bubbleLayer.appendChild(c);
+      bubbles.push({ el: c, x, y: surfY + 1, ripple: true, age: 0, v: 0, ph: 0 });
     };
 
     // ── flakes ("feeding" is purely for show) ──
@@ -5542,8 +5560,7 @@
         const c = sv("circle", { cx: 0, cy: -6, r: "2.2", fill: "#f3d9a4" });
         c.setAttribute("opacity", "0");
         flakeLayer.appendChild(c);
-        if (pond) { const [fx, fy] = pondPt(10); flakes.push({ el: c, x: fx, y: fy, vy: 0, delay: i * 0.12, ph: Math.random() * 6.28, show: false, rest: true, age: 0, dead: false }); continue; }   // crumbs float on the water
-        flakes.push({ el: c, x: 20 + Math.random() * (W - 40), y: -6, vy: 26 + Math.random() * 14, delay: i * 0.12, ph: Math.random() * 6.28, show: false, rest: false, age: 0, dead: false });
+        flakes.push({ el: c, x: 20 + Math.random() * (W - 40), y: pond ? surfY + 2 : -6, vy: (pond ? 16 : 26) + Math.random() * 14, delay: i * 0.12, ph: Math.random() * 6.28, show: false, rest: false, age: 0, dead: false });
       }
       try { if (navigator.vibrate) navigator.vibrate(10); } catch {}
       say(feedLines[Math.floor(Math.random() * feedLines.length)], 3500);
@@ -5552,19 +5569,15 @@
 
     // ── movement ──
     let T = 0;
+    const loY = k => { const base = k === "finished" ? H * 0.2 : 40; return pond ? Math.max(base, surfY + 24) : base; };   // the highest a fish swims to
     const retarget = fi => {
       const m = fi.L * 0.7;
-      if (pond) {
-        let p;
-        if (fi.kind === "slow") { p = [fi.x + (Math.random() - 0.5) * 110, fi.y + (Math.random() - 0.5) * 70]; if (pondInside(p[0], p[1], fi.L * 0.6) > 1) p = pondPt(fi.L * 0.6); }
-        else p = pondPt(fi.L * 0.6);
-        fi.tx = p[0]; fi.ty = p[1];
-      } else if (fi.kind === "slow") {
+      if (fi.kind === "slow") {
         // inch along: small hops from where it already is
         fi.tx = Math.max(m, Math.min(W - m, fi.x + (Math.random() - 0.5) * 160));
-        fi.ty = Math.max(H * 0.3, Math.min(floorY - 24, fi.y + (Math.random() - 0.5) * 80));
+        fi.ty = Math.max(pond ? surfY + 40 : H * 0.3, Math.min(floorY - 24, fi.y + (Math.random() - 0.5) * 80));
       } else {
-        const lo = fi.kind === "finished" ? H * 0.2 : 40;
+        const lo = loY(fi.kind);
         const hi = fi.kind === "finished" ? H * 0.65 : floorY - 24;
         fi.tx = m + Math.random() * Math.max(10, W - 2 * m);
         fi.ty = lo + Math.random() * Math.max(10, hi - lo);
@@ -5575,15 +5588,6 @@
     const restFish = () => {
       // asleep fish lie along the sand, spread out and slightly tilted
       const sleepers = fish.filter(x => x.kind === "abandoned");
-      if (pond) {                                                      // resting fish lie still along the bottom of the pond, near the bank
-        sleepers.forEach((fi, i) => {
-          const a = 0.25 + (i + 0.5) / sleepers.length * 2.6 + (rnd("rx" + fi.f.workId) - 0.5) * 0.3;
-          const [x, y] = pondPt(fi.L * 0.5, a, 0.7);
-          fi.x = x; fi.y = y; fi.ang = a + 1.57 + (rnd("ry" + fi.f.workId) - 0.5) * 0.6;
-          fi.g.setAttribute("transform", `translate(${fi.x.toFixed(1)} ${fi.y.toFixed(1)}) rotate(${(fi.ang * 57.3).toFixed(1)})`);
-        });
-        return;
-      }
       sleepers.forEach((fi, i) => {
         const fx = (i + 0.5 + (rnd("rx" + fi.f.workId) - 0.5) * 0.6) / sleepers.length;
         fi.x = Math.max(fi.L * 0.6, Math.min(W - fi.L * 0.6, fx * W));
@@ -5602,16 +5606,14 @@
         placed = true;
         fish.forEach(fi => {
           if (fi.kind === "abandoned") return;
-          if (pond) { const [x, y] = pondPt(fi.L * 0.6, rnd("ia" + fi.f.workId) * 6.283, rnd("ir" + fi.f.workId)); fi.x = x; fi.y = y; retarget(fi); return; }
           fi.x = fi.L + rnd("ix" + fi.f.workId) * (W - 2 * fi.L);
-          const lo = fi.kind === "finished" ? H * 0.2 : 40, hi = fi.kind === "finished" ? H * 0.65 : floorY - 24;
+          const lo = loY(fi.kind), hi = fi.kind === "finished" ? H * 0.65 : floorY - 24;
           fi.y = lo + rnd("iy" + fi.f.workId) * Math.max(10, hi - lo);
           retarget(fi);
         });
       } else {
         fish.forEach(fi => {
           if (fi.kind === "abandoned") return;
-          if (pond) { const n = pondInside(fi.x, fi.y, fi.L * 0.6); if (n > 1) { const s = 1 / Math.sqrt(n); fi.x = PX + (fi.x - PX) * s; fi.y = PY + (fi.y - PY) * s; } return; }
           fi.x = Math.max(fi.L * 0.6, Math.min(W - fi.L * 0.6, fi.x));
           fi.y = Math.min(floorY - 12, fi.y);
         });
@@ -5637,8 +5639,8 @@
           if (k.y >= floorY + 4) { k.y = floorY + 4; k.rest = true; }
         } else {
           k.age += dt;
-          k.el.setAttribute("opacity", Math.max(0, 1 - k.age / (pond ? 6 : 4)).toFixed(2));
-          if (k.age >= (pond ? 6 : 4)) { killFlake(k); flakes.splice(i, 1); continue; }
+          k.el.setAttribute("opacity", Math.max(0, 1 - k.age / 4).toFixed(2));
+          if (k.age >= 4) { killFlake(k); flakes.splice(i, 1); continue; }
         }
         k.el.setAttribute("cx", k.x.toFixed(1)); k.el.setAttribute("cy", k.y.toFixed(1));
       }
@@ -5678,42 +5680,31 @@
         fi.vy += (dy / d * sp * arrive - fi.vy) * ease;
         fi.x += fi.vx * dt; fi.y += fi.vy * dt;
         const m = fi.L * 0.6;
-        if (pond) {                                                    // keep to the water: slide back inside the ellipse and turn away from the bank
-          const n = pondInside(fi.x, fi.y, m);
-          if (n > 1) { const s = 1 / Math.sqrt(n); fi.x = PX + (fi.x - PX) * s; fi.y = PY + (fi.y - PY) * s; fi.vx = (PX - fi.x) * 0.4; fi.vy = (PY - fi.y) * 0.4; if (!fi.chase) retarget(fi); }
-          const spd0 = Math.hypot(fi.vx, fi.vy);
-          if (spd0 > 4) { const da0 = Math.atan2(fi.vy, fi.vx) - fi.ang, da = Math.atan2(Math.sin(da0), Math.cos(da0)); fi.ang += da * Math.min(1, dt * 2.2); }
-          fi.g.setAttribute("transform", `translate(${fi.x.toFixed(1)} ${fi.y.toFixed(1)}) rotate(${(fi.ang * 57.3).toFixed(1)})`);
-          fi.tail.setAttribute("transform", `rotate(${(Math.sin(T * (1.6 + spd0 / 30) + fi.ph) * (7 + Math.min(6, spd0 / 6)) * (reduced ? 0.5 : 1)).toFixed(1)} ${(-fi.L * 0.28).toFixed(1)} 0)`);
-          if (fi.kind === "lively" && Math.random() < dt * 0.05) spawnBubble(fi.x + Math.cos(fi.ang) * fi.L * 0.4, fi.y + Math.sin(fi.ang) * fi.L * 0.4);
-          return;
-        }
         if (fi.x < m) { fi.x = m; fi.vx = Math.abs(fi.vx); } else if (fi.x > W - m) { fi.x = W - m; fi.vx = -Math.abs(fi.vx); }
-        if (fi.y < 10) { fi.y = 10; fi.vy = Math.abs(fi.vy); } else if (fi.y > floorY - 8) { fi.y = floorY - 8; fi.vy = -Math.abs(fi.vy); }
+        const yMin = pond ? surfY + 16 : 10;
+        if (fi.y < yMin) { fi.y = yMin; fi.vy = Math.abs(fi.vy); } else if (fi.y > floorY - 8) { fi.y = floorY - 8; fi.vy = -Math.abs(fi.vy); }
         if (Math.abs(fi.vx) > 3) fi.dir = fi.vx > 0 ? 1 : -1;
         const spd = Math.hypot(fi.vx, fi.vy);
         const tilt = Math.max(-0.6, Math.min(0.6, Math.atan2(fi.vy, Math.max(8, Math.abs(fi.vx))))) * 57.3;
         fi.g.setAttribute("transform", `translate(${fi.x.toFixed(1)} ${fi.y.toFixed(1)}) scale(${fi.dir} 1) rotate(${tilt.toFixed(1)})`);
-        const wag = Math.sin(T * (2.2 + spd / 22) + fi.ph) * (6 + Math.min(8, spd / 8)) * (reduced ? 0.5 : 1);
+        const wag = Math.sin(T * (2.2 + spd / 22) * (pond ? 0.7 : 1) + fi.ph) * (6 + Math.min(8, spd / 8)) * (reduced ? 0.5 : 1);
         fi.tail.setAttribute("transform", `rotate(${wag.toFixed(1)} ${(-fi.L * 0.26).toFixed(1)} 0)`);
         // lively fish blow the odd bubble
         if (fi.kind === "lively" && Math.random() < dt * 0.05) spawnBubble(fi.x + fi.dir * fi.L * 0.4, fi.y - 2);
       });
 
       // ambient bubbles off the sand
-      if (pond) { if (Math.random() < dt * 0.45) { const [rx, ry] = pondPt(10); spawnBubble(rx, ry); } }
-      else if (Math.random() < dt * 0.9) spawnBubble(Math.random() * W, floorY);
+      if (Math.random() < dt * (pond ? 0.5 : 0.9)) spawnBubble(Math.random() * W, floorY);
       for (let i = bubbles.length - 1; i >= 0; i--) {
         const b = bubbles[i];
         if (b.ripple) {
           b.age += dt;
-          if (b.age < 0) continue;
           if (b.age > 1.8) { b.el.remove(); bubbles.splice(i, 1); continue; }
-          b.el.setAttribute("r", (2 + b.age * 15 * calm).toFixed(1)); b.el.setAttribute("stroke-opacity", (0.5 * (1 - b.age / 1.8)).toFixed(2));
+          const rx = 2 + b.age * 12 * calm; b.el.setAttribute("rx", rx.toFixed(1)); b.el.setAttribute("ry", (rx * 0.28).toFixed(1)); b.el.setAttribute("stroke-opacity", (0.5 * (1 - b.age / 1.8)).toFixed(2));
           continue;
         }
         b.y -= b.v * dt * calm; b.x += Math.sin(T * 3 + b.ph) * 8 * dt;
-        if (b.y < -6) { b.el.remove(); bubbles.splice(i, 1); continue; }
+        if (b.y < (pond ? surfY + 2 : -6)) { if (pond) spawnRipple(b.x); b.el.remove(); bubbles.splice(i, 1); continue; }
         b.el.setAttribute("cx", b.x.toFixed(1)); b.el.setAttribute("cy", b.y.toFixed(1));
       }
 
@@ -7561,7 +7552,7 @@
     const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
     svg.appendChild(selG);
     const hits = sv("g", {}, svg);                                          // the tap targets sit on top of the light and shade
-    {                                                                    // the pond opens as a pond (the fic aquarium, seen from above); closing it brings you back here, music still going
+    {                                                                    // the pond opens as a pond (the fic aquarium, seen from the side); closing it brings you back here, music still going
       const ph = sv("ellipse", { cx: POND[0], cy: POND[1], rx: POND[2] + 4, ry: POND[3] + 4, fill: "transparent" }, hits);
       ph.style.cursor = "pointer"; ph.setAttribute("role", "button"); ph.setAttribute("aria-label", "The pond");
       ph.addEventListener("click", e => { e.stopPropagation(); restoreScroll = field.scrollTop; bgKeep = true; close(); world.openAquarium({ pond: true, onClose: () => openWoods() }); });
