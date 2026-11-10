@@ -2494,7 +2494,7 @@ try {
   // bookshelf, garden, stained glass) are drawn by world.js, which only the web app ships. It is
   // fetched the first time one is opened, so AO3 pages never carry it and the app's first paint
   // doesn't wait for it. `keepsakes.openX()` is what every button in the app calls.
-  const WORLD_NAMES = ["openGraveyard","openGraveyardGrounds","openCelebration","openConstellation","openAquarium","openBookshelf","openGarden","openStainedGlass","openHollowbrook","openChapel","openWheelers"];
+  const WORLD_NAMES = ["openGraveyard","openGraveyardGrounds","openCelebration","openConstellation","openAquarium","openBookshelf","openGarden","openStainedGlass","openHollowbrook","openChapel","openWheelers","openSoftLanding"];
   const WORLD_URL = (document.currentScript && document.currentScript.src) ? new URL("world.js", document.currentScript.src).href : "world.js";
   let worldPromise = null;
   function loadWorld() {
@@ -25149,6 +25149,27 @@ try {
     periodNavLi.after(briefLi);
   }
 
+  // Web app only: the anti-spiral button, right next to the Day N button. Opens the soft landing flow
+  // (world/softlanding.js) and hands it today's cycle day when the tracker has one.
+  if (window.__ao3WebApp) {
+    const softLi = document.createElement("li");
+    softLi.id = "ao3-softlanding-li";
+    const softBtn = document.createElement("a");
+    softBtn.textContent = "\u{1FAE7} Anti-spiral";
+    softBtn.href = "javascript:void(0)";
+    softBtn.style.cursor = "pointer";
+    softBtn.onclick = () => {
+      let cycleDay = null;
+      try {
+        const st = getPeriodStats();
+        if (st && st.lastEntry && Number.isFinite(st.currentCycleDay)) cycleDay = st.currentCycleDay;
+      } catch (e) { /* no cycle data: the flow just skips the day line */ }
+      try { window.__ao3Extras && window.__ao3Extras.openSoftLanding(cycleDay != null ? { cycleDay } : {}); } catch (e) { console.error(e); }
+    };
+    softLi.appendChild(softBtn);
+    periodNavLi.after(softLi);
+  }
+
   // Web app only: one "Keepsakes" button that opens a small menu of the four views.
   if (window.__ao3WebApp) {
     const keepLi = document.createElement("li");
@@ -25181,7 +25202,8 @@ try {
       document.body.appendChild(back);
     };
     keepLi.appendChild(keepBtn);
-    (periodNavLi.nextElementSibling || periodNavLi).after(keepLi); // after the Daily Brief button
+    const briefAnchor = Array.from(nav.children).find(li => li.firstChild && li.firstChild.textContent === "Daily Brief");
+    (briefAnchor || periodNavLi).after(keepLi); // after the Daily Brief button
 
     // and a separate "Grounds" button right after Keepsakes: straight into the graveyard grounds
     const groundsLi = document.createElement("li");
