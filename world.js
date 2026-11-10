@@ -11268,6 +11268,253 @@
   return { openMikesRoom };
 };
 
+// ════════ softlanding.js ════════
+// softlanding.js — 🫧 the soft landing: an anti-spiral flow (openSoftLanding).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["softlanding"] = function (ctx) {
+  'use strict';
+  const world = ctx.world;   // look openers up when called, never when the file starts
+
+  // ── 🫧 SOFT LANDING ──
+  // For PMDD days and after-work brain. One calm screen at a time, in a fixed order:
+  //   arrive → breathe (in 4, out 6, six rounds) → ground (5-4-3-2-1) → name the spiral and get a
+  //   reframe → put the loudest thought down (typed, never saved) → tonight's only jobs, then exits.
+  // Stores nothing at all. `openSoftLanding({ cycleDay })` shows a quiet "Day N" line when the app passes the day.
+  // Exits go to Mike's room and the woods through ctx.world.
+  const CHIPS = [
+    { id: "work",  label: "work is replaying", line: "work is closed for today. whatever it was will still be there at your next shift, and you'll meet it with a rested brain, not this one." },
+    { id: "people", label: "everyone's annoyed with me", line: "tired brains are brilliant at inventing evidence. no new facts have arrived. only the feeling did." },
+    { id: "fail",  label: "i'm failing at everything", line: "that's a mood talking, not a measurement. you got through today. that counts, even if it doesn't feel like it." },
+    { id: "none",  label: "i just feel awful", line: "you don't need a reason or a story for it. bodies get loud sometimes. it's allowed to just be loud for a bit." }
+  ];
+  const PMDD_LINE = "pmdd turns the volume up on everything. it comes in waves, and it's not the truth about you or your life. nothing you decide while it's loud has to be final.";
+  const SENSES = [
+    [5, "things you can see", "look slowly. find the small stuff: a seam, a shadow, a colour."],
+    [4, "things you can feel", "your feet on the floor, fabric, the weight of your phone."],
+    [3, "things you can hear", "the far ones too: a fridge, a road, your own breath."],
+    [2, "things you can smell", "or two smells you like, if nothing's close by."],
+    [1, "thing you can taste", "or one sip of water."]
+  ];
+  const JOBS = ["a glass of water", "something to eat, even small", "wash your face or take a shower", "softer clothes", "phone down, lights low"];
+  const NOT_JOBS = "not tonight's jobs: fixing work, replying to anyone, deciding anything about your life.";
+  const PARK = ["tomorrow, rested", "after the weekend", "when i'm past this wave", "it can stay dropped"];
+  const STEPS = ["arrive", "breathe", "ground", "name it", "put it down", "tonight"];
+
+  function openSoftLanding(opts) {
+    opts = opts || {};
+    const old = document.getElementById("ao3-softlanding"); if (old) old.remove();
+    const el = (tag, css, text) => { const e = document.createElement(tag); if (css) e.style.cssText = css; if (text != null) e.textContent = text; return e; };
+    const reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const SERIF = "Georgia,'Times New Roman',serif";
+    const INK = "#f4ecf2", SOFT = "rgba(244,236,242,0.68)", PINK = "#f4b6c2", LINE = "rgba(244,236,242,0.18)";
+
+    const back = el("div", "position:fixed;inset:0;z-index:1000002;background:linear-gradient(180deg,#2a2850 0%,#3d3563 55%,#54436f 100%);color:" + INK + ";font-family:" + SERIF + ";display:flex;flex-direction:column;");
+    back.id = "ao3-softlanding";
+    const top = el("div", "flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 6px;");
+    const dots = el("div", "display:flex;gap:8px;align-items:center;");
+    const xBtn = el("button", "background:none;border:none;color:" + SOFT + ";font-size:18px;padding:6px 8px;cursor:pointer;", "\u2715");
+    top.appendChild(dots); top.appendChild(xBtn);
+    const body = el("div", "flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:8px 24px 16px;text-align:center;");
+    const foot = el("div", "flex:0 0 auto;padding:6px 24px calc(env(safe-area-inset-bottom,0px) + 12px);text-align:center;font-family:system-ui,sans-serif;font-size:10.5px;line-height:1.45;color:rgba(244,236,242,0.5);",
+      "if it ever feels like more than a spiral, or like you're not safe, please tell someone near you now. findahelpline.com lists lines by country.");
+    back.appendChild(top); back.appendChild(body); back.appendChild(foot);
+    document.body.appendChild(back);
+
+    const timers = [];
+    const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
+    const clearTimers = () => { while (timers.length) clearTimeout(timers.pop()); };
+    let step = 0, pmdd = false, picked = null;
+    const jobsDone = new Set();
+
+    const h1 = t => el("div", "font-style:italic;font-size:26px;line-height:1.25;margin:18px 0 10px;", t);
+    const p = (t, extra) => el("div", "font-family:system-ui,sans-serif;font-size:15px;line-height:1.55;color:" + SOFT + ";max-width:320px;" + (extra || ""), t);
+    const btn = (t, primary) => el("button", "font-family:system-ui,sans-serif;font-size:15px;border-radius:999px;padding:12px 26px;margin:8px 4px;cursor:pointer;border:1px solid " + (primary ? PINK : LINE) + ";background:" + (primary ? PINK : "transparent") + ";color:" + (primary ? "#3a2a4d" : INK) + ";" + (primary ? "font-weight:600;" : ""), t);
+    const chip = (t, on) => el("button", "font-family:system-ui,sans-serif;font-size:14px;border-radius:16px;padding:10px 14px;margin:5px;cursor:pointer;border:1px solid " + (on ? PINK : LINE) + ";background:" + (on ? "rgba(244,182,194,0.22)" : "rgba(255,255,255,0.05)") + ";color:" + INK + ";", t);
+
+    function close() { clearTimers(); document.removeEventListener("keydown", onKey); back.remove(); }
+    function onKey(e) { if (e.key === "Escape") close(); }
+    document.addEventListener("keydown", onKey);
+    xBtn.addEventListener("click", close);
+
+    function go(n) { step = Math.max(0, Math.min(STEPS.length - 1, n)); render(); }
+    function nextBtn(label) { const b = btn(label || "next", true); b.addEventListener("click", () => go(step + 1)); return b; }
+
+    function drawDots() {
+      dots.textContent = "";
+      STEPS.forEach((name, i) => {
+        const d = el("button", "width:" + (i === step ? 22 : 9) + "px;height:9px;border-radius:5px;border:none;padding:0;cursor:pointer;background:" + (i === step ? PINK : (i < step ? "rgba(244,182,194,0.5)" : LINE)) + ";transition:width .3s;");
+        d.setAttribute("aria-label", name);
+        d.addEventListener("click", () => go(i));
+        dots.appendChild(d);
+      });
+    }
+
+    // ── the six screens ──
+    function sArrive() {
+      body.appendChild(el("div", "font-size:54px;margin-top:40px;", "\u{1FAE7}"));
+      body.appendChild(h1("hey. slow down a second."));
+      body.appendChild(p("you don't have to fix anything right now. you only have to get through the next few minutes, one small step at a time."));
+      if (opts.cycleDay) body.appendChild(p("day " + opts.cycleDay + " \u00B7 be extra gentle with yourself", "margin-top:14px;font-size:13px;color:rgba(244,236,242,0.5);"));
+      const row = el("div", "margin-top:26px;");
+      row.appendChild(nextBtn("start"));
+      body.appendChild(row);
+    }
+
+    function sBreathe() {
+      body.appendChild(h1("in for 4, out for 6"));
+      body.appendChild(p("breathe in through your nose, then out slowly, like fogging a window.", "min-height:48px;"));
+      const stage = el("div", "width:230px;height:230px;display:flex;align-items:center;justify-content:center;margin:14px 0 6px;");
+      const circle = el("div", "position:relative;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f9d3dc,#f4b6c2 55%,#c98fb0);transform:scale(.8);");
+      circle.appendChild(el("div", "position:absolute;inset:-60px;border-radius:50%;z-index:-1;background:radial-gradient(circle,rgba(244,182,194,0.42) 0%,rgba(244,182,194,0.16) 45%,rgba(244,182,194,0) 70%);pointer-events:none;"));
+      stage.style.position = "relative"; stage.style.isolation = "isolate";
+      stage.appendChild(circle); body.appendChild(stage);
+      const label = el("div", "font-style:italic;font-size:22px;height:30px;", reduced ? "" : "ready\u2026");
+      const count = el("div", "font-family:system-ui,sans-serif;font-size:12px;color:rgba(244,236,242,0.5);margin-top:4px;", "");
+      body.appendChild(label); body.appendChild(count);
+      const row = el("div", "margin-top:14px;min-height:56px;");
+      body.appendChild(row);
+      const TOTAL = 6; let n = 0;
+      const finish = () => { label.textContent = "good. that's enough."; count.textContent = ""; circle.style.transition = "transform 2s ease"; circle.style.transform = "scale(1)"; row.appendChild(nextBtn()); };
+      const skip = el("button", "background:none;border:none;color:rgba(244,236,242,0.5);font-family:system-ui,sans-serif;font-size:12px;margin-top:6px;cursor:pointer;", "skip");
+      skip.addEventListener("click", () => { clearTimers(); go(step + 1); });
+      body.appendChild(skip);
+      function inhale() {
+        label.textContent = "in\u2026";
+        if (!reduced) { circle.style.transition = "transform 4s ease-in-out"; circle.style.transform = "scale(1.7)"; }
+        later(exhale, 4000);
+      }
+      function exhale() {
+        label.textContent = "out\u2026 slowly";
+        if (!reduced) { circle.style.transition = "transform 6s ease-in-out"; circle.style.transform = "scale(.8)"; }
+        n++; count.textContent = n + " of " + TOTAL;
+        later(() => (n >= TOTAL ? finish() : inhale()), 6000);
+      }
+      later(inhale, 900);
+    }
+
+    function sGround() {
+      let i = 0;
+      const holder = el("div", "display:flex;flex-direction:column;align-items:center;width:100%;");
+      body.appendChild(holder);
+      function show() {
+        holder.textContent = "";
+        const [num, what, hint] = SENSES[i];
+        holder.appendChild(el("div", "font-size:88px;font-style:italic;color:" + PINK + ";margin-top:26px;line-height:1;", String(num)));
+        holder.appendChild(h1(what));
+        holder.appendChild(p(hint));
+        holder.appendChild(p("take your time. tap when you've got them.", "margin-top:16px;font-size:13px;color:rgba(244,236,242,0.5);"));
+        const b = btn(i === SENSES.length - 1 ? "done" : "got them", true);
+        b.style.marginTop = "22px";
+        b.addEventListener("click", () => { if (i < SENSES.length - 1) { i++; show(); } else go(step + 1); });
+        holder.appendChild(b);
+      }
+      show();
+    }
+
+    function sName() {
+      body.appendChild(h1("what's the spiral saying?"));
+      body.appendChild(p("pick the closest one. you're not agreeing with it, just naming it."));
+      const wrap = el("div", "display:flex;flex-wrap:wrap;justify-content:center;margin:14px 0 6px;max-width:340px;");
+      const card = el("div", "margin-top:12px;max-width:330px;min-height:20px;");
+      const pm = chip("it's a pmdd day", pmdd);
+      const draw = () => {
+        wrap.textContent = "";
+        CHIPS.forEach(c => {
+          const b = chip(c.label, picked === c.id);
+          b.addEventListener("click", () => { picked = c.id; draw(); });
+          wrap.appendChild(b);
+        });
+        const b2 = chip("it's a pmdd day", pmdd);
+        b2.addEventListener("click", () => { pmdd = !pmdd; draw(); });
+        wrap.appendChild(b2);
+        card.textContent = "";
+        const c = CHIPS.find(x => x.id === picked);
+        if (c || pmdd) {
+          const box = el("div", "border:1px solid " + LINE + ";background:rgba(255,255,255,0.06);border-radius:16px;padding:14px 16px;text-align:left;");
+          if (c) box.appendChild(p(c.line, "color:" + INK + ";"));
+          if (pmdd) box.appendChild(p(PMDD_LINE, "color:" + INK + ";" + (c ? "margin-top:10px;" : "")));
+          card.appendChild(box);
+        }
+      };
+      void pm; draw();
+      body.appendChild(wrap); body.appendChild(card);
+      const row = el("div", "margin-top:14px;"); row.appendChild(nextBtn()); body.appendChild(row);
+    }
+
+    function sPark() {
+      body.appendChild(h1("put the loudest one down"));
+      body.appendChild(p("type it out exactly as it sounds. it isn't saved anywhere, and no one will read it."));
+      const ta = el("textarea", "width:100%;max-width:330px;height:120px;margin-top:16px;border-radius:16px;border:1px solid " + LINE + ";background:rgba(255,255,255,0.07);color:" + INK + ";padding:12px 14px;font-size:16px;font-family:system-ui,sans-serif;resize:none;box-sizing:border-box;outline:none;");
+      ta.placeholder = "what's it saying\u2026";
+      body.appendChild(ta);
+      const out = el("div", "margin-top:8px;");
+      body.appendChild(out);
+      const drop = btn("put it down", true);
+      out.appendChild(drop);
+      drop.addEventListener("click", () => {
+        ta.style.transition = reduced ? "opacity .3s" : "opacity 1.6s ease, transform 1.6s ease";
+        ta.style.opacity = "0"; if (!reduced) ta.style.transform = "translateY(-46px)";
+        out.textContent = "";
+        later(() => {
+          ta.value = ""; ta.style.display = "none";
+          out.appendChild(p("it's out of your head and off the screen. when do you want to look at it again, if ever?", "margin-bottom:10px;"));
+          const w = el("div", "display:flex;flex-wrap:wrap;justify-content:center;max-width:340px;");
+          PARK.forEach(t => {
+            const c = chip(t, false);
+            c.addEventListener("click", () => {
+              out.textContent = "";
+              out.appendChild(p("ok. it's parked until then. you don't have to carry it tonight.", "color:" + INK + ";margin-bottom:6px;"));
+              out.appendChild(nextBtn());
+            });
+            w.appendChild(c);
+          });
+          out.appendChild(w);
+        }, reduced ? 350 : 1700);
+      });
+      const skip = el("button", "background:none;border:none;color:rgba(244,236,242,0.5);font-family:system-ui,sans-serif;font-size:12px;margin-top:10px;cursor:pointer;", "skip this one");
+      skip.addEventListener("click", () => go(step + 1));
+      body.appendChild(skip);
+    }
+
+    function sTonight() {
+      body.appendChild(h1("tonight's only jobs"));
+      body.appendChild(p("tap them off as you go. that's the whole list."));
+      const list = el("div", "margin:16px 0 8px;width:100%;max-width:320px;");
+      const note = p(NOT_JOBS, "margin-top:8px;font-size:13px;font-style:italic;");
+      const draw = () => {
+        list.textContent = "";
+        JOBS.forEach((j, i) => {
+          const on = jobsDone.has(i);
+          const r = el("button", "display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:11px 14px;margin:6px 0;border-radius:14px;cursor:pointer;font-family:system-ui,sans-serif;font-size:15px;color:" + INK + ";border:1px solid " + (on ? PINK : LINE) + ";background:" + (on ? "rgba(244,182,194,0.2)" : "rgba(255,255,255,0.05)") + ";");
+          r.appendChild(el("span", "font-size:18px;color:" + PINK + ";width:20px;", on ? "\u2713" : "\u25CB"));
+          r.appendChild(el("span", on ? "text-decoration:line-through;opacity:.7;" : "", j));
+          r.addEventListener("click", () => { on ? jobsDone.delete(i) : jobsDone.add(i); draw(); });
+          list.appendChild(r);
+        });
+      };
+      draw();
+      body.appendChild(list); body.appendChild(note);
+      body.appendChild(p("if you'd like some company:", "margin-top:22px;font-size:13px;color:rgba(244,236,242,0.5);"));
+      const row = el("div", "display:flex;flex-wrap:wrap;justify-content:center;");
+      const go2 = (fn) => () => { close(); try { world[fn](); } catch (e) {} };
+      const mk = btn("\u{1F6CF} sit in mike's room"); mk.addEventListener("click", go2("openMikesRoom"));
+      const wd = btn("\u{1F332} walk the woods"); wd.addEventListener("click", go2("openWoods"));
+      const dn = btn("i'm okay now", true); dn.addEventListener("click", close);
+      row.appendChild(mk); row.appendChild(wd); row.appendChild(dn);
+      body.appendChild(row);
+    }
+
+    const SCREENS = [sArrive, sBreathe, sGround, sName, sPark, sTonight];
+    function render() {
+      clearTimers(); body.textContent = ""; body.scrollTop = 0; drawDots();
+      SCREENS[step]();
+    }
+    render();
+  }
+
+  return { openSoftLanding };
+};
+
 // ════════ world.js ════════
 // world.js — the keepsake scenes: graveyard, graveyard grounds, Bram’s cottage, celebrations,
 // constellation, aquarium, bookshelf, garden, Hollowbrook village, the chapel (stained glass), the bell tower, Hawkins
@@ -11324,7 +11571,7 @@ window.__ao3WorldInit = function (core) {
   function openStainedGlass() { return world.openChapel(); }
   world.openStainedGlass = openStainedGlass;
 
-  const PUBLIC = ["openGraveyard", "openGraveyardGrounds", "openCelebration", "openConstellation", "openAquarium", "openBookshelf", "openGarden", "openStainedGlass", "openHollowbrook", "openChapel", "openBellTower", "openHawkins", "openWheelers", "openBasement", "openBasementFort", "openFortInside"];
+  const PUBLIC = ["openGraveyard", "openGraveyardGrounds", "openCelebration", "openConstellation", "openAquarium", "openBookshelf", "openGarden", "openStainedGlass", "openHollowbrook", "openChapel", "openBellTower", "openHawkins", "openWheelers", "openBasement", "openBasementFort", "openFortInside", "openSoftLanding"];
   const missing = PUBLIC.filter(n => typeof world[n] !== "function");
   if (missing.length) throw new Error("world: missing " + missing.join(", ") + ". Load every file listed in manifest.json before calling __ao3WorldInit.");
   try { void ctx.lib["hawkins-kit"]; } catch (e) {}      // start the shared environment now so the real Prague weather is fetched before any scene opens
