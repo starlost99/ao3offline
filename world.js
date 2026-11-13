@@ -841,6 +841,11 @@
   // the plaid pattern "bs-plaid" must exist in the calling scene's <defs>. A pose's blush:true deepens the cheeks.
   function bsKit(sv, anim, FIG) {
     const SKIN_A = "#ecc6a6", SKIN_B = "#eec4a2", NECK_A = "#d9ae8e", NECK_B = "#dcb090", TEAL = "#2c8aa6", TEAL_D = "#1f6a82", GREY = "#5e6770", THERMAL = "#aab0bb";
+    // pajamas (Mike's room, after the lamp goes off): Will in pale blue pinstripe flannel with white piping, Mike in a grey sleep tee with a maroon ringer neck and its tag showing (it is on backwards).
+    // setPj(true) swaps both torsos and sleeves; every other scene leaves it off.
+    const PJ_A = "#9fbad6", PJ_AD = "#5f7ea3", PJ_B = "#b9bcc8", PJ_BD = "#7f8392", PJ_RED = "#8c3a42", PJ_WHITE = "#e9eef5";
+    let pj = false;
+    const mixPt = (p, q, k) => [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k];
     // two-bone arm: the shoulder S and the hand target T (local units), the elbow bends out and down
     const solveArm = (S, T, u, f, left) => {
       let dx = T[0] - S[0], dy = T[1] - S[1], d = Math.hypot(dx, dy);
@@ -858,9 +863,14 @@
       const [E, Hd] = solveArm(S, T, F.u, F.f, left);
       const w = isA ? 10.6 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
       seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
+      if (pj) {
+        if (isA) { seg(S, E, PJ_A, w); seg(E, Hd, PJ_A, w - 1.6); seg(mixPt(E, Hd, 0.74), mixPt(E, Hd, 0.97), PJ_WHITE, w - 1.1, "butt"); }   // long flannel sleeves with a white cuff
+        else { const M = mixPt(S, E, 0.72); seg(S, M, PJ_B, w); seg(mixPt(S, E, 0.62), M, PJ_RED, w - 0.3, "butt"); seg(M, E, SKIN_B, w - 3); seg(E, Hd, SKIN_B, w - 3.6); }   // short tee sleeves, bare forearms
+      } else {
       seg(S, E, isA ? "url(#bs-plaid)" : "url(#bs-knit)", w); seg(E, Hd, isA ? "url(#bs-plaid)" : "url(#bs-knit)", w - 1.6);
       if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], "#1f2331", w - 0.6, "butt"); }
-      if (isA && left) { const k = 0.78, wx = E[0] + (Hd[0] - E[0]) * k, wy = E[1] + (Hd[1] - E[1]) * k, ang = Math.atan2(Hd[1] - E[1], Hd[0] - E[0]) * 180 / Math.PI; const wg = sv("g", { transform: `translate(${wx.toFixed(1)} ${wy.toFixed(1)}) rotate(${ang.toFixed(1)})` }, g); sv("rect", { x: -1.9, y: -3.9, width: 3.8, height: 7.8, rx: 0.8, fill: "#2a2a36" }, wg); sv("rect", { x: -0.9, y: -1.6, width: 1.8, height: 3.2, fill: "#9ac6e0", opacity: 0.9 }, wg); }
+      }
+      if (isA && left && !pj) { const k = 0.78, wx = E[0] + (Hd[0] - E[0]) * k, wy = E[1] + (Hd[1] - E[1]) * k, ang = Math.atan2(Hd[1] - E[1], Hd[0] - E[0]) * 180 / Math.PI; const wg = sv("g", { transform: `translate(${wx.toFixed(1)} ${wy.toFixed(1)}) rotate(${ang.toFixed(1)})` }, g); sv("rect", { x: -1.9, y: -3.9, width: 3.8, height: 7.8, rx: 0.8, fill: "#2a2a36" }, wg); sv("rect", { x: -0.9, y: -1.6, width: 1.8, height: 3.2, fill: "#9ac6e0", opacity: 0.9 }, wg); }
       sv("circle", { cx: Hd[0].toFixed(1), cy: Hd[1].toFixed(1), r: 4.4, fill: isA ? SKIN_A : SKIN_B, stroke: "#b98f72", "stroke-width": 0.6 }, g);
       return Hd;
     };
@@ -888,14 +898,35 @@
       else sv("path", Object.assign({ d: `M-2.8 ${m + 0.4} Q0 ${m + 0.9} 2.8 ${m + 0.4}` }, MS), g);
       if (p.blush || o.cheek || mood === "smile" || mood === "grin" || mood === "cheer") [-1, 1].forEach(sd => sv("ellipse", { cx: sd * (o.ex + 2.6), cy: m - 2.4, rx: p.blush ? 3.2 : o.cheek ? 3.1 : 2.4, ry: p.blush ? 2 : o.cheek ? 2 : 1.4, fill: p.blush ? "#e86a7a" : o.cheek ? "#ea8f8f" : "#e8908a", opacity: p.blush ? 0.6 : o.cheek ? 0.62 : 0.3 }, g));
     };
-    const torsoA = g => {                                   // the striped sweater: cream with navy and maroon bands, a navy ribbed crew neck
+    const pjTorsoA = g => {                                 // pale blue pinstripe flannel, white collar and placket, buttons, a breast pocket
+      sv("path", { d: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", fill: PJ_A, stroke: PJ_AD, "stroke-width": 0.8 }, g);
+      [-15, -7.5, 7.5, 15].forEach(x => sv("path", { d: `M${x} -3 V58`, stroke: PJ_WHITE, "stroke-width": 0.5, opacity: 0.4 }, g));
+      sv("rect", { x: -4.6, y: -12, width: 9.2, height: 8, fill: NECK_A }, g);
+      sv("path", { d: "M-5.6 -5 L0 6.4 L5.6 -5 Z", fill: NECK_A }, g);
+      sv("path", { d: "M-11 -5.6 Q-8 -11 -4.4 -11.4 L0.2 5.8 L-2.6 8.8 Z", fill: PJ_WHITE, stroke: PJ_AD, "stroke-width": 0.5, "stroke-linejoin": "round" }, g);
+      sv("path", { d: "M11 -5.6 Q8 -11 4.4 -11.4 L-0.2 5.8 L2.6 8.8 Z", fill: PJ_WHITE, stroke: PJ_AD, "stroke-width": 0.5, "stroke-linejoin": "round" }, g);
+      sv("path", { d: "M0 9 V58", stroke: PJ_WHITE, "stroke-width": 1, opacity: 0.85 }, g);
+      [14, 26, 38, 50].forEach(y => sv("circle", { cx: 0, cy: y, r: 1.3, fill: "#f6f2e8", stroke: PJ_AD, "stroke-width": 0.35 }, g));
+      sv("path", { d: "M-18 13 H-7.5 V23 L-12.8 25.6 L-18 23 Z", stroke: PJ_AD, "stroke-width": 0.7, fill: "none", opacity: 0.8 }, g);
+    };
+    const pjTorsoB = g => {                                 // a heather grey sleep tee, maroon ringer neck, the care tag poking out at the front
+      sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: PJ_B, stroke: PJ_BD, "stroke-width": 0.8 }, g);
+      sv("rect", { x: -5, y: -13, width: 10, height: 9, fill: NECK_B }, g);
+      sv("path", { d: "M-11 -5 Q0 7 11 -5 L9.4 -9.4 Q0 -2.6 -9.4 -9.4 Z", fill: PJ_RED }, g);
+      sv("rect", { x: -2.5, y: 1.6, width: 5, height: 4, rx: 0.6, fill: "#f3f1ea", stroke: "#c9c4b4", "stroke-width": 0.3 }, g);
+      sv("path", { d: "M-1.3 3.2 H1.3 M-1.3 4.5 H0.8", stroke: "#a9a493", "stroke-width": 0.35 }, g);
+      sv("path", { d: "M-19 14 Q-22 36 -20 60 M19 14 Q22 36 20 60", stroke: PJ_BD, "stroke-width": 0.7, fill: "none", opacity: 0.5 }, g);
+    };
+    const torsoA = g => {
+      if (pj) { pjTorsoA(g); return; }                                   // the striped sweater: cream with navy and maroon bands, a navy ribbed crew neck
       sv("path", { d: "M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 58 L-25 58 Z", fill: "url(#bs-plaid)", stroke: "#5a2e3c", "stroke-width": 0.8 }, g).setAttribute("stroke-opacity", 0.55);
       sv("rect", { x: -4.6, y: -12, width: 9.2, height: 8, fill: NECK_A }, g);
       sv("path", { d: "M-10.4 -5.4 Q0 4.6 10.4 -5.4 L9 -10.4 Q0 -3.8 -9 -10.4 Z", fill: "#2b3862" }, g);
       sv("path", { d: "M-9 -9 Q0 -2.6 9 -9", stroke: "#4a5a8a", "stroke-width": 0.5, fill: "none", opacity: 0.6 }, g);
       sv("path", { d: "M-17 12 Q-19.4 34 -17.6 58 M17 12 Q19.4 34 17.6 58", stroke: "#7a6a5e", "stroke-width": 0.7, fill: "none", opacity: 0.5 }, g);
     };
-    const torsoB = g => {                                   // a chunky dark knit with maroon patches, a ribbed navy crew neck over a white tee
+    const torsoB = g => {
+      if (pj) { pjTorsoB(g); return; }                                   // a chunky dark knit with maroon patches, a ribbed navy crew neck over a white tee
       sv("path", { d: "M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 62 L-28 62 Z", fill: "url(#bs-knit)", stroke: "#171b28", "stroke-width": 0.8 }, g);
       sv("rect", { x: -5, y: -13, width: 10, height: 9, fill: NECK_B }, g);
       sv("path", { d: "M-11 -5 Q0 7 11 -5 L9.4 -9.4 Q0 -2.6 -9.4 -9.4 Z", fill: "#1f2331" }, g);
@@ -1000,7 +1031,7 @@
       ["base", "mid", "light"].forEach(tone => sv("path", { d: H.hair[tone], "fill-rule": "evenodd", stroke: fill, "stroke-width": 0.25, "stroke-linejoin": "round" }, hair));
       return { root, head };
     };
-    return { solveArm, drawArm, face, torsoA, torsoB, headA, headB, headShift, silhouette };
+    return { solveArm, drawArm, face, torsoA, torsoB, headA, headB, headShift, silhouette, setPj: v => { pj = !!v; } };
   }
 
   return { bsKit };
@@ -10735,7 +10766,7 @@
     //    itself when you walk in; tap either of them to hear the next line sooner, and when a moment ends tap them again for the next one. ──
     const FIG = { a: { cx: 160, sy: 302, s: 1.1, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 222, sy: 299, s: 1.1, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
     const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
-    const { drawArm, torsoA, torsoB, headA, headB, headShift } = bsKit(sv, anim, FIG);
+    const { drawArm, torsoA, torsoB, headA, headB, headShift, setPj } = bsKit(sv, anim, FIG);
     [["a", 4.2], ["b", 4.8]].forEach(([key, br]) => {
       const F = FIG[key]; F.brT = br;
       F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL); F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
@@ -10770,6 +10801,26 @@
       sv("ellipse", { cx: x + 8, cy: y + 8, rx: 14, ry: 3.4, fill: "#000", opacity: 0.3 }, A);
       sv("path", { d: `M${x - 4} ${y + 4} Q${x - 4} ${y - 4} ${x + 6} ${y - 4} L${x + 12} ${y} Q${x + 20} ${y} ${x + 20} ${y + 6} V${y + 8} H${x - 4} Z`, fill: "#b89c76", transform: `rotate(${r} ${x} ${y})` }, A);
     });
+
+    // ── bedtime: the two sweaters they shed under the comforter land on the heap (lumps, shown while they are in their pajamas), and the comforter can heave ──
+    const blob = (g, fill, stroke) => sv("path", { d: "M-11 -6 Q-14 -2 -12 6 Q-6 10 0 9 Q8 10 12 6 Q14 -2 11 -6 Q4 -9 0 -8 Q-4 -9 -11 -6 Z M-11 -4 Q-21 0 -17 8 Q-13 10 -11 6 M11 -4 Q21 -1 18 7 Q14 10 11 6", fill, stroke, "stroke-width": 0.8, "stroke-linejoin": "round" }, g);
+    const LUMP = { a: { x: 222, y: 478, r: -14, fill: "url(#bs-plaid)", stroke: "#5a2e3c" }, b: { x: 250, y: 474, r: 10, fill: "url(#bs-knit)", stroke: "#171b28" } };   // where Will's striped sweater and Mike's dark knit come to rest
+    const lumpEl = {};
+    ["a", "b"].forEach(k => { const L = LUMP[k]; lumpEl[k] = sv("g", { transform: `translate(${L.x} ${L.y}) rotate(${L.r}) scale(0.95 0.7)`, display: "none" }, pileG); blob(lumpEl[k], L.fill, L.stroke); });
+    const showLumps = on => ["a", "b"].forEach(k => lumpEl[k].setAttribute("display", on ? "" : "none"));
+    const tossG = sv("g", { "pointer-events": "none" }, A);                                                              // flying clothes, above the bed
+    const toss = k => {                                                                                                  // a sweater sails out of the covers and lands on the heap (beat key `toss: "a"` Will's, `"b"` Mike's)
+      const L = LUMP[k], x0 = k === "a" ? 168 : 206, y0 = 330, shown = () => lumpEl[k].setAttribute("display", "");
+      if (reduce) { shown(); return; }
+      const o = sv("g", { transform: `translate(${x0} ${y0})` }, tossG), i = anim(sv("g", {}, o), "transform-box:fill-box;transform-origin:50% 50%;");
+      blob(i, L.fill, L.stroke);
+      const dx = L.x - x0, dy = L.y - y0;
+      try {
+        const an = i.animate([{ transform: "translate(0px,0px) rotate(0deg)", opacity: 0 }, { transform: `translate(${(dx * 0.25).toFixed(0)}px,-58px) rotate(120deg)`, opacity: 1, offset: 0.25 }, { transform: `translate(${(dx * 0.6).toFixed(0)}px,-22px) rotate(260deg)`, offset: 0.55 }, { transform: `translate(${dx}px,${dy}px) rotate(${360 + L.r}deg)` }], { duration: 1000, easing: "linear", fill: "forwards" });
+        an.onfinish = () => { o.remove(); shown(); };
+      } catch { o.remove(); shown(); }
+    };
+    const heave = () => { if (reduce) return; try { coverG.animate([{ transform: "scale(1,1)" }, { transform: "scale(1.015,1.06) translate(-2px,-3px)" }, { transform: "scale(0.995,1.02) translate(2px,-1px)" }, { transform: "scale(1.02,1.07) translate(-1px,-4px)" }, { transform: "scale(1,1)" }], { duration: 1500, easing: "ease-in-out" }); } catch {} };   // the comforter heaves while somebody changes under it (beat key `heave: true`)
 
     // ── the carpet scenes: Will and Mike sit cross-legged in the lamplight in front of the bed (hidden until a carpet moment plays), with a board game, a comic or one
     //    set of earphones between them. The same figures (bsKit) at the same size as in the bed, with jeans and shoes; the bed figures are hidden while these are shown (see setStage). ──
@@ -10990,16 +11041,28 @@
       const COL = color === "blue" ? "blue" : color === "yellow" ? "yellow" : "amber";
       const gn = mrGoodnightBeats(HK_WX[hkWxGet()][0]);                                                               // tonight's goodnight (see MR_GN)
       const back = stage === "carpet" ? [["n", "They scramble up off the carpet and back under the comforter, one after the other. It’s late.", { reset: true }]] : [];
+      const sunk = { dy: 22, L: "lap", R: "lap" };                                                                    // sunk down under the comforter, only their heads on the pillows
+      const up = { dy: 0, mood: "smile", blush: true };
       runBeats([
         ...back,
-        ["n", `Will reaches past Mike and clicks the lamp off. The ${COL} glow folds up into the dark.`, { reset: true, lamp: "off", a: { L: [118, 306], look: -1, mood: "calm" } }],
+        ["n", "Will reaches past Mike and clicks the lamp off.", { reset: true, lamp: "off", ms: 1500, a: { L: [118, 306], look: -1, mood: "calm" } }],
         ["w", "Okay. Lights out.", { a: { L: "lap", look: 1, mood: "smile" } }],
+        ["m", "Wait. We’re still in our clothes.", { ms: 1700, b: { look: -1, mood: "o" } }],
+        ["w", "Pajamas. Right.", { ms: 1200, a: { mood: "calm", look: 1 } }],
+        ["n", "Under the comforter, there is a lot of wriggling.", { heave: true, jig: true, ms: 1700, a: Object.assign({ mood: "o", look: 1, head: [3, 2, 7] }, sunk), b: Object.assign({ mood: "o", look: -1, head: [-3, 2, -7] }, sunk) }],
+        ["w", "Ow. Your elbow.", { ms: 1300, heave: true, a: { mood: "o", head: [1, 2, -5] } }],
+        ["m", "Sorry! Hold still.", { ms: 1300, b: { mood: "smirk", head: [-4, 1, -9] } }],
+        ["n", "A striped sweater sails out of the covers and lands on the heap.", { toss: "a", ms: 1600 }],
+        ["n", "A dark knit follows. It lands on top.", { toss: "b", ms: 1500 }],
+        ["n", "Two heads surface, hair everywhere, in pajamas.", { pj: true, ms: 1700, a: Object.assign({ sx: 3, head: [2, 1, 4], look: 1 }, up), b: Object.assign({ sx: -3, head: [-2, 1, -4], look: -1 }, up) }],
+        ["w", "Mike. Your shirt’s on backwards.", { ms: 1700, a: { mood: "smirk", look: 1 }, b: { look: 1 } }],
+        ["m", "It’s a style.", { ms: 1100, b: { mood: "smirk", look: -1 }, hearts: 1 }],
         ["m", "Come here. You’re cold.", Object.assign({ hearts: 3 }, MR_CUDDLE)],
-        ["n", "They shuffle together until there’s no space left between them. A head on a shoulder, two hands on the comforter.", {}],
+        ["n", "They shuffle together until there’s no space left. A head on a shoulder, two hands on the comforter.", {}],
         ...gn.beats,
-        ["n", "They slide down under the comforter, bit by bit, until only their faces show. Their breathing slows, long and even, and the covers begin to rise and fall.", { a: MR_SLEEP.a, b: MR_SLEEP.b, zz: true }],
+        ["n", "They slide down under the comforter until only their faces show. The covers begin to rise and fall.", { a: MR_SLEEP.a, b: MR_SLEEP.b, zz: true }],
         ["n", "Asleep. The house ticks and the window glows faintly blue. They’ll stay like this until somebody taps the lamp.", { hearts: 1 }]
-      ], null);
+      ], null, true);
     };
     const mrGoodnightBeats = wx => {                                                                                   // the goodnight as beats: eyes close on each one's last line, hearts on the very last, a caption line before (a long day) and after
       const g = mrGoodnight(wx), L = g.lines, n = L.length, beats = [];
@@ -11022,7 +11085,9 @@
         ["n", "Up through the floor, muffled by the walls, comes Mrs. Wheeler: “Michael! Breakfast!”", { voice: "karen", a: { look: -1 }, b: { mood: "o", look: 1 } }],
         ["m", "…We didn’t hear that.", { b: { mood: "smirk", look: -1 } }],
         ["w", "Mike. We definitely heard that. Five more minutes, though.", { a: { mood: "smile", eyes: "happy", blush: true, look: 1 }, hearts: 2 }],
-        ["n", "Not asleep any more, not getting up either. The whole house wakes up around them.", {}]
+        ["n", "Not asleep any more, not getting up either. The whole house wakes up around them.", { ms: 2600 }],
+        ["n", "Five minutes later, the comforter starts to heave. Yesterday’s clothes get fished off the floor.", { heave: true, jig: true, ms: 2200, a: { dy: 22, mood: "o", L: "lap", R: "lap" }, b: { dy: 22, mood: "o", L: "lap", R: "lap" } }],
+        ["n", "Two rumpled heads surface, dressed for the day.", { pj: false, unpile: true, ms: 1800, a: { dy: 0, mood: "smile", look: 1 }, b: { dy: 0, mood: "smile", look: -1 } }]
       ], () => { tid = setTimeout(another, reduce ? 400 : 1600); });
     };
     const tapLamp = () => {
@@ -11049,7 +11114,7 @@
     hit(MR.bed.x - 2, MR.bed.y + 4, MR.bed.w + 4, 212, "The bed", () => say("A big red metal bed under a checked comforter and a striped knit blanket. Plenty of room for two, and a stack of comics."));
     hit(156, 44, 106, 28, "The ONE WAY sign", () => say(["A ONE WAY street sign over the closet. Nobody knows where it came from.", "It points to the closet. Somewhere in there is a lot of mess."][nSign++ % 2]));
     hit(MR.closet.x - 4, MR.closet.y + 8, MR.closet.w + 8, MR.closet.h - 8, "The closet", () => say(["A closet door with a mirror on it and ties hanging from the rail. One of them is very teal.", "In the mirror: a room that looks a lot like this one, but tidier."][nCloset++ % 2]));
-    hit(200, 462, 70, 36, "The pile of clothes", () => say("A heap of clothes at the foot of the bed. Clean or dirty is anyone’s guess."));
+    hit(200, 462, 70, 36, "The pile of clothes", () => say(asleep ? "A striped sweater and a dark knit, shed in a hurry, lie on top of the heap." : "A heap of clothes at the foot of the bed. Clean or dirty is anyone’s guess."));
     hit(120, 440, 150, 80, "The carpet", () => say("The carpet in the lamplight. The best spot in the room."));
     const emptyBed = () => say("The comforter is rumpled and empty. Nobody’s up there: they’re down on the carpet.");
     hit(128, 244, 62, 82, "Will", () => stage === "carpet" ? emptyBed() : next()); hit(190, 240, 72, 86, "Mike", () => stage === "carpet" ? emptyBed() : next());
@@ -11115,6 +11180,10 @@
     let voice = null;                                                                                                   // Karen's call from downstairs, while it plays (see hkVoice)
     const P = { a: null, b: null };
     const setPose = patch => {
+      if ("pj" in patch) { setPj(patch.pj); patch = Object.assign({ a: {}, b: {} }, patch); }                         // pajamas on or off (beat key `pj`): both figures are redrawn in the new clothes
+      if (patch.unpile) showLumps(false);                                                                               // the shed sweaters leave the heap (`unpile: true`)
+      if (patch.heave) heave();
+      if (patch.toss) toss(patch.toss);
       if (patch.reset) { setStage("bed"); P.a = Object.assign({}, MR_BASE.a); P.b = Object.assign({}, MR_BASE.b); comicG.setAttribute("display", "none"); drawFig("a", P.a); drawFig("b", P.b); }   // back to sitting up in the bed, from wherever the last moment left them
       if (patch.lamp) setLamp(patch.lamp);
       if ("zz" in patch) setZz(patch.zz);
@@ -11152,7 +11221,7 @@
       if (playing) step(); else another();
     };
     // plays a list of beats, like a moment, but locked: nothing else runs until it ends (the lamp scenes use it)
-    const runBeats = (list, done) => {
+    const runBeats = (list, done, fast) => {                                                                          // fast: shorter read times (the bedtime scene); a beat's own patch.ms overrides them
       clearTimeout(tid); hideBubble(); playing = false; scene = true;
       let i = 0;
       const go = () => {
@@ -11161,7 +11230,7 @@
         const [who, text, patch] = list[i++];
         setPose(patch || {});
         if (who === "n") { hideBubble(); say(text); } else speak(who, text);
-        tid = setTimeout(go, readTime(text));
+        tid = setTimeout(go, (patch && patch.ms) || (fast ? Math.min(3400, 1200 + text.length * 28) : readTime(text)));
       };
       go();
     };
@@ -11234,7 +11303,7 @@
       else onBreath();                                                                                                  // the first z, on the first exhale
     };
     sh.onClose = () => { clearTimeout(tid); clearTimeout(tmTick); clearTimeout(tmDone); hideBubble(); if (voice) voice.stop(); amb.stop(); snd.stop(); };
-    if (asleep) { P.a = Object.assign({}, MR_BASE.a, MR_SLEEP.a); P.b = Object.assign({}, MR_BASE.b, MR_SLEEP.b); drawFig("a", P.a); drawFig("b", P.b); setLamp("off"); setZz(true); }   // still asleep from last time: lamp out, z's rising
+    if (asleep) { setPj(true); showLumps(true); P.a = Object.assign({}, MR_BASE.a, MR_SLEEP.a); P.b = Object.assign({}, MR_BASE.b, MR_SLEEP.b); drawFig("a", P.a); drawFig("b", P.b); setLamp("off"); setZz(true); }   // still asleep from last time: lamp out, z's rising
     else start();                                                                                                      // otherwise they are in the bed from the moment you walk in
     let first = Math.floor(Math.random() * MR_MOMENTS.length);
     try { const last = parseInt(localStorage.getItem(MR_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < MR_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (MR_MOMENTS.length - 1))) % MR_MOMENTS.length; } catch {}
