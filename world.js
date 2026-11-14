@@ -881,9 +881,14 @@
       const F = FIG[who], isA = who === "a", isC = who === "c", S = Sov || (left ? F.sl : F.sr);
       const [E, Hd] = solveArm(S, T, F.u, F.f, left);
       const w = isA ? 10.6 : isC ? 10.4 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
-      seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35);
+      if (isC) { seg(mixPt(S, E, 0.6), E, "#1b1320", w - 3).setAttribute("opacity", 0.18); seg(E, Hd, "#1b1320", w - 3.4).setAttribute("opacity", 0.18); }   // Karen: a faint shadow under the bare forearm only
+      else { seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35); }
       if (isC) {                                                                                      // Karen: a short striped sleeve with a turned-up cuff, then a bare forearm
-        const M = mixPt(S, E, 0.6); seg(S, M, KB_SLEEVE, w); seg(mixPt(S, E, 0.44), M, KB_CUFF, w + 0.5, "butt"); seg(M, E, SKIN_C, w - 3.4); seg(E, Hd, SKIN_C, w - 4);
+        const M = mixPt(S, E, 0.6), ddx = M[0] - S[0], ddy = M[1] - S[1], dl = Math.hypot(ddx, ddy) || 1, ux = ddx / dl, uy = ddy / dl, nx = -uy, ny = ux, hw = w / 2;
+        const P = (a, b) => `${(a).toFixed(1)} ${(b).toFixed(1)}`, T0 = [S[0] - ux * 4.5, S[1] - uy * 4.5];
+        seg(M, E, SKIN_C, w - 3.4); seg(E, Hd, SKIN_C, w - 4);                                    // forearm first: its round top end then hides under the cuff
+        sv("path", { d: `M${P(T0[0] + nx * hw, T0[1] + ny * hw)} Q${P(T0[0] - ux * 2.2, T0[1] - uy * 2.2)} ${P(T0[0] - nx * hw, T0[1] - ny * hw)} L${P(M[0] - nx * (hw + 0.6), M[1] - ny * (hw + 0.6))} L${P(M[0] + nx * (hw + 0.6), M[1] + ny * (hw + 0.6))} Z`, fill: KB_SLEEVE, stroke: KB_CUFF, "stroke-width": 0.5, "stroke-linejoin": "round" }, g);   // a short sleeve that starts at the shoulder line and flares slightly
+        seg([M[0] - ux * 3.2, M[1] - uy * 3.2], [M[0] + ux * 0.6, M[1] + uy * 0.6], KB_CUFF, w + 1.2, "butt");   // the turned-up cuff
       } else if (pj) {
         if (isA) { seg(S, E, PJ_A, w); seg(E, Hd, PJ_A, w - 1.6); seg(mixPt(E, Hd, 0.74), mixPt(E, Hd, 0.97), PJ_WHITE, w - 1.1, "butt"); }   // long flannel sleeves with a white cuff
         else { const M = mixPt(S, E, 0.72); seg(S, M, PJ_B, w); seg(mixPt(S, E, 0.62), M, PJ_RED, w - 0.3, "butt"); seg(M, E, SKIN_B, w - 3); seg(E, Hd, SKIN_B, w - 3.6); }   // short tee sleeves, bare forearms
@@ -900,6 +905,15 @@
       const eyes = sv("g", {}, g);
       [-1, 1].forEach(sd => {
         const x = sd * o.ex + lk, y = o.ey + lky;
+        if (o.lash) {   // Karen's liner, after the reference drawing: a thick upper-lid line hugging the top of the eye, ending in a little wing and a small lash below it. Part of the eye group, so it blinks with the eye and rests on the lid line when the eye is closed or smiling
+          const LS = { stroke: "#241816", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, ew = (o.er || 1) * 1.35, L = (a, b) => `${(x + sd * a).toFixed(2)} ${(y + b).toFixed(2)}`;
+          if (ek === "closed" || ek === "happy") {
+            const yy = ek === "happy" ? y + 0.9 : y;
+            sv("path", Object.assign({ d: `M${(x - sd * 2.3).toFixed(2)} ${yy} Q${(x).toFixed(2)} ${(yy + (ek === "happy" ? -2.9 : 2)).toFixed(2)} ${(x + sd * 2.3).toFixed(2)} ${yy} Q${(x + sd * 3.2).toFixed(2)} ${(yy - 0.5).toFixed(2)} ${(x + sd * 4).toFixed(2)} ${(yy - 1.7).toFixed(2)}`, "stroke-width": 1.15 }, LS), eyes);
+          } else {
+            sv("path", Object.assign({ d: `M${L(-ew, -1.2)} Q${L(0.1, -4.9)} ${L(ew + 0.1, -1.5)} Q${L(ew + 1.1, -1.9)} ${L(ew + 1.9, -2.9)}`, "stroke-width": 0.95 }, LS), eyes);   // one line: the lid, running out into a small wing
+          }
+        }
         if (ek === "closed") sv("path", { d: `M${x - 2.2} ${y} Q${x} ${y + 1.7} ${x + 2.2} ${y}`, stroke: "#2a1d1a", "stroke-width": 1, fill: "none", "stroke-linecap": "round" }, eyes);
         else if (ek === "happy") sv("path", { d: `M${x - 2.2} ${y + 0.9} Q${x} ${y - 2} ${x + 2.2} ${y + 0.9}`, stroke: "#2a1d1a", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round" }, eyes);
         else { const er = o.er || 1; sv("ellipse", { cx: x, cy: y, rx: 1.35 * er, ry: 1.7 * er, fill: o.eye || "#2a1d1a" }, eyes); sv("circle", { cx: x + 0.5 * er, cy: y - 0.6 * er, r: 0.45 * er, fill: "#fff", opacity: 0.9 }, eyes); }
@@ -1036,7 +1050,7 @@
         skin: SKIN_C, neck: NECK_C, neckW: 4.4, neckTop: -17, chin: -11,
         face: { cy: -26, rx: 14.4, ry: 16 }, ear: { x: 16, y: -20.5, rx: 2.4, ry: 3 },
         hair: KAREN_HAIR, hairFill: KAREN_HAIR_FILL, hairShift: [0, 0],
-        look: { ex: 6.8, ey: -24.4, by: -29.8, my: -15.6, brow: "#7a4a24", bw: 1.1, er: 1.7, eye: "#1a1214", cheek: true }
+        look: { ex: 6.8, ey: -24.4, by: -29.8, my: -15.6, brow: "#7a4a24", bw: 1.1, er: 1.7, eye: "#1a1214", cheek: true, lash: true }
       }
     };
     // Karen's hair is drawn in two goes: the whole traced mass sits BEHIND her neck and face (so it can never grow over the face or
@@ -1075,7 +1089,6 @@
       }
       const fg = turn ? sv("g", { transform: `translate(${(turn * H.face.rx * (p.turnAmt || 0.34)).toFixed(2)} 0) scale(${p.turnW || 0.8} 1)` }, h) : h;
       face(fg, p, H.look);
-      if (who === "c") [-1, 1].forEach(sd => sv("path", { d: `M${sd * (H.look.ex + 1.9)} ${H.look.ey - 0.8} q${sd * 1.7} -0.2 ${sd * 2.5} -1.8`, stroke: "#2a1d1a", "stroke-width": 0.8, fill: "none", "stroke-linecap": "round" }, fg));   // the lash flick at the outer corner
       if (turn && p.mood === "kiss") {
         const lx = turn * (H.face.rx - 0.2), ly = H.look.my + 0.1;
         sv("ellipse", { cx: lx, cy: ly, rx: 1.7, ry: 2.3, fill: "#c4525e", stroke: "#8a2f3a", "stroke-width": 0.4 }, h);
@@ -11600,7 +11613,57 @@
       ["k", "Hands.", { c: { mood: "calm", look: 1 }, b: { L: "lap" } }],
       ["n", "The cookies stay exactly where they are. Mike has never been so aware of his own hands.", { b: { mood: "calm", look: 0 } }],
       ["k", "…Take one. After the napkins.", { c: { mood: "smile", look: 1 } }],
-      ["m", "Best mom ever.", { b: { mood: "cheer", look: 1 } }]] }
+      ["m", "Best mom ever.", { b: { mood: "cheer", look: 1 } }]] },
+    // the tender ones: Mrs. Wheeler is lovely about Will and Mike, and Mike goes pink
+    { name: "his sweater", props: [], intro: "Mike is wearing a sweater that is very slightly too small for him, and his mother has noticed.", beats: [
+      ["n", "Mrs. Wheeler looks up from the mail and stops. Mike is wearing a sweater that is very slightly too small for him, and it is not his.", { c: { mood: "smile", look: 1 }, b: { mood: "calm", look: 0 } }],
+      ["k", "That’s Will’s sweater, isn’t it?"],
+      ["m", "…It was cold.", { b: { mood: "o", look: -1, blush: true } }],
+      ["k", "It’s a lovely colour on you.", { c: { mood: "smile", look: 1 } }],
+      ["m", "Mom.", { b: { mood: "smirk", look: -1, blush: true, head: [0, 2, -4] } }],
+      ["n", "Mike pulls the sleeves down over his hands and tries to become one with the island.", { b: { mood: "calm", look: 0, blush: true } }],
+      ["k", "Keep it as long as you like. I think he’d be glad you did.", { hearts: 2, c: { eyes: "happy", mood: "smile", look: 1 } }],
+      ["m", "…Yeah. I think he would.", { b: { mood: "smile", look: 1, blush: true } }]] },
+    { name: "his name", props: [], intro: "Mrs. Wheeler is chopping something, and only half pretending not to listen.", beats: [
+      ["n", "Mrs. Wheeler is chopping an onion. Mike is telling her about his day, and has said the word “Will” eleven times in two minutes.", { c: { mood: "calm", look: 1 }, b: { mood: "grin", look: 1 } }],
+      ["k", "You do that, you know."],
+      ["m", "Do what?", { b: { mood: "o", look: 1 } }],
+      ["k", "Light up. Every time you say his name.", { c: { mood: "smile", look: 1 } }],
+      ["m", "I do not.", { b: { mood: "calm", look: 0, blush: true } }],
+      ["k", "Michael."],
+      ["m", "…Maybe a little.", { b: { mood: "smirk", look: -1, blush: true, head: [0, 2, -4] } }],
+      ["k", "I like seeing it. You’re allowed to be that happy, sweetheart.", { c: { eyes: "happy", mood: "smile", look: 1 } }],
+      ["n", "Mike looks very hard at a spot on the floor. The spot is doing nothing to help him.", { hearts: 2, b: { mood: "smile", look: 0, blush: true } }]] },
+    { name: "one for Will", props: ["plate"], intro: "A plate of cookies, and a mother counting them out in twos.", beats: [
+      ["n", "Mrs. Wheeler puts two cookies on a napkin, and then, after a moment, a third.", { b: { mood: "smile", look: 1 }, c: { mood: "smile", look: 1 } }],
+      ["k", "One for you. Two for Will. He never takes more than one if I’m watching."],
+      ["m", "That’s… actually really specific.", { b: { mood: "o", look: 1 } }],
+      ["k", "He says thank you for everything, like he’s afraid it’ll be taken away. Tell him he doesn’t have to.", { c: { mood: "calm", look: 1 } }],
+      ["m", "…I’ll tell him.", { b: { mood: "calm", look: 0, blush: true } }],
+      ["k", "And tell him this is his house too. It really is.", { c: { eyes: "happy", mood: "smile", look: 1 } }],
+      ["n", "Mike takes the napkin as carefully as if it were made of glass.", { hearts: 2, b: { mood: "smile", look: 1, blush: true } }],
+      ["m", "He’s going to cry about a cookie.", { b: { mood: "grin", look: 1, blush: true } }],
+      ["k", "Good. Then I’ve done my job.", { c: { mood: "grin", look: 1 } }]] },
+    { name: "the door", props: [], intro: "Mrs. Wheeler has put down the mail, which means this is a Serious Talk.", beats: [
+      ["n", "Mrs. Wheeler puts down the mail and folds her hands. Mike has seen this before, and he is bracing for it.", { c: { mood: "calm", look: 1 }, b: { mood: "o", look: 1 } }],
+      ["k", "I’m going to say one thing, and then I’m never going to mention it again."],
+      ["m", "Is this a… a talk?", { b: { mood: "o", look: -1, blush: true } }],
+      ["k", "It’s a very short talk. If Will is ever sad, or scared, or just doesn’t want to go home, he stays here. No questions.", { c: { mood: "smile", look: 1 } }],
+      ["m", "…Okay.", { b: { mood: "calm", look: 1 } }],
+      ["k", "And you two look after each other. That’s all. That’s the whole talk.", { c: { eyes: "happy", mood: "smile", look: 1 } }],
+      ["m", "That’s it?", { b: { mood: "o", look: 1, blush: true } }],
+      ["k", "I told you it was short.", { c: { mood: "grin", look: 1 } }],
+      ["n", "Mike nods, very fast, because if he opens his mouth anything could come out.", { hearts: 2, b: { mood: "smile", look: 1, blush: true } }]] },
+    { name: "come here", props: [], intro: "A mother with her arms already half open, and a son who knows exactly what is coming.", beats: [
+      ["n", "Mike has gone quiet in the way that means something is on his mind. Mrs. Wheeler puts the mail down.", { c: { mood: "calm", look: 1 }, b: { mood: "calm", look: 0 } }],
+      ["k", "Come here.", { c: { mood: "smile", look: 1 } }],
+      ["m", "Mom, you’re doing the thing.", { b: { mood: "smirk", look: 1, blush: true } }],
+      ["k", "I am hugging my son. It’s allowed.", { hearts: 2, c: { eyes: "happy", mood: "smile", look: 1 } }],
+      ["n", "Mike lets himself be hugged for exactly as long as is dignified, and then a little longer.", { b: { eyes: "happy", mood: "smile", look: 1, blush: true } }],
+      ["m", "…Thanks for being so nice about Will. I thought you’d be, I don’t know.", { b: { eyes: "open", mood: "calm", look: 1, blush: true } }],
+      ["k", "Sweetheart. All I want is for you to be loved. And I can see it from across the room.", { c: { mood: "smile", look: 1 } }],
+      ["m", "Okay. Okay, stop, I’m going to go pink.", { b: { mood: "grin", look: 1, blush: true, head: [0, 2, -4] } }],
+      ["k", "You already are.", { hearts: 3, c: { mood: "grin", look: 1 } }]] }
   ];
 
   function openKitchen() {
