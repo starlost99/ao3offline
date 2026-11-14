@@ -783,11 +783,11 @@
     set: on => { try { if (on) localStorage.setItem(SLEEP_KEY, "1"); else localStorage.removeItem(SLEEP_KEY); } catch {} }
   };
 
-  // Where Will and Mike are while they are awake: ONE place at a time (Mike's room, the table in the basement, or inside the blanket fort), and every other
+  // Where Will and Mike are while they are awake: ONE place at a time (Mike's room, the table in the basement, inside the blanket fort, or the kitchen), and every other
   // scene is empty until you find them or call them over (the "call them here" pills). They move on by themselves every 12 to 40 minutes, never to the place
   // they just left (saved under "ao3-hk-where"). Asleep, they are always in Mike's room. A scene asks once, when it opens: hkWhere.here("basement").
-  const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort"];
-  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket." };
+  const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort", "kitchen"];
+  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket.", kitchen: "Somewhere in the house, a cupboard bangs and the fridge door sighs open." };
   const hkWhere = {
     set(p, lo, hi) { try { const a = lo || 12, b = hi || 40; localStorage.setItem(WHERE_KEY, JSON.stringify({ p, until: Date.now() + (a + Math.random() * (b - a)) * 60000 })); } catch {} },
     get() {
@@ -11388,11 +11388,69 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["kitchen"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkWindowSky } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkWindowSky, hkSleep, hkWhere, bfFade } = ctx.lib["hawkins-kit"];
+  const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
   const openMikesRoom = (...args) => world.openMikesRoom(...args);
   const openHawkins = (...args) => world.openHawkins(...args);
+
+  // The moments in the kitchen. Each moment: props lying on the island, then beats [who, text, patch?]. who: "w" Will, "m" Mike, "n" the caption only.
+  // A patch changes the pose from that beat on: { a: Will's, b: Mike's } (mood, eyes, head [dx, dy, tilt], sx, blush, lean, L / R hands: a point [x, y] on the
+  // picture, with a held thing as a third entry: "mug", "cookie", "plate", "glass", "pad"), plus hearts: n (a puff of hearts), jig: true (a happy wiggle).
+  // The island's top is at about y 250 to 295. Everything is gentle and innocent.
+  const KT_KEY = "ao3-kt-moment";
+  const KT_BASE = { a: { sx: 0, head: [1, 1, 3], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: 0, head: [-1, 1, -3], mood: "smile", look: -1, L: "lap", R: "lap" } };
+  const KT_MOMENTS = [
+    { name: "cocoa", props: ["mugs"], beats: [
+      ["n", "Two mugs on the island, steam curling up. Mike is guarding the marshmallow bag like it is a state secret."],
+      ["w", "Mike. How many marshmallows did you put in mine?", { a: { mood: "o", look: 1 } }],
+      ["m", "Four. That is a respectable number.", { b: { mood: "smirk" } }],
+      ["w", "And in yours?", { a: { mood: "smirk" } }],
+      ["m", "…Eleven. But they’re small. Structurally speaking, they’re small marshmallows.", { b: { mood: "grin", blush: true }, jig: true }],
+      ["w", "That is not a thing.", { a: { mood: "grin" } }],
+      ["m", "Fine. You can have two of mine. Strategically.", { b: { mood: "smile" }, a: { eyes: "happy", mood: "smile" } }],
+      ["n", "They clink mugs. Will gets a cocoa moustache, and Mike has to look away very fast.", { hearts: 2, a: { R: [190, 218, "mug"], blush: true }, b: { L: [238, 216, "mug"], blush: true, mood: "calm" } }]] },
+    { name: "the cookie heist", props: ["plate"], beats: [
+      ["n", "A plate of cookies, cooling. Dinner is in an hour. This is not a coincidence."],
+      ["m", "Okay. One each. We take them at the same time.", { b: { mood: "smirk", L: [214, 266] } }],
+      ["w", "That’s not a plan, that’s just stealing together.", { a: { mood: "grin", R: [204, 266] } }],
+      ["m", "Stealing together is the best kind.", { b: { mood: "grin" } }],
+      ["n", "A floorboard creaks upstairs. Both of them freeze with a cookie halfway to their mouths.", { a: { mood: "o", look: 0, R: [196, 206, "cookie"] }, b: { mood: "o", look: 0, L: [230, 204, "cookie"] } }],
+      ["w", "Was that your mom?", { a: { mood: "o" } }],
+      ["m", "That was the house. The house does that.", { b: { mood: "calm" } }],
+      ["w", "You say that about everything.", { a: { mood: "smirk" } }],
+      ["m", "Everything the house does is the house.", { b: { mood: "grin" }, jig: true }],
+      ["n", "Crumbs, everywhere. Mike has one on his chin. Will has decided not to tell him.", { hearts: 2, a: { eyes: "happy", mood: "smile", blush: true } }]] },
+    { name: "drying up", props: ["dishes"], beats: [
+      ["n", "Someone has to dry. Mike volunteered Will. Will volunteered Mike. They are both drying.", { a: { R: [198, 262, "plate"] }, b: { L: [226, 266] } }],
+      ["w", "You’re doing it wrong. You’re just moving the water around.", { a: { mood: "smirk" } }],
+      ["m", "I’m giving it a moment to think about what it did.", { b: { mood: "grin" } }],
+      ["w", "It’s a plate, Mike.", {}],
+      ["m", "A plate with feelings.", { b: { mood: "cheer" }, jig: true }],
+      ["w", "…Okay, give it here. You’re getting soap on your sleeve.", { a: { mood: "grin", blush: true } }],
+      ["m", "I like the soap.", { b: { mood: "smile" } }],
+      ["n", "Will dabs a bit of foam on Mike’s nose. Mike pretends to be furious for almost a whole second.", { hearts: 3, a: { eyes: "happy", mood: "cheer", R: [236, 202] }, b: { mood: "o", blush: true } }]] },
+    { name: "milk, quietly", props: ["milk"], beats: [
+      ["n", "The house is quiet. The fridge hums. It has been quiet long enough that whispering feels right."],
+      ["w", "Don’t turn on the big light.", { a: { mood: "calm", look: 0.5 } }],
+      ["m", "I wasn’t going to. The fridge light is plenty.", { b: { mood: "smile" } }],
+      ["w", "It’s kind of nice. Like a stage.", { a: { mood: "smile", lookY: -0.5 } }],
+      ["m", "You can have the spotlight. I’ll be the audience.", { b: { blush: true, mood: "smile" } }],
+      ["w", "You’re always the audience. Be in the show once in a while.", { a: { mood: "smirk" } }],
+      ["m", "…Okay. Same glass? There’s only one clean one.", { b: { mood: "smirk", blush: true } }],
+      ["w", "Convenient.", { a: { mood: "grin", blush: true }, jig: true }],
+      ["n", "They share the glass, taking turns, trying not to laugh at each other’s milk moustaches. The fridge hums on.", { hearts: 2, a: { R: [190, 214, "glass"], eyes: "happy" }, b: { mood: "grin" } }]] },
+    { name: "pancakes", props: ["flour"], beats: [
+      ["n", "Mrs. Wheeler’s pancake card, in her handwriting, stained with decades of syrup. Will reads it out. Mike is stirring with great confidence.", { a: { R: [200, 222, "pad"], look: 0 }, b: { L: [232, 262] } }],
+      ["w", "‘Two cups flour, a pinch of salt, a good dash of baking powder.’ Mike, what’s a dash?", { a: { mood: "o" } }],
+      ["m", "A dash is like a pinch, but with more attitude.", { b: { mood: "smirk" } }],
+      ["w", "That is not a measurement.", { a: { mood: "smirk" } }],
+      ["m", "It’s my mom’s measurement. Everything she does is a dash.", { b: { mood: "grin" } }],
+      ["w", "‘Whisk until smooth.’ Smooth, Mike. Not lumpy.", { a: { mood: "calm" } }],
+      ["m", "It’s smooth. It’s just smooth with texture.", { b: { mood: "cheer", blush: true }, jig: true }],
+      ["n", "There is flour on Will’s cheek, flour in Mike’s curls and, somehow, flour on the ceiling light.", { hearts: 3, a: { eyes: "happy", mood: "cheer", blush: true } }]] }
+  ];
 
   // ── the Wheelers' kitchen: the ROOM ONLY (nothing to tap, nobody in it, no sound; the way in is the "kitchen" pill in Mike's room) ──
   // Styled after the reference photo: dark mahogany cabinets with small silver knobs, red laminate counters, a cream retro fridge, a cream stove under a
@@ -11405,25 +11463,35 @@
   // When things are added later (taps, Will and Mike, sounds), they go below the "ROOM" block.
   function openKitchen() {
     const sh = hkShell("ao3-kitchen", "▦ The kitchen");
-    const { sv, rnd } = sh.kit;
-    const { sub, field, caption, pill, close } = sh;
+    const { sv, rnd, anim, el } = sh.kit;
+    const { sub, field, caption, pill, close, later } = sh;
     const W = 360, H = 540;
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const away = !hkSleep.get() && !hkWhere.here("kitchen");                                    // awake, but somewhere else in the house: the kitchen is empty
+    const asleep = hkSleep.get(), empty = asleep || away;                                       // asleep upstairs: empty and quiet, no moments
+    const say = t => { caption.textContent = t; };
+    let leaving = false, tid = 0;
     sh.box.style.background = "#2a1c1a";
     const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
     svg.style.cssText = "width:100%;height:auto;display:block;";
     const defs = sv("defs", {}, svg);
     const grad = (id, y1, y2, stops) => { const g = sv("linearGradient", { id, x1: 0, y1, x2: 0, y2 }, defs); stops.forEach(([o, c, a]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": a == null ? 1 : a }, g)); };
-    grad("kt-back", 0, 1, [["0%", "#c6cadf"], ["100%", "#aab0c9"]]);
-    grad("kt-left", 0, 1, [["0%", "#aeb4cd"], ["100%", "#8d94b2"]]);
-    grad("kt-right", 0, 1, [["0%", "#c0c5da"], ["100%", "#a4abc6"]]);
-    grad("kt-ceil", 0, 1, [["0%", "#f1e6cf"], ["100%", "#dccfb4"]]);
-    grad("kt-top", 0, 1, [["0%", "#b83a3a"], ["100%", "#982c2c"]]);
+    grad("kt-back", 0, 1, [["0%", "#cfc6d2"], ["100%", "#b9aebd"]]);          // the back wall: pale grey-lilac
+    grad("kt-left", 0, 1, [["0%", "#ddd2b9"], ["100%", "#c3b79b"]]);          // the left wall: beige wallpaper (a fine pattern is laid over it below)
+    grad("kt-right", 0, 1, [["0%", "#cdc4d0"], ["100%", "#b2a8b8"]]);
+    grad("kt-ceil", 0, 1, [["0%", "#ece3cf"], ["100%", "#d6ccb4"]]);
+    grad("kt-top", 0, 1, [["0%", "#e56a3f"], ["100%", "#cf5230"]]);           // orange laminate
     const lamp = sv("radialGradient", { id: "kt-lamp", cx: "50%", cy: "50%", r: "50%" }, defs);
     sv("stop", { offset: "0%", "stop-color": "#fff0c4", "stop-opacity": "0.55" }, lamp);
     sv("stop", { offset: "100%", "stop-color": "#fff0c4", "stop-opacity": "0" }, lamp);
     const vig = sv("radialGradient", { id: "kt-vig", cx: "50%", cy: "50%", r: "75%" }, defs);
     sv("stop", { offset: "58%", "stop-color": "#140a0a", "stop-opacity": "0" }, vig);
     sv("stop", { offset: "100%", "stop-color": "#140a0a", "stop-opacity": "0.5" }, vig);
+    const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);   // Will's striped sweater (bsKit asks for this id)
+    sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
+    const knit = sv("pattern", { id: "bs-knit", width: 30, height: 30, patternUnits: "userSpaceOnUse" }, defs);   // Mike's chunky patterned sweater
+    sv("rect", { width: 30, height: 30, fill: "#272d41" }, knit); sv("rect", { x: 2, y: 3, width: 13, height: 10, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 15, width: 11, height: 12, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 2, width: 9, height: 9, fill: "#1c2030" }, knit); sv("rect", { x: 3, y: 18, width: 10, height: 8, fill: "#1c2030" }, knit);
+    sv("path", { d: "M0 14.5 H30 M15.5 0 V30", stroke: "#74703f", "stroke-width": 0.7, "stroke-dasharray": "2 1.2", opacity: 0.5 }, knit); sv("path", { d: "M4 6 h3 M20 20 h3 M9 22 h2 M22 5 h2", stroke: "#8a4050", "stroke-width": 0.6, opacity: 0.6 }, knit);
     const tm = HK_TIMES[hkTimeGet()], kind = HK_WX[hkWxGet()][0];
 
     // ── ROOM ──
@@ -11442,23 +11510,28 @@
     const sideX = (x, h0, h1, z0, z1, fill, extra) => poly3([[x, h1, z0], [x, h1, z1], [x, h0, z1], [x, h0, z0]], fill, extra);                            // a face on a side wall's plane, z0 far, z1 near
     const dot = (x, h, z, r, fill, extra) => { const p = P(x, h, z); return sv("circle", Object.assign({ cx: p[0].toFixed(1), cy: p[1].toFixed(1), r, fill }, extra || {}), svg); };
     const line = (a, b, stroke, w, extra) => sv("path", Object.assign({ d: `M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}`, stroke, "stroke-width": w, fill: "none", "stroke-linecap": "round" }, extra || {}), svg);
-    const WOOD = "#5b201c", WOOD_D = "#3a1210", WOOD_L = "#7d2f28", KNOB = "#d6d1c6";
+    const WOOD = "#80532d", WOOD_D = "#4a2c14", WOOD_L = "#a07040", KNOB = "#d6d1c6";   // medium oak-brown cabinets
 
-    // the floor: brown and cream tiles, 0.4 m square, running out from the back wall
-    poly3([[-HW, 0, D], [HW, 0, D], [HW, 0, ZN], [-HW, 0, ZN]], "#e6d8bb");
+    // the floor: cream vinyl with a tan check and thin orange grid lines, 0.4 m square, running out from the back wall
+    poly3([[-HW, 0, D], [HW, 0, D], [HW, 0, ZN], [-HW, 0, ZN]], "#f1e7cf");
     for (let i = 0; i < 9; i++) for (let j = 0; j < 10; j++) {
-      if ((i + j) % 2 === 0) continue;
       const za = D - 0.4 * i, zb = D - 0.4 * (i + 1), xa = -HW + 0.4 * j, xb = xa + 0.4;
       if (zb < ZN - 0.05) continue;
-      poly3([[xa, 0, za], [xb, 0, za], [xb, 0, zb], [xa, 0, zb]], "#6a3a2e");
+      poly3([[xa, 0, za], [xb, 0, za], [xb, 0, zb], [xa, 0, zb]], (i + j) % 2 ? "#e7c9a0" : "#f1e7cf", { stroke: "#d9905e", "stroke-width": 0.7, "stroke-opacity": 0.8 });
     }
     // ceiling and walls (lilac), with the crown moulding and skirting
     poly3([[-HW, CEIL, D], [HW, CEIL, D], [HW, CEIL, 1], [-HW, CEIL, 1]], "url(#kt-ceil)");
     front(-HW, HW, 0, CEIL, D, "url(#kt-back)");
     sideX(-HW, 0, CEIL, D, 1, "url(#kt-left)");
     sideX(HW, 0, CEIL, D, 1, "url(#kt-right)");
-    poly3([[0.3, CEIL, 2.9], [1.5, CEIL, 2.9], [1.5, CEIL, 2.0], [0.3, CEIL, 2.0]], "#fff4d6");                             // the ceiling light panel, glowing
-    { const c = P(0.9, CEIL, 2.45); sv("ellipse", { cx: c[0], cy: c[1] + 10, rx: 120, ry: 62, fill: "url(#kt-lamp)" }, svg); }
+    for (let k = 0; k < 26; k++) for (let m = 0; m < 6; m++) { const z = D - 0.1 - k * 0.1 - (m % 2) * 0.05, h = 0.25 + m * 0.36; if (z > 1.05) { const a = P(-HW, h, z); sv("circle", { cx: a[0].toFixed(1), cy: a[1].toFixed(1), r: 0.7, fill: "#a89a7c", opacity: 0.35 }, svg); } }   // the wallpaper's fine dots
+    // the ceiling light: a big box of light with a grid of white bars, set in a dark wooden frame (the beam shows along its near and left sides)
+    { const L0 = -0.35, L1 = 1.55, Z0 = 3.0, Z1 = 1.55;
+      poly3([[L0 - 0.1, CEIL, Z0 + 0.1], [L1 + 0.1, CEIL, Z0 + 0.1], [L1 + 0.1, CEIL, Z1 - 0.12], [L0 - 0.1, CEIL, Z1 - 0.12]], "#5a3a20");
+      poly3([[L0, CEIL, Z0], [L1, CEIL, Z0], [L1, CEIL, Z1], [L0, CEIL, Z1]], "#fffdf2");
+      for (let k = 1; k < 4; k++) { const x = L0 + (L1 - L0) * k / 4; line(P(x, CEIL, Z0), P(x, CEIL, Z1), "#cfc9b6", 1.1, { opacity: 0.9 }); }
+      for (let k = 1; k < 4; k++) { const z = Z0 + (Z1 - Z0) * k / 4; line(P(L0, CEIL, z), P(L1, CEIL, z), "#cfc9b6", 1.1, { opacity: 0.9 }); }
+      const c = P((L0 + L1) / 2, CEIL, (Z0 + Z1) / 2); sv("ellipse", { cx: c[0], cy: c[1] + 14, rx: 150, ry: 78, fill: "url(#kt-lamp)" }, svg); }
     front(-HW, HW, CEIL - 0.1, CEIL, D, "#efe6d5"); front(-HW, HW, CEIL - 0.105, CEIL - 0.1, D, "#b7ad98", { opacity: 0.6 });
     sideX(-HW, CEIL - 0.1, CEIL, D, 1, "#e3d9c4"); sideX(HW, CEIL - 0.1, CEIL, D, 1, "#f0e8d8");
     front(-HW, HW, 0, 0.1, D, "#d9cfbd"); sideX(-HW, 0, 0.1, D, 1, "#cfc4ae"); sideX(HW, 0, 0.1, D, 1, "#6b5646");
@@ -11472,18 +11545,33 @@
       front(w0, w1, s0 + (s1 - s0) / 3 - 0.018, s0 + (s1 - s0) / 3 + 0.018, D, "#efe7d6"); front(w0, w1, s0 + 2 * (s1 - s0) / 3 - 0.018, s0 + 2 * (s1 - s0) / 3 + 0.018, D, "#efe7d6");
       front(w0 - 0.08, w1 + 0.08, s0 - 0.07, s0 - 0.04, D, "#e3d9c4");
       [[w0 - 0.27, w0 - 0.02], [w1 + 0.02, w1 + 0.27]].forEach(([x0, x1]) => {
-        poly3([[x0, 2.12, D - 0.04], [x1, 2.12, D - 0.04], [x1 + 0.01, 1.05, D - 0.04], [x0 - 0.01, 1.05, D - 0.04]], "#d9be80");
-        for (let k = 1; k < 5; k++) { const x = x0 + (x1 - x0) * k / 5; line(P(x, 2.1, D - 0.04), P(x, 1.07, D - 0.04), "#b89a5a", 0.7, { opacity: 0.6 }); }
+        poly3([[x0, 2.12, D - 0.04], [x1, 2.12, D - 0.04], [x1 + 0.01, 1.05, D - 0.04], [x0 - 0.01, 1.05, D - 0.04]], "#ecdca0");   // yellow gingham: tan bars both ways over butter yellow
+        for (let k = 1; k < 7; k++) { const x = x0 + (x1 - x0) * k / 7; line(P(x, 2.1, D - 0.04), P(x, 1.07, D - 0.04), "#c9b36a", 2.6, { opacity: 0.45 }); }
+        for (let k = 0; k < 8; k++) { const h = 1.1 + k * 0.125; line(P(x0, h, D - 0.04), P(x1, h, D - 0.04), "#c9b36a", 2.4, { opacity: 0.45 }); }
       });
-      front(w0 - 0.3, w1 + 0.3, 2.0, 2.16, D - 0.05, "#e2c98e"); front(w0 - 0.3, w1 + 0.3, 2.0, 2.03, D - 0.05, "#b89a5a", { opacity: 0.55 });
-      for (let k = 0; k < 9; k++) { const x = w0 - 0.3 + (w1 - w0 + 0.6) * k / 8; line(P(x, 2.15, D - 0.05), P(x, 2.02, D - 0.05), "#b89a5a", 0.6, { opacity: 0.55 }); }
+      front(w0 - 0.3, w1 + 0.3, 2.0, 2.16, D - 0.05, "#eedfa6"); front(w0 - 0.3, w1 + 0.3, 2.0, 2.03, D - 0.05, "#b89a5a", { opacity: 0.55 });
+      for (let k = 0; k < 14; k++) { const x = w0 - 0.3 + (w1 - w0 + 0.6) * k / 13; line(P(x, 2.16, D - 0.05), P(x, 2.0, D - 0.05), "#c9b36a", 2.2, { opacity: 0.5 }); }
+      line(P(w0 - 0.3, 2.08, D - 0.05), P(w1 + 0.3, 2.08, D - 0.05), "#c9b36a", 2, { opacity: 0.5 });
     }
+
+    // the cream retro fridge (0.65 m wide, 1.75 m tall), standing in the right corner: rounded at the top, chrome handles, a seam between the doors
+    { const ZF = 2.9;
+      sideX(1.35, 0, 1.75, D, ZF, "#d9d8d0", { stroke: "#b5b3a8", "stroke-width": 0.7 });
+      sideX(1.35, 0, 0.06, D, ZF, "#3a3128", { opacity: 0.6 });
+      const f = front(1.35, HW, 0, 1.75, ZF, "#f4f3ee", { stroke: "#b5b3a8", "stroke-width": 0.9 }); f.setAttribute("rx", 4);   // a plain white fridge
+      front(1.4, 1.95, 1.72, 1.745, ZF, "#dcdad2", { opacity: 0.9 });
+      front(1.35, HW, 1.1, 1.125, ZF, "#a9a79c", { opacity: 0.9 });
+      front(1.39, 1.425, 1.2, 1.55, ZF, "#c9c7bd", { rx: 1.2, stroke: "#8f8d82", "stroke-width": 0.4 }); front(1.39, 1.425, 0.7, 1.05, ZF, "#c9c7bd", { rx: 1.2, stroke: "#8f8d82", "stroke-width": 0.4 });
+      [[1.5, 1.45, 0.07, 0.09, "#e8c23a"], [1.62, 1.38, 0.06, 0.08, "#3a82c8"], [1.74, 1.5, 0.08, 0.1, "#f2f2ea"], [1.55, 1.3, 0.06, 0.06, "#d0402e"], [1.7, 1.25, 0.07, 0.08, "#f2e27a"], [1.84, 1.4, 0.05, 0.07, "#4a9a5a"], [1.6, 0.95, 0.09, 0.1, "#f2f2ea"], [1.78, 0.85, 0.06, 0.07, "#e8c23a"]]
+        .forEach(([x, h, w, hh, c]) => front(x, x + w, h, h + hh, ZF, c, { stroke: "#a9a79c", "stroke-width": 0.3 }));        // magnets and notes on the doors
+      front(1.35, HW, 0, 0.05, ZF, "#3a3128", { opacity: 0.7 }); }
 
     // wall cupboards: dark mahogany, a raised panel and a small silver knob on every door; 0.35 m deep, from 1.5 m up to 2.2 m (they stop short of the fridge and the window)
     const ZU = D - 0.35;
     const doorF = (x0, x1, h0, h1, z, knob) => {                                                                          // knob: "l"/"r" and "t"/"b"
       front(x0, x1, h0, h1, z, WOOD, { stroke: WOOD_D, "stroke-width": 0.8 });
       front(x0 + 0.03, x1 - 0.03, h0 + 0.03, h1 - 0.03, z, "none", { stroke: WOOD_L, "stroke-width": 0.6, opacity: 0.7 });
+      for (let k = 1; k < 4; k++) { const gx = x0 + (x1 - x0) * (k / 4 + ((k * 7 + Math.round(h0 * 10)) % 5 - 2) * 0.02); line(P(gx, h1 - 0.05, z), P(gx + 0.01, h0 + 0.05, z), WOOD_D, 0.5, { opacity: 0.35 }); }   // wood grain
       dot(knob[0] === "l" ? x0 + 0.06 : x1 - 0.06, knob[1] === "t" ? h1 - 0.08 : h0 + 0.08, z, 1.3, KNOB);
     };
     const doorS = (x, z0, z1, h0, h1, knobZ, knobH, fill) => {                                                            // a door on a side wall's cupboard run
@@ -11491,8 +11579,8 @@
       sideX(x, h0 + 0.03, h1 - 0.03, z0 - 0.03, z1 + 0.03, "none", { stroke: WOOD_L, "stroke-width": 0.6, opacity: 0.7 });
       dot(x, knobH, knobZ, 1.3, KNOB);
     };
-    doorF(-HW, -1.4, 1.5, 2.2, ZU, "rb"); doorF(-1.4, -0.8, 1.5, 2.2, ZU, "lb");                                           // over the microwave and toaster
-    sideX(-HW + 0.35, 1.5, 2.2, ZU, 2.65, "none"); doorS(-HW + 0.35, ZU, 2.65, 1.5, 2.2, 2.74, 1.58);                          // the one door on the left wall
+    doorF(-HW + 0.35, -1.2, 1.5, 2.2, ZU, "rb"); doorF(-1.2, -0.8, 1.5, 2.2, ZU, "lb");                                           // over the microwave and toaster
+    front(-HW, -HW + 0.35, 1.5, 2.2, 2.65, "#6b4426", { stroke: WOOD_D, "stroke-width": 0.8 }); doorS(-HW + 0.35, ZU, 2.65, 1.5, 2.2, 2.74, 1.58);                          // the one door on the left wall
     doorF(0.95, 1.35, 1.5, 2.2, ZU, "rb"); doorF(1.35, HW, 1.9, 2.2, ZU, "lb");                                           // right of the hood, and above the fridge
 
     // the hanging plant, in front of the left curtain (a dark bowl on rope, leaves above, a few vines below)
@@ -11503,80 +11591,215 @@
       sv("path", { d: `M${bowl[0] - bw / 2 + 2} ${bowl[1] + 3} Q${bowl[0] - bw / 2 - 1} ${bowl[1] + 12} ${bowl[0] - bw / 2 + 1} ${bowl[1] + 17} M${bowl[0] + bw / 2 - 2} ${bowl[1] + 3} Q${bowl[0] + bw / 2 + 1} ${bowl[1] + 10} ${bowl[0] + bw / 2 - 1} ${bowl[1] + 14}`, stroke: "#3f7f4a", "stroke-width": 1.4, fill: "none", "stroke-linecap": "round" }, svg); }
 
     // the range hood over the stove (0.6 m wide, from 1.5 m up)
-    poly3([[0.5, 1.82, D], [0.8, 1.82, D], [0.95, 1.5, 3.05], [0.35, 1.5, 3.05]], "#efe6d2", { stroke: "#b7ad98", "stroke-width": 0.7 });
-    front(0.35, 0.95, 1.46, 1.5, 3.05, "#cfc6ad");
+    poly3([[0.5, 1.82, D], [0.8, 1.82, D], [0.95, 1.5, 3.05], [0.35, 1.5, 3.05]], "#f1eee6", { stroke: "#b5b3a8", "stroke-width": 0.7 });
+    front(0.35, 0.95, 1.46, 1.5, 3.05, "#cfccc0");
 
     // the back worktop run (red laminate, a darker lip), 0.6 m deep, over base cupboards; the sink is let into it
     const ZC = D - 0.6;
     top(-1.4, 1.35, 0.9, D, ZC, "url(#kt-top)");
-    front(-1.4, 1.35, 0.86, 0.9, ZC, "#741e1e");
-    [[-1.4, -0.95, "rt"], [-0.95, -0.5, "lt"], [-0.5, -0.05, "rt"], [-0.05, 0.35, "lt"]].forEach(([a, b, k]) => doorF(a, b, 0.1, 0.86, ZC, k));
+    front(-1.4, 1.35, 0.86, 0.9, ZC, "#a8401f");
+    [[-1.4, -0.95, "rt"], [-0.5, -0.05, "rt"], [-0.05, 0.35, "lt"]].forEach(([a, b, k]) => doorF(a, b, 0.1, 0.86, ZC, k));
     doorF(0.95, 1.35, 0.1, 0.86, ZC, "lt");
+    // the white built-in dishwasher beside the sink: a control strip along the top, a big handle
+    front(-0.95, -0.5, 0.05, 0.86, ZC, "#f1f0ea", { stroke: "#b5b3a8", "stroke-width": 0.8 });
+    front(-0.95, -0.5, 0.74, 0.86, ZC, "#e2e0d6", { stroke: "#b5b3a8", "stroke-width": 0.5 });
+    [-0.88, -0.82, -0.76].forEach(x => dot(x, 0.8, ZC, 1.1, "#8f8d82")); front(-0.66, -0.56, 0.78, 0.82, ZC, "#5a5750", { rx: 0.8 });
+    front(-0.9, -0.55, 0.64, 0.675, ZC, "#c4c2b8", { rx: 1.5, stroke: "#8f8d82", "stroke-width": 0.4 });
     front(-1.4, 1.35, 0, 0.1, ZC + 0.05, "#1f0a08");                                                                       // the toe kick
     top(-0.5, 0.05, 0.9, 3.45, 3.12, "#3a2a30"); top(-0.46, 0.01, 0.9, 3.4, 3.17, "#6a5a62", { opacity: 0.6 });
     { const t0 = P(-0.22, 0.9, 3.5), t1 = P(-0.22, 1.18, 3.55), t2 = P(-0.1, 1.2, 3.5); sv("path", { d: `M${t0[0].toFixed(1)} ${t0[1].toFixed(1)} L${t1[0].toFixed(1)} ${t1[1].toFixed(1)} Q${t1[0].toFixed(1)} ${(t1[1] - 6).toFixed(1)} ${t2[0].toFixed(1)} ${(t2[1] - 4).toFixed(1)}`, stroke: "#2a2024", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, svg); }
 
     // the cream stove (0.6 m wide) in the run, with two rings on top and the knobs on the back panel
-    front(0.35, 0.95, 0, 0.9, ZC, "#e8dcc0", { stroke: "#a99c78", "stroke-width": 0.7 });
-    front(0.4, 0.9, 0.12, 0.7, ZC, "#efe3c6", { stroke: "#a99c78", "stroke-width": 0.8 }); front(0.45, 0.85, 0.28, 0.6, ZC, "#2a2428");
-    top(0.35, 0.95, 0.9, D, ZC, "#d9cba8", { stroke: "#a99c78", "stroke-width": 0.6 });
+    front(0.35, 0.95, 0, 0.9, ZC, "#eeece4", { stroke: "#b5b3a8", "stroke-width": 0.7 });
+    front(0.4, 0.9, 0.12, 0.7, ZC, "#f6f4ee", { stroke: "#b5b3a8", "stroke-width": 0.8 }); front(0.45, 0.85, 0.28, 0.6, ZC, "#2a2428");
+    top(0.35, 0.95, 0.9, D, ZC, "#dedbd0", { stroke: "#b5b3a8", "stroke-width": 0.6 });
     [[0.52, 3.2], [0.78, 3.2], [0.52, 3.45], [0.78, 3.45]].forEach(([x, z]) => { const c = P(x, 0.905, z), r = 0.11 * F / z; sv("ellipse", { cx: c[0].toFixed(1), cy: c[1].toFixed(1), rx: r.toFixed(1), ry: (r * 0.3).toFixed(1), fill: "#2a2224" }, svg); sv("ellipse", { cx: c[0].toFixed(1), cy: c[1].toFixed(1), rx: (r * 0.5).toFixed(1), ry: (r * 0.15).toFixed(1), fill: "#463c3e" }, svg); });
     front(0.35, 0.95, 0.9, 1.0, D, "#e8dcc0", { stroke: "#a99c78", "stroke-width": 0.5 });
     [0.45, 0.58, 0.72, 0.85].forEach(x => dot(x, 0.95, D, 1.3, "#3a3032"));
 
     // on the worktop: the microwave, a chopping board against the wall, the toaster; then a coffee maker and a utensil crock
-    front(-1.37, -0.92, 0.9, 1.2, 3.25, "#2a2220", { rx: 2, stroke: "#14100f", "stroke-width": 0.8 }); front(-1.34, -1.11, 0.93, 1.17, 3.25, "#150f0e", { rx: 1 }); front(-1.08, -0.97, 0.93, 1.17, 3.25, "#3a302c", { rx: 1 });
-    [1.05, 1.1, 1.15].forEach(h => dot(-1.025, h, 3.25, 0.9, "#8a7a70"));
-    front(-1.48, -1.4, 0.9, 1.3, 3.5, "#5a3a2a", { rx: 2 }); dot(-1.44, 1.22, 3.5, 1.4, "#2a1a12");
     front(-0.8, -0.55, 0.9, 1.08, 3.3, "#d9ceb4", { rx: 2, stroke: "#a99c78", "stroke-width": 0.6 }); front(-0.76, -0.59, 1.06, 1.08, 3.3, "#3a3032");
     front(1.0, 1.15, 0.9, 1.28, 3.35, "#e4dcc8", { rx: 2, stroke: "#a99c78", "stroke-width": 0.6 }); front(1.02, 1.13, 0.9, 1.1, 3.35, "#3a2c28", { rx: 1.5 }); front(1.02, 1.13, 1.18, 1.26, 3.35, "#cfc6ad");
     front(1.2, 1.3, 0.9, 1.07, 3.3, "#1a1416", { rx: 1.5 });
     [[1.22, 1.2, 0.05], [1.25, 1.24, 0], [1.28, 1.21, -0.04]].forEach(([x, h, dx]) => line(P(x, 1.06, 3.3), P(x + dx, h + 0.04, 3.3), "#2a2224", 1.6));
 
-    // the cream retro fridge (0.65 m wide, 1.75 m tall), standing in the right corner: rounded at the top, chrome handles, a seam between the doors
-    { const ZF = 2.9;
-      sideX(1.35, 0, 1.75, D, ZF, "#cdbf8c", { stroke: "#b3a577", "stroke-width": 0.7 });
-      const f = front(1.35, HW, 0, 1.75, ZF, "#ecdfb0", { stroke: "#b3a577", "stroke-width": 0.9 }); f.setAttribute("rx", 7);
-      front(1.4, 1.95, 1.72, 1.745, ZF, "#d6d1c4", { opacity: 0.9 });
-      front(1.35, HW, 1.1, 1.125, ZF, "#8a7d58", { opacity: 0.9 });
-      front(1.39, 1.425, 1.2, 1.55, ZF, "#d7d3c8", { rx: 1.2, stroke: "#9a9588", "stroke-width": 0.4 }); front(1.39, 1.425, 0.7, 1.05, ZF, "#d7d3c8", { rx: 1.2, stroke: "#9a9588", "stroke-width": 0.4 });
-      front(1.5, 1.7, 1.6, 1.64, ZF, "#b9b29a", { rx: 1 }); front(1.35, HW, 0, 0.05, ZF, "#3a3128", { opacity: 0.7 }); }
-
     // the left worktop run, along the left wall (0.6 m deep, it ends at z = 2.5): a dial phone and a potted plant in an orange basket on it
     { const ZE = 2.5;
       top(-HW, -1.4, 0.9, D, ZE, "url(#kt-top)");
-      sideX(-1.4, 0.86, 0.9, D, ZE, "#741e1e"); front(-HW, -1.4, 0.86, 0.9, ZE, "#741e1e");
+      sideX(-1.4, 0.86, 0.9, ZC, ZE, "#a8401f"); front(-HW, -1.4, 0.86, 0.9, ZE, "#a8401f");
       sideX(-1.4, 0.1, 0.86, 3.0, ZE, WOOD, { stroke: WOOD_D, "stroke-width": 0.8 });
-      doorS(-1.4, 3.0, 2.75, 0.1, 0.86, 2.82, 0.8); doorS(-1.4, 2.75, ZE, 0.1, 0.86, 2.68, 0.8);
-      front(-HW, -1.4, 0, 0.86, ZE, "#4a1a16", { stroke: WOOD_D, "stroke-width": 0.8 }); front(-HW, -1.4, 0, 0.1, ZE, "#1f0a08");
-      const ph = P(-1.78, 0.9, 2.95), r = 0.17 * F / 2.95;
-      sv("ellipse", { cx: ph[0].toFixed(1), cy: (ph[1] - 1).toFixed(1), rx: r.toFixed(1), ry: (r * 0.38).toFixed(1), fill: "#16120f" }, svg);
-      sv("ellipse", { cx: ph[0].toFixed(1), cy: (ph[1] - 3).toFixed(1), rx: (r * 0.7).toFixed(1), ry: (r * 0.26).toFixed(1), fill: "#2a2522" }, svg);
-      sv("ellipse", { cx: ph[0].toFixed(1), cy: (ph[1] - 3.2).toFixed(1), rx: (r * 0.42).toFixed(1), ry: (r * 0.15).toFixed(1), fill: "none", stroke: "#e8e2d6", "stroke-width": 0.7 }, svg);
-      sv("path", { d: `M${(ph[0] - r * 0.9).toFixed(1)} ${(ph[1] - 5).toFixed(1)} Q${ph[0].toFixed(1)} ${(ph[1] - 9).toFixed(1)} ${(ph[0] + r * 0.9).toFixed(1)} ${(ph[1] - 5).toFixed(1)}`, stroke: "#16120f", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, svg);
+      sideX(-1.45, 0, 0.1, ZC, ZE, "#1f0a08"); doorS(-1.4, 3.0, ZE, 0.1, 0.86, 2.9, 0.8);
+      front(-HW, -1.4, 0, 0.86, ZE, "#6b4426", { stroke: WOOD_D, "stroke-width": 0.8 }); front(-HW, -1.4, 0, 0.1, ZE, "#1f0a08");
+      const ph = P(-1.78, 0.9, 2.95), r = 0.13 * F / 2.95, f = v => v.toFixed(1);
+      sv("path", { d: `M${f(ph[0] - r)} ${f(ph[1] - 1)} L${f(ph[0] - r * 0.78)} ${f(ph[1] - r * 0.62)} H${f(ph[0] + r * 0.78)} L${f(ph[0] + r)} ${f(ph[1] - 1)} Q${f(ph[0])} ${f(ph[1] + r * 0.5)} ${f(ph[0] - r)} ${f(ph[1] - 1)} Z`, fill: "#16120f" }, svg);   // the body
+      sv("ellipse", { cx: f(ph[0]), cy: f(ph[1] - r * 0.62), rx: f(r * 0.78), ry: f(r * 0.24), fill: "#2a2522" }, svg);
+      sv("ellipse", { cx: f(ph[0]), cy: f(ph[1] - r * 0.64), rx: f(r * 0.5), ry: f(r * 0.17), fill: "#16120f", stroke: "#e8e2d6", "stroke-width": 0.7 }, svg);   // the dial
+      sv("path", { d: `M${f(ph[0] - r * 0.85)} ${f(ph[1] - r * 0.95)} Q${f(ph[0])} ${f(ph[1] - r * 1.55)} ${f(ph[0] + r * 0.85)} ${f(ph[1] - r * 0.95)}`, stroke: "#0c0a09", "stroke-width": 2.6, fill: "none", "stroke-linecap": "round" }, svg);   // the handset
+      [-0.85, 0.85].forEach(k => sv("circle", { cx: f(ph[0] + r * k), cy: f(ph[1] - r * 0.95), r: 2.2, fill: "#0c0a09" }, svg));
       const pb = P(-1.78, 0.9, 3.3), bw = 0.26 * F / 3.3;
       for (let k = 0; k < 7; k++) { const a = -80 + k * 27, cx = pb[0] + Math.sin(a * Math.PI / 180) * bw * 0.28, cy = pb[1] - bw * 0.7 - Math.abs(Math.cos(a * Math.PI / 180)) * bw * 0.3; sv("ellipse", { cx: cx.toFixed(1), cy: cy.toFixed(1), rx: (bw * 0.34).toFixed(1), ry: (bw * 0.14).toFixed(1), fill: k % 2 ? "#2f6a3a" : "#43804d", transform: `rotate(${a - 90 + (a < -30 ? -10 : a > 30 ? 10 : 0)} ${cx.toFixed(1)} ${cy.toFixed(1)})` }, svg); }
       sv("path", { d: `M${(pb[0] - bw * 0.5).toFixed(1)} ${(pb[1] - bw * 0.8).toFixed(1)} H${(pb[0] + bw * 0.5).toFixed(1)} L${(pb[0] + bw * 0.42).toFixed(1)} ${pb[1].toFixed(1)} H${(pb[0] - bw * 0.42).toFixed(1)} Z`, fill: "#d98a2a", stroke: "#a8661a", "stroke-width": 0.7 }, svg);
       [0.3, 0.55].forEach(t => line([pb[0] - bw * 0.46, pb[1] - bw * 0.8 * (1 - t)], [pb[0] + bw * 0.46, pb[1] - bw * 0.8 * (1 - t)], "#a8661a", 0.8, { opacity: 0.8 })); }
 
-    // the island: 1.2 m wide and 0.8 m deep, about a 1 m aisle in front of the worktop and off to the right of the middle. Red top with a darker lip and an overhang, dark mahogany
-    // panels, a bowl of fruit on top. Drawn last, so it stands in front of everything (and hides the lower part of the back cupboards, as it would).
+    // the microwave and the cookbooks stand at the corner, so they are drawn after both runs
+    front(-1.37, -0.92, 0.9, 1.2, 3.25, "#2a2220", { rx: 2, stroke: "#14100f", "stroke-width": 0.8 }); front(-1.34, -1.11, 0.93, 1.17, 3.25, "#150f0e", { rx: 1 }); front(-1.08, -0.97, 0.93, 1.17, 3.25, "#3a302c", { rx: 1 });
+    [1.05, 1.1, 1.15].forEach(h => dot(-1.025, h, 3.25, 0.9, "#8a7a70"));
+    [[-1.78, 0.2, "#c8402e"], [-1.74, 0.25, "#e8c23a"], [-1.7, 0.22, "#3a6aa8"], [-1.66, 0.27, "#f0ead8"], [-1.62, 0.21, "#4a8a56"], [-1.58, 0.25, "#8a4a2a"], [-1.54, 0.23, "#e07a2a"]]    // a row of cookbooks standing on the left counter
+      .forEach(([x, hh, c]) => front(x, x + 0.04, 0.9, 0.9 + hh, 3.5, c, { stroke: "#3a2a20", "stroke-width": 0.4 }));
+
+    const bodyL = sv("g", {}, svg);                                                                                  // Will and Mike's bodies: behind the island
+    // the island: 1.2 m wide and 0.8 m deep, about a 1 m aisle in front of the worktop and off to the right of the middle. Orange top with a darker lip and an overhang, a plain
+    // oak-panelled front (tall panels, no knobs), a butcher block with a knife block and a folded cloth on top. Drawn last, so it stands in front of everything.
     { const IZ0 = 1.95, IZ1 = 1.15, IX0 = -0.3, IX1 = 0.9, BZ = 1.25;
       const sh0 = P(0.3, 0, 1.7); sv("ellipse", { cx: sh0[0].toFixed(1), cy: (P(0.3, 0, BZ)[1] + 4).toFixed(1), rx: (0.6 * F / BZ).toFixed(1), ry: 9, fill: "#000", opacity: 0.3 }, svg);
-      front(IX0 + 0.1, IX1 - 0.1, 0, 0.86, BZ, "#4a1a16", { stroke: WOOD_D, "stroke-width": 0.9 });
-      front(IX0 + 0.1, IX1 - 0.1, 0, 0.07, BZ, "#2a0c0a", { opacity: 0.7 });
-      const mid = (IX0 + IX1) / 2;
-      [[IX0 + 0.16, mid - 0.03], [mid + 0.03, IX1 - 0.16]].forEach(([a, b]) => { front(a, b, 0.12, 0.74, BZ, "none", { stroke: WOOD_L, "stroke-width": 0.8, opacity: 0.65 }); front(a + 0.04, b - 0.04, 0.16, 0.7, BZ, "none", { stroke: "#2a0c0a", "stroke-width": 0.6, opacity: 0.6 }); });
+      const bx0 = IX0 + 0.1, bx1 = IX1 - 0.1, n = 4, pw = (bx1 - bx0) / n;
+      front(bx0, bx1, 0, 0.86, BZ, WOOD_D);
+      for (let k = 0; k < n; k++) {
+        const a = bx0 + k * pw + 0.012, b = bx0 + (k + 1) * pw - 0.012;
+        front(a, b, 0.07, 0.84, BZ, k % 2 ? "#8a5a32" : WOOD, { stroke: WOOD_D, "stroke-width": 0.8 });
+        front(a + 0.025, b - 0.025, 0.11, 0.8, BZ, "none", { stroke: WOOD_L, "stroke-width": 0.6, opacity: 0.7 });
+        for (let g = 1; g < 4; g++) line(P(a + (b - a) * g / 4, 0.78, BZ), P(a + (b - a) * g / 4 + 0.008, 0.13, BZ), WOOD_D, 0.5, { opacity: 0.32 });   // grain
+      }
+      front(bx0, bx1, 0, 0.07, BZ, "#241008");
       top(IX0, IX1, 0.9, IZ0, IZ1, "url(#kt-top)");
-      front(IX0, IX1, 0.855, 0.9, IZ1, "#741e1e"); front(IX0 + 0.1, IX1 - 0.1, 0.8, 0.855, IZ1, "#1a0806", { opacity: 0.45 });
-      line(P(IX0 + 0.15, 0.9, 2.0), P(IX1 - 0.15, 0.9, 2.0), "#e07a7a", 1, { opacity: 0.35 });
-      const bp = P(0.3, 0.9, 1.55), bs = 0.95;
-      const bowl = sv("g", { transform: `translate(${bp[0].toFixed(1)} ${(bp[1] - 3).toFixed(1)}) scale(${bs}) translate(-190 -395)` }, svg);
-      sv("ellipse", { cx: 190, cy: 399, rx: 30, ry: 5, fill: "#000", opacity: 0.28 }, bowl);
-      [[176, 390, 6, "#e0862a"], [186, 387, 6.4, "#d6402e"], [199, 390, 6, "#e0a032"], [206, 392, 4.8, "#d6402e"]].forEach(([cx, cy, r, f]) => sv("circle", { cx, cy, r, fill: f }, bowl));
-      sv("path", { d: "M184 390 Q195 383 208 388 Q197 386 186 393 Z", fill: "#e8cf4a", stroke: "#b89a2a", "stroke-width": 0.6 }, bowl);
-      sv("path", { d: "M160 393 Q190 412 220 393 Q190 388 160 393 Z", fill: "#1f1a24", stroke: "#0e0a10", "stroke-width": 0.8 }, bowl);
-      sv("path", { d: "M166 395 Q190 401 214 395", stroke: "#4a4252", "stroke-width": 0.8, fill: "none", opacity: 0.7 }, bowl); }
+      front(IX0, IX1, 0.855, 0.9, IZ1, "#a8401f"); front(IX0 + 0.1, IX1 - 0.1, 0.82, 0.86, BZ, "#1a0806", { opacity: 0.3 });
+      line(P(IX0 + 0.15, 0.9, 1.8), P(IX1 - 0.15, 0.9, 1.8), "#f09a78", 1, { opacity: 0.35 });
+      // the butcher block (a thick wooden slab, on its side a little to the left), a folded cloth beside it and the knife block on the right
+      { const c0 = 0.05, c1 = 0.55, cz0 = 1.78, cz1 = 1.5, th = 0.05;
+        poly3([[c0, 0.9, cz1], [c1, 0.9, cz1], [c1, 0.9 + th, cz1], [c0, 0.9 + th, cz1]], "#a8703a", { stroke: "#5a3818", "stroke-width": 0.5 });
+        top(c0, c1, 0.9 + th, cz0, cz1, "#c9924f", { stroke: "#7a4e22", "stroke-width": 0.5 });
+        for (let g = 1; g < 6; g++) line(P(c0 + (c1 - c0) * g / 6, 0.9 + th, cz0), P(c0 + (c1 - c0) * g / 6, 0.9 + th, cz1), "#9a6a34", 0.6, { opacity: 0.6 });
+        top(-0.22, 0.02, 0.9, 1.7, 1.52, "#efe9d6", { stroke: "#b5ad94", "stroke-width": 0.5 });                                          // the cloth
+        top(-0.2, 0.0, 0.905, 1.66, 1.56, "#d9cfb2", { opacity: 0.7 });
+        const kz = 1.62, kb = P(0.7, 0.9, kz), kw = 0.13 * F / kz, kh = 0.26 * F / kz;
+        sv("path", { d: `M${(kb[0] - kw * 0.5).toFixed(1)} ${kb[1].toFixed(1)} L${(kb[0] - kw * 0.42).toFixed(1)} ${(kb[1] - kh).toFixed(1)} L${(kb[0] + kw * 0.5).toFixed(1)} ${(kb[1] - kh * 0.72).toFixed(1)} L${(kb[0] + kw * 0.5).toFixed(1)} ${kb[1].toFixed(1)} Z`, fill: "#a8703a", stroke: "#5a3818", "stroke-width": 0.6 }, svg);
+        [0.12, 0.3, 0.48].forEach((t, i) => line([kb[0] - kw * 0.3 + kw * t, kb[1] - kh * (0.98 - t * 0.5)], [kb[0] - kw * 0.3 + kw * t + 1, kb[1] - kh * (1.25 - t * 0.5)], "#1a1416", 2.2));   // the knife handles
+      } }
+
+    // ── Will and Mike in the kitchen: they stand behind the island (bodies hidden at the hips by its top), arms drawn over it ──
+    const FIG = { a: { cx: 177, sy: 204, s: 0.8, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 249, sy: 199, s: 0.82, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
+    const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
+    const propG = sv("g", {}, svg);                                                                                  // things lying on the island top
+    const armL = sv("g", {}, svg);                                                                                   // arms and held things, in front of the island
+    const { drawArm, torsoA, torsoB, headA, headB, headShift } = bsKit(sv, anim, FIG);
+    ["a", "b"].forEach(key => {
+      const F = FIG[key], br = key === "a" ? 4.2 : 4.8;
+      F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL); F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
+      F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`);
+    });
+    // things on the island: a pair of mugs, a plate of cookies, a stack of plates, a milk carton with a glass, a mixing bowl
+    const mugShape = (g, x, y, col, k) => {
+      sv("rect", { x: x - 5.5 * k, y: y - 10 * k, width: 11 * k, height: 10 * k, rx: 2 * k, fill: col, stroke: "#1a0c14", "stroke-width": 0.6 }, g);
+      sv("path", { d: `M${x + 5.5 * k} ${y - 7.5 * k} q${5 * k} ${1 * k} 0 ${5 * k}`, stroke: col, "stroke-width": 1.6 * k, fill: "none" }, g);
+      sv("ellipse", { cx: x, cy: y - 10 * k, rx: 5 * k, ry: 1.4 * k, fill: "#5a3420" }, g);
+      if (!reduce) for (let i = 0; i < 2; i++) anim(sv("path", { d: `M${x - 2 + i * 4} ${y - 12 * k} q-2 -4 0 -7 q2 -3 0 -6`, stroke: "#fff", "stroke-width": 1, fill: "none", opacity: 0.5, "stroke-linecap": "round" }, g), `animation:hkSmoke 2.6s ease-out ${i * 1.1}s infinite;`);
+    };
+    const drawProps = list => {
+      clear(propG);
+      list.forEach(k => {
+        if (k === "mugs") { mugShape(propG, 163, 270, "#c9482e", 1); mugShape(propG, 262, 270, "#2c8aa6", 1); }
+        else if (k === "plate") { sv("ellipse", { cx: 212, cy: 272, rx: 17, ry: 4.4, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.7 }, propG); [[-6, -1.5], [5, -2], [0, -4]].forEach(([dx, dy]) => { sv("circle", { cx: 212 + dx, cy: 272 + dy, r: 4, fill: "#c98a4a", stroke: "#8a5a2a", "stroke-width": 0.5 }, propG); [[-1, -1], [1.2, 0.8]].forEach(([a, b]) => sv("circle", { cx: 212 + dx + a, cy: 272 + dy + b, r: 0.7, fill: "#4a2a18" }, propG)); }); }
+        else if (k === "dishes") { for (let i = 0; i < 4; i++) sv("ellipse", { cx: 212, cy: 273 - i * 2.2, rx: 17, ry: 4.4, fill: i % 2 ? "#e8e0cc" : "#f4efe2", stroke: "#b8ad92", "stroke-width": 0.6 }, propG); sv("ellipse", { cx: 160, cy: 273, rx: 11, ry: 3, fill: "#fff", opacity: 0.55 }, propG); }
+        else if (k === "milk") { sv("rect", { x: 205, y: 250, width: 12, height: 22, fill: "#f4f2ea", stroke: "#9a968a", "stroke-width": 0.6 }, propG); sv("polygon", { points: "205,250 211,244 217,250", fill: "#e8e4d8", stroke: "#9a968a", "stroke-width": 0.6 }, propG); sv("rect", { x: 205, y: 257, width: 12, height: 7, fill: "#3a82c8" }, propG); sv("rect", { x: 232, y: 262, width: 9, height: 10, rx: 1.5, fill: "#fff", opacity: 0.55, stroke: "#9a968a", "stroke-width": 0.6 }, propG); }
+        else if (k === "flour") { sv("ellipse", { cx: 212, cy: 270, rx: 19, ry: 5, fill: "#7a8a96", stroke: "#3a4650", "stroke-width": 0.7 }, propG); sv("path", { d: "M193 270 Q212 292 231 270 Z", fill: "#8a9aa6", stroke: "#3a4650", "stroke-width": 0.7 }, propG); sv("ellipse", { cx: 212, cy: 269, rx: 16, ry: 3.6, fill: "#f4efe2" }, propG); sv("path", { d: "M196 268 Q212 258 228 268", fill: "#fffaf0" }, propG); sv("circle", { cx: 244, cy: 268, r: 2, fill: "#fffaf0", opacity: 0.8 }, propG); }
+      });
+    };
+    // what a hand can hold
+    const prop = (g, kind, x, y) => {
+      if (kind === "mug") mugShape(g, x, y + 4, "#d9a05a", 0.85);
+      else if (kind === "cookie") { sv("circle", { cx: x, cy: y, r: 4, fill: "#c98a4a", stroke: "#8a5a2a", "stroke-width": 0.5 }, g); [[-1, -1], [1.2, 0.8]].forEach(([a, b]) => sv("circle", { cx: x + a, cy: y + b, r: 0.7, fill: "#4a2a18" }, g)); }
+      else if (kind === "plate") { sv("ellipse", { cx: x, cy: y + 1, rx: 14, ry: 3.6, fill: "#f4efe2", stroke: "#b8ad92", "stroke-width": 0.6 }, g); sv("ellipse", { cx: x, cy: y + 1, rx: 9, ry: 2, fill: "none", stroke: "#cfc6ad", "stroke-width": 0.5 }, g); }
+      else if (kind === "glass") sv("rect", { x: x - 4.5, y: y - 9, width: 9, height: 11, rx: 1.5, fill: "#fff", opacity: 0.7, stroke: "#9a968a", "stroke-width": 0.6 }, g);
+      else if (kind === "pad") { const Pp = sv("g", { transform: `translate(${x} ${y}) rotate(-8)` }, g); sv("rect", { x: -11, y: -16, width: 22, height: 16, rx: 1.2, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, Pp); sv("path", { d: "M-8 -12 h16 M-8 -8.5 h14 M-8 -5 h12", stroke: "#8a7a5a", "stroke-width": 0.7 }, Pp); sv("circle", { cx: 6, cy: -3, r: 2, fill: "#b8782a", opacity: 0.6 }, Pp); }
+    };
+    const drawFig = (key, p) => {
+      const F = FIG[key], isA = key === "a";
+      clear(F.b1); clear(F.b2);
+      const tr = `translate(${(F.cx + (p.sx || 0)).toFixed(1)} ${(F.sy + (p.dy || 0)).toFixed(1)}) scale(${F.s})`;
+      F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr);
+      const lean = p.lean || 0, la = lean * Math.PI / 180, lc = Math.cos(la), ls = Math.sin(la);
+      const tg = sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1);
+      const shoulder = left => { const S = left ? F.sl : F.sr, rx = S[0], ry = S[1] - 58; return [rx * lc - ry * ls, rx * ls + ry * lc + 58]; };
+      (isA ? torsoA : torsoB)(tg);
+      const cx = F.cx + (p.sx || 0), cy = F.sy + (p.dy || 0), toLocal = t => [(t[0] - cx) / F.s, (t[1] - cy) / F.s];
+      const mouth = () => { const [hx, hy] = headShift(p); return [cx + hx * F.s, cy + ((isA ? -13.6 : -17.4) + hy + 3) * F.s]; };
+      const hand = (left, t) => {
+        if (t === "lap") { drawArm(F.b1, key, left, [left ? -17 : 17, 50], 0, 0, 0, shoulder(left)); return; }
+        if (t === "mouth") t = mouth();
+        const Hd = drawArm(F.b2, key, left, toLocal(t), 0, 0, 0, shoulder(left));
+        if (t[2]) prop(F.b2, t[2], Hd[0], Hd[1]);
+      };
+      hand(false, p.R || "lap"); hand(true, p.L || "lap");
+      (isA ? headA : headB)(tg, p);
+    };
+    // ── hearts, the speech bubble and the director ──
+    const heartsG = sv("g", { "pointer-events": "none" }, svg);
+    const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z", HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
+    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(213 + (Math.random() - 0.5) * 50).toFixed(1)} ${(150 + Math.random() * 20).toFixed(1)}) scale(${(1.2 + Math.random() * 0.7).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
+    if (!document.getElementById("ao3-bf-css")) { const s = document.createElement("style"); s.id = "ao3-bf-css"; s.textContent = "@keyframes bfHeart{0%{opacity:0;transform:translate(0,0) scale(.4)}15%{opacity:.95}70%{opacity:.8}100%{opacity:0;transform:translate(var(--dx,0px),-92px) scale(1.15)}}@keyframes bfPop{0%{opacity:0;transform:translate(-50%,-100%) scale(.85)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}"; (document.head || document.documentElement).appendChild(s); }
+    // ── the speech bubble: one at a time, above whoever is speaking ──
+    const HEADX = { w: 177, m: 249 };
+    let bub = null;
+    const hideBubble = () => { if (bub) { bub.remove(); bub = null; } };
+    const speak = (who, text) => {
+      hideBubble();
+      const anchor = who === "w" ? 33 : 67, headPct = HEADX[who] / W * 100, cw = wrap.clientWidth || 360;
+      bub = el("div", `position:absolute;left:${anchor}%;top:${(150 / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.35);pointer-events:none;z-index:5;`, text);
+      const tail = el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((headPct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`);
+      bub.appendChild(tail); ov.appendChild(bub);
+    };
+    const PS = { a: null, b: null };
+    const setPose = patch => {
+      ["a", "b"].forEach(k => { if (patch[k]) PS[k] = Object.assign({}, PS[k], patch[k]); });
+      ["a", "b"].forEach(k => { if (patch[k]) drawFig(k, PS[k]); });
+      if (patch.jig && !reduce) ["a", "b"].forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-4px)" }, { transform: "translateY(0)" }, { transform: "translateY(-2px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
+      if (patch.hearts) puff(patch.hearts);
+    };
+    const start = patch => { PS.a = Object.assign({}, KT_BASE.a); PS.b = Object.assign({}, KT_BASE.b); drawProps(KT_MOMENTS[mi].props || []); drawFig("a", PS.a); drawFig("b", PS.b); if (patch) setPose(patch); };
+    let mi = 0, bi = 0, playing = false;
+    const readTime = t => 2600 + t.length * 48;
+    const step = () => {
+      clearTimeout(tid);
+      const M = KT_MOMENTS[mi];
+      if (bi >= M.beats.length) { playing = false; hideBubble(); say("The moment settles. Tap either of them for another."); return; }
+      const [who, text, patch] = M.beats[bi++];
+      setPose(patch || {});
+      if (who === "n") { hideBubble(); say(text); } else speak(who, text);
+      tid = setTimeout(step, readTime(text));
+    };
+    const EMPTY_SAY = ["The kitchen, quiet: a clock ticking, the fridge humming, and nobody. Everyone is asleep upstairs.", "Nobody here. The big ceiling light is off and the window is a dark square. Everyone is asleep upstairs.", "A quiet kitchen. One mug is upside down on the rack, and nobody is awake to move it."];
+    const AWAY_SAY = ["Nobody in the kitchen. The island is still warm where somebody leaned on it.", "An empty kitchen. A cookie plate sits there looking guilty.", "The fridge hums for nobody. A chair is pushed out, and its owner is somewhere else."];
+    const NOBODY = asleep ? EMPTY_SAY : AWAY_SAY;
+    let nEmpty = 0;
+    const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(KT_KEY, String(mi)); } catch {} say("In the kitchen: two people at the island, with the whole house to themselves."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } let n = Math.floor(Math.random() * (KT_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
+    const next = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } if (playing) step(); else another(); };
+    sh.onClose = () => { clearTimeout(tid); hideBubble(); };
+    let first = Math.floor(Math.random() * KT_MOMENTS.length);
+    try { const last = parseInt(localStorage.getItem(KT_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < KT_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (KT_MOMENTS.length - 1))) % KT_MOMENTS.length; } catch {}
+
+    // ── what you can tap ──
+    const SAY = {
+      fridge: ["A white fridge, covered in magnets and notes. One of them just says MICHAEL, in capitals.", "The fridge hums its one note. Behind it, a calendar still says last month."],
+      window: ["Yellow gingham curtains, and a plant that has survived entirely on Mrs. Wheeler’s stubbornness.", "The window over the sink. Whatever the sky is doing, it is doing it a bit more loudly here."],
+      phone: ["A black dial phone on the counter. It rings at the worst possible moments, and nobody ever lets it ring out.", "The phone cord has been stretched into a spring by years of long, whispered calls."],
+      light: ["The big ceiling light buzzes faintly, as if it is thinking about something.", "A box of white light in a wooden frame. Every kitchen conversation in this house happens under it."],
+      island: ["A big orange island with a butcher block, a knife block and a faint sprinkling of crumbs.", "The island: homework, board games, secrets and, once, a very ambitious cake."],
+      stove: ["The stove, white and sensible, under its hood. Something is always about to be cooked on it.", "Four rings and a clock that has been four minutes fast since forever."]
+    };
+    const cnt = {}; const tap = k => () => { cnt[k] = (cnt[k] || 0) + 1; say(SAY[k][(cnt[k] - 1) % SAY[k].length]); };
+    const hits = [];
+    const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
+    hit(318, 160, 42, 150, "The fridge", tap("fridge"));
+    hit(116, 96, 100, 54, "The window", tap("window"));
+    hit(14, 150, 70, 80, "The phone", tap("phone"));
+    hit(130, 14, 220, 70, "The ceiling light", tap("light"));
+    hit(236, 220, 82, 40, "The stove", tap("stove"));
+    hit(120, 300, 250, 150, "The island", tap("island"));
+    hit(150, 150, 60, 100, "Will", next);
+    hit(218, 142, 62, 108, "Mike", next);
+    const hitG = sv("g", {}, svg);
+    hits.slice().reverse().forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
 
     // the evening: a faint blue wash after dark, a rose one at dusk, then a soft vignette over everything
     if (tm.name === "night") rect(0, 0, W, H, "#0b1030", { opacity: 0.18, "pointer-events": "none" });
@@ -11584,12 +11807,20 @@
     rect(0, 0, W, H, "url(#kt-vig)", { "pointer-events": "none" });
 
     // ── frame ──
-    field.appendChild(svg);
+    const wrap = el("div", "position:relative;");
+    const ov = el("div", "position:absolute;inset:0;pointer-events:none;overflow:hidden;");
+    wrap.appendChild(svg); wrap.appendChild(ov); field.appendChild(wrap);
     sub.textContent = "hawkins · the kitchen";
-    caption.textContent = "The Wheelers’ kitchen: dark cupboards, red counters, a checkered floor and a window over the sink.";
-    pill("▲ upstairs", "Back up the stairs to Mike’s room", () => { close(); openMikesRoom(); });
+    pill("▲ upstairs", "Back up the stairs to Mike’s room", () => { if (leaving) return; leaving = true; close(); openMikesRoom(); });
+    if (away) pill("✦ call them here", "Call Will and Mike into the kitchen", () => { if (leaving) return; leaving = true; hkWhere.call("kitchen"); say("You shout down the hall. Two sets of footsteps come thundering in…"); bfFade(sh, () => ctx.world.openKitchen()); });
+    pill("\u{1F4AC} next", "Hear the next line sooner", next);
+    pill("\u{1F501} another", "A different moment", another);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     document.body.appendChild(sh.back);
+    if (empty) {
+      bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none"); if (away) drawProps(["plate"]);
+      say(asleep ? "The Wheelers’ kitchen, in the quiet: the fridge hums, the clock ticks, and nobody is up. Everyone is asleep upstairs." : "The Wheelers’ kitchen: oak cupboards, orange counters, and nobody home just now." + hkWhere.hint());
+    } else { say("The Wheelers’ kitchen: oak cupboards, orange counters, and two people at the island."); play(first); }
   }
 
   return { openKitchen };
