@@ -891,7 +891,7 @@
         seg([M[0] - ux * 3.2, M[1] - uy * 3.2], [M[0] + ux * 0.6, M[1] + uy * 0.6], KB_CUFF, w + 1.2, "butt");   // the turned-up cuff
       } else if (pj) {
         if (isA) { seg(S, E, PJ_A, w); seg(E, Hd, PJ_A, w - 1.6); seg(mixPt(E, Hd, 0.74), mixPt(E, Hd, 0.97), PJ_WHITE, w - 1.1, "butt"); }   // long flannel sleeves with a white cuff
-        else { const M = mixPt(S, E, 0.72); seg(S, M, PJ_B, w); seg(mixPt(S, E, 0.62), M, PJ_RED, w - 0.3, "butt"); seg(M, E, SKIN_B, w - 3); seg(E, Hd, SKIN_B, w - 3.6); }   // short tee sleeves, bare forearms
+        else { const M = mixPt(S, E, 0.72); seg(mixPt(S, E, 0.5), E, SKIN_B, w - 3); seg(E, Hd, SKIN_B, w - 3.6); seg(S, M, PJ_B, w, "butt"); sv("circle", { cx: S[0].toFixed(1), cy: S[1].toFixed(1), r: (w / 2).toFixed(1), fill: PJ_B }, g); seg(mixPt(S, E, 0.62), M, PJ_RED, w - 0.3, "butt"); }   // short tee sleeves, bare forearms: the skin is drawn first, starting under the sleeve, so the sleeve hem (square cut) sits on top of the arm and nothing floats
       } else {
       seg(S, E, isA ? "url(#bs-plaid)" : "url(#bs-knit)", w); seg(E, Hd, isA ? "url(#bs-plaid)" : "url(#bs-knit)", w - 1.6);
       if (!isA) { const k = 0.74, cp = [E[0] + (Hd[0] - E[0]) * k, E[1] + (Hd[1] - E[1]) * k]; seg(cp, [E[0] + (Hd[0] - E[0]) * 0.97, E[1] + (Hd[1] - E[1]) * 0.97], "#1f2331", w - 0.6, "butt"); }
