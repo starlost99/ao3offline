@@ -783,6 +783,25 @@
     set: on => { try { if (on) localStorage.setItem(SLEEP_KEY, "1"); else localStorage.removeItem(SLEEP_KEY); } catch {} }
   };
 
+  // Where Will and Mike are while they are awake: ONE place at a time (Mike's room, the table in the basement, or inside the blanket fort), and every other
+  // scene is empty until you find them or call them over (the "call them here" pills). They move on by themselves every 12 to 40 minutes, never to the place
+  // they just left (saved under "ao3-hk-where"). Asleep, they are always in Mike's room. A scene asks once, when it opens: hkWhere.here("basement").
+  const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort"];
+  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket." };
+  const hkWhere = {
+    set(p, lo, hi) { try { const a = lo || 12, b = hi || 40; localStorage.setItem(WHERE_KEY, JSON.stringify({ p, until: Date.now() + (a + Math.random() * (b - a)) * 60000 })); } catch {} },
+    get() {
+      if (hkSleep.get()) return "room";
+      let st = null; try { st = JSON.parse(localStorage.getItem(WHERE_KEY) || "null"); } catch {}
+      if (st && HK_PLACES.includes(st.p) && Date.now() < st.until) return st.p;
+      const opts = HK_PLACES.filter(x => !st || x !== st.p), p = opts[Math.floor(Math.random() * opts.length)];
+      hkWhere.set(p); return p;
+    },
+    here: place => hkWhere.get() === place,
+    call(place) { hkWhere.set(place, 20, 45); },                                                                      // you called them over: they stay a good while
+    hint() { return Math.random() < 0.6 ? " " + HK_HINTS[hkWhere.get()] : ""; }                                      // a faint clue, now and then, for an empty room
+  };
+
   // ── weather over a whole scene (the village and the town map; the lawn, house and grounds paint their own) ──
   // Draws rain, storm, fog, snow or falling leaves in a see-through layer over `host` (a positioned box). Replaces any earlier layer; never takes taps.
   function hkWxOverlay(host, kind, reduce) {
@@ -827,7 +846,7 @@
   }
   hkLiveRefresh();                                                                  // warm the cache as soon as the world loads
 
-  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound };
+  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere };
 };
 
 // ════════ lib/figures.js ════════
@@ -8673,7 +8692,7 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["wheelers"] = function (ctx) {
   'use strict';
   const {
-    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep
+    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkWhere
   } = ctx.lib["hawkins-kit"];
   const { bellMuted } = ctx.lib["bell-audio"];
   const { bsKit } = ctx.lib["figures"];
@@ -8695,7 +8714,8 @@
     const { sv, rnd, anim, el } = sh.kit;
     const { box, sub, field, caption, pill, close, later } = sh;
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const asleep = hkSleep.get();                              // Will and Mike are in bed: Mike's window is dark, nobody waves, the basement is empty and silent
+    const asleep = hkSleep.get();
+    let inRoom = !asleep && hkWhere.here("room"), downstairs = !asleep && !inRoom;                   // awake: in Mike's room (the window waves) or somewhere else in the house (the window is lit but empty; the radio is heard if they are down in the basement or the fort)                              // Will and Mike are in bed: Mike's window is dark, nobody waves, the basement is empty and silent
     const season = hkSeason();
     const say = t => { caption.textContent = t; };
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -8833,7 +8853,7 @@
     [willSil, mikeSil].forEach(n => { n.style.transition = "transform .6s ease-out"; n.style.transform = "translateY(7px)"; });
     let waving = false;
     const wave = () => {
-      if (asleep || waving || gone) return; waving = true;
+      if (!inRoom || waving || gone) return; waving = true;
       fig.style.opacity = 1;
       later(() => { willSil.style.transform = "translateY(0)"; }, 60);
       later(() => { mikeSil.style.transform = "translateY(0)"; }, 260);
@@ -8938,10 +8958,11 @@
     // tappable things (kept on top of the glows so they always answer)
     const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
     const ASLEEP_WIN = ["Mike’s window is dark. Just a faint blue glow behind the curtains, and not a sound.", "Nobody at the glass tonight. Whoever’s up there is asleep."];
+    const NOBODY_WIN = ["Mike’s window is lit, but nobody is at the glass.", "The fairy lights blink at an empty room. Whoever’s home is somewhere else.", "Nobody comes to the window. The house is just keeping its lights on."];
     const WIN_SAY = ["Mike\u2019s room. Fairy lights strung along the glass.", "Two shadows lean into the glass for a second, then slip back out of sight.", "The lights blink on, off, on. A code, maybe."];
     hit(158, 205, 46, 40, "Mike\u2019s window, and the way up to his room", () => {
       if (entering) return;
-      say(asleep ? ASLEEP_WIN[nWin % ASLEEP_WIN.length] : WIN_SAY[nWin % WIN_SAY.length]); nWin++; wave();
+      say(asleep ? ASLEEP_WIN[nWin % ASLEEP_WIN.length] : inRoom ? WIN_SAY[nWin % WIN_SAY.length] : NOBODY_WIN[nWin % NOBODY_WIN.length]); nWin++; wave();
       if (nWin >= 2) goUp();                                                                                    // the second tap climbs up to Mike\u2019s room
     });
     hit(73, 205, 46, 40, "An upstairs window", () => { say("Dark upstairs. A curtain stirs."); twitch(); });
@@ -9063,6 +9084,10 @@
     const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
     const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
     hkSoundPill(pill, amb);
+    const callBtn = !asleep && !inRoom ? pill("✦ call up", "Whistle up at Mike’s window to call them to his room", () => {
+      if (entering || inRoom) return; hkWhere.call("room"); inRoom = true; downstairs = false; callBtn.style.display = "none";
+      say("You whistle up at the window. A shape comes to the glass…"); later(wave, 700);
+    }) : null;
     pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
 
@@ -9097,7 +9122,7 @@
       later(syncEnv, 60000);
     };
     later(syncEnv, 60000);
-    if (!asleep) sched(() => { hkCrackle(); ring(); say(pick(RADIO)); }, 20000, 42000);                              // the walkie-talkie is only heard while somebody is down there
+    sched(() => { if (!downstairs) return; hkCrackle(); ring(); say(pick(RADIO)); }, 20000, 42000);                              // the walkie-talkie is only heard while somebody is down there
     // somewhere down the street a bike whirs past (not at night, and not in rain, storm or snow)
     sched(() => {
       const k = HK_WX[wxI][0];
@@ -9128,8 +9153,9 @@
     paintWeather();
     document.body.appendChild(sh.back);
     if (asleep) say("The house is quiet. Mike’s window is dark; everybody has gone to bed.");
+    else if (!inRoom) say("Mike’s window is lit, but nobody is at the glass." + hkWhere.hint());
     const openLine = caption.textContent;
-    later(() => { if (entering || asleep) return; if (caption.textContent === openLine) say("Two silhouettes appear in Mike\u2019s window, then slip away. Somebody wants you in the basement."); wave(); }, 1100);   // somebody has seen you coming
+    later(() => { if (entering || !inRoom) return; if (caption.textContent === openLine) say("Two silhouettes appear in Mike\u2019s window, then slip away. Somebody wants you in the basement."); wave(); }, 1100);   // somebody has seen you coming
   }
 
   return { openWheelers };
@@ -9140,7 +9166,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["basement"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkWhere } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -9202,7 +9228,8 @@
     sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
     sh.onClose = () => amb.stop();
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const asleep = hkSleep.get();                                // Will and Mike are asleep upstairs (the lamp in Mike's room): the table is empty and nothing plays
+    const away = !hkSleep.get() && !hkWhere.here("basement");                                // awake, but somewhere else in the house: the table is empty too
+    const asleep = hkSleep.get(), empty = asleep || away;                                // Will and Mike are asleep upstairs (the lamp in Mike's room): the table is empty and nothing plays
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hits = [];
     let nTable = 0, nCouch = 0, nMap = 0, nMini = 0, nSnack = 0, nPoster = 0;
@@ -9440,17 +9467,19 @@
     let first = Math.floor(Math.random() * BS_POSES.length);
     try { const last = parseInt(localStorage.getItem(BS_POSE_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < BS_POSES.length) first = (last + 1 + Math.floor(Math.random() * (BS_POSES.length - 1))) % BS_POSES.length; } catch {}
     applyPose(first, false);
-    if (asleep) { bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none"); }   // nobody at the table
+    if (empty) { bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none"); }   // nobody at the table
     const EMPTY_SAY = ["Two empty chairs and a map nobody is leaning over. Everyone is upstairs, asleep.", "The table is quiet. A die sits where somebody left it, and the popcorn is just getting staler.", "No campaign tonight. The basement is empty and the stairs are dark."];
+    const AWAY_SAY = ["Two empty chairs, and a die still sitting on the map. They were just here.", "The table is empty. Somebody left half a soda, and it is still fizzing.", "Nobody down here. The campaign is paused mid-battle."];
     let nEmpty = 0;
-    const shift = () => { if (asleep) { say(EMPTY_SAY[nEmpty++ % EMPTY_SAY.length]); return; } applyPose((pi + 1 + Math.floor(Math.random() * (BS_POSES.length - 1))) % BS_POSES.length, true); };
+    const emptyLine = () => { const P = asleep ? EMPTY_SAY : AWAY_SAY; return P[nEmpty++ % P.length]; };
+    const shift = () => { if (empty) { say(emptyLine()); return; } applyPose((pi + 1 + Math.floor(Math.random() * (BS_POSES.length - 1))) % BS_POSES.length, true); };
 
     const roll = () => {
       const n = 1 + Math.floor(Math.random() * 20);
       if (!reduce) try { tableDie.animate([{ transform: "rotate(0deg) scale(1)" }, { transform: "rotate(300deg) scale(1.5)", offset: 0.5 }, { transform: "rotate(720deg) scale(1)" }], { duration: 560, easing: "ease-out" }); } catch {}
       later(() => {
         setDie(n);
-        if (asleep) { say(`You roll the die. ${n}. Nobody is there to react.`); return; }
+        if (empty) { say(`You roll the die. ${n}. Nobody is there to react.`); return; }
         if (n === 20) { say("You roll the die. 20! The whole table erupts."); react("cheer"); }
         else if (n === 1) { say("You roll the die. 1. A very small, very quiet groan."); react("groan"); }
         else say(`You roll the die. ${n}.${n >= 15 ? " Somebody mutters “that’s good”." : n <= 5 ? " Somebody mutters “oh no”." : ""}`);
@@ -9472,7 +9501,7 @@
     hit(266, 334, 28, 36, "The dice", roll);
     hit(76, 342, 28, 20, "The popcorn", () => say(["A bowl of popcorn. It is mostly the unpopped kind by now.", "Somebody keeps eating it off the edge of the map."][nSnack++ % 2]));
     hit(90, 322, 26, 16, "The sodas", () => say("Two cans of soda, one already shaken."));
-    hit(258, 300, 22, 40, "The walkie-talkie", () => { if (asleep) { say("The walkie-talkie is switched on, and silent. Nobody is down here to answer."); return; } hkCrackle(); say("The walkie-talkie hisses. “…Mike? Where did you go? Over.”"); });
+    hit(258, 300, 22, 40, "The walkie-talkie", () => { if (empty) { say("The walkie-talkie is switched on, and silent. Nobody is down here to answer."); return; } hkCrackle(); say("The walkie-talkie hisses. “…Mike? Where did you go? Over.”"); });
     // the couch (and the little arrow on it) is the way left, to the blanket fort: see openBasementFort
     let leaving = false;
     const goFort = () => { if (leaving) return; leaving = true; say("The couch cushions are gone. A trail of popcorn leads off to the left\u2026"); bfFade(sh, () => openBasementFort(true)); };
@@ -9487,7 +9516,8 @@
     hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     field.appendChild(svg);
     sub.textContent = "hawkins · the basement";
-    say(asleep ? "Warm, low-ceilinged, smelling of stale popcorn, and completely empty. Everyone is asleep upstairs." : "Warm, low-ceilinged, smelling of popcorn. " + BS_POSES[pi].say);
+    say(empty ? (asleep ? "Warm, low-ceilinged, smelling of stale popcorn, and completely empty. Everyone is asleep upstairs." : "Warm, low-ceilinged, smelling of stale popcorn, and empty. The chairs are pushed back." + hkWhere.hint()) : "Warm, low-ceilinged, smelling of popcorn. " + BS_POSES[pi].say);
+    if (away) pill("✦ call them here", "Call Will and Mike down to the table", () => { if (leaving) return; leaving = true; hkWhere.call("basement"); say("You call down the stairs. A muffled “coming!”, and feet on the steps…"); bfFade(sh, () => ctx.world.openBasement()); });
     pill("\u{1F9CD} shift", "Make the two of them sit differently", shift);
     pill("\u{1F3B2} roll", "Roll the die", roll);
     pill("\u25C0 fort", "Follow the popcorn trail to the blanket fort", goFort);
@@ -9506,7 +9536,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["fort"] = function (ctx) {
   'use strict';
-  const { hkShell, bfFade, hkSleep } = ctx.lib["hawkins-kit"];
+  const { hkShell, bfFade, hkSleep, hkWhere } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -9529,7 +9559,8 @@
     const { sv, rnd, anim, el } = sh.kit;
     const { sub, field, caption, pill, later } = sh;
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const asleep = hkSleep.get();                                 // Will and Mike are asleep upstairs: no shadows on the blanket, no hearts, nothing moves
+    const away = !hkSleep.get() && !hkWhere.here("fort");                                       // awake, but not in the fort: it is empty
+    const asleep = hkSleep.get(), empty = asleep || away;                                 // Will and Mike are asleep upstairs: no shadows on the blanket, no hearts, nothing moves
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hits = [];
     let nTent = 0, nHeart = 0, nTv = 0, nCouch = 0, nTrail = 0, nDraw = 0, leaving = false;
@@ -9751,7 +9782,7 @@
         later(() => w.remove(), 3000);
       }
     };
-    if (asleep) { sil.setAttribute("display", "none"); heartsG.setAttribute("display", "none"); }   // an empty fort
+    if (empty) { sil.setAttribute("display", "none"); heartsG.setAttribute("display", "none"); }   // an empty fort
     // a soft vignette
     const vgn = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "url(#bf-vig)" }, svg); vgn.setAttribute("pointer-events", "none");
     // the way back to the table, as a small arrow on the right
@@ -9780,14 +9811,16 @@
         "The wizard is doing something with a blue swirl. The knight on the white horse is mostly just very sure of himself."]
     };
     const EMPTY_TENT = ["The fort is empty. The blanket hangs still and the shadows have gone.", "Nobody inside. A cushion has slid halfway off the roof and nobody is there to fix it.", "Quiet. Everyone is asleep upstairs, and the fort is waiting for them."];
-    const wobble = () => { if (asleep || reduce) return; try { tent.animate([{ transform: "translate(0,0)" }, { transform: "translate(-1.5px,0)" }, { transform: "translate(1.5px,0)" }, { transform: "translate(0,0)" }], { duration: 380, easing: "ease-out" }); } catch {} };
+    const AWAY_TENT = ["The fort is empty. The blanket hangs still, and somebody’s flashlight is lying in the door.", "Nobody inside. The cushions are still dented where they were sitting.", "Quiet. They were in here a minute ago, by the look of the popcorn."];
+    const TENT_NOBODY = asleep ? EMPTY_TENT : AWAY_TENT;
+    const wobble = () => { if (empty || reduce) return; try { tent.animate([{ transform: "translate(0,0)" }, { transform: "translate(-1.5px,0)" }, { transform: "translate(1.5px,0)" }, { transform: "translate(0,0)" }], { duration: 380, easing: "ease-out" }); } catch {} };
     const peek = () => {       // tapping the fort fades in to openFortInside() (defined below)
       if (typeof openFortInside === "function" && !leaving) { leaving = true; say("You lift the edge of the blanket…"); bfFade(sh, () => openFortInside(true)); return true; }
       return false;
     };
     const back = () => { if (leaving) return; leaving = true; say("Back to the table."); bfFade(sh, () => openBasement()); };
-    hit(4, 150, 230, 278, "The blanket fort", () => { if (peek()) return; say(asleep ? EMPTY_TENT[nTent++ % EMPTY_TENT.length] : SAY.tent[nTent++ % SAY.tent.length]); wobble(); if (!asleep) puff(3); });
-    hit(70, 56, 64, 100, "The hearts", () => { if (asleep) { say("No hearts tonight. The fort is empty and everyone is asleep."); return; } say(SAY.heart[nHeart++ % SAY.heart.length]); puff(2); });
+    hit(4, 150, 230, 278, "The blanket fort", () => { if (peek()) return; say(empty ? TENT_NOBODY[nTent++ % TENT_NOBODY.length] : SAY.tent[nTent++ % SAY.tent.length]); wobble(); if (!empty) puff(3); });
+    hit(70, 56, 64, 100, "The hearts", () => { if (empty) { say(asleep ? "No hearts tonight. The fort is empty and everyone is asleep." : "No hearts. The fort is empty."); return; } say(SAY.heart[nHeart++ % SAY.heart.length]); puff(2); });
     hit(226, 218, 120, 156, "The TV", () => {
       say(SAY.tv[nTv++ % SAY.tv.length]);
       if (!reduce) try { tvWall.animate([{ opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }], { duration: 420 }); } catch {}
@@ -9800,7 +9833,8 @@
     hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     field.appendChild(svg);
     sub.textContent = "hawkins · the basement · the fort";
-    say(asleep ? "Off to the left of the table: a blanket fort. Every couch cushion is in it, and nobody else is." : "Off to the left of the table: a blanket fort. Every couch cushion is in it. So are two shadows.");
+    say(empty ? (asleep ? "Off to the left of the table: a blanket fort. Every couch cushion is in it, and nobody else is." : "Off to the left of the table: a blanket fort. Every couch cushion is in it, and nobody else is." + hkWhere.hint()) : "Off to the left of the table: a blanket fort. Every couch cushion is in it. So are two shadows.");
+    if (away) pill("✦ call them here", "Call Will and Mike into the fort", () => { if (leaving) return; leaving = true; hkWhere.call("fort"); say("You whisper at the blanket. Two shapes shuffle in, giggling…"); bfFade(sh, () => ctx.world.openBasementFort(true)); });
     pill("\u{1F3B2} table", "Back to the table", back);
     if (typeof openFortInside === "function") pill("\u{1F3D5}️ peek inside", "Lift the edge of the blanket", peek);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { sh.close(); openHawkins(false); });
@@ -9821,7 +9855,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["fort-inside"] = function (ctx) {
   'use strict';
-  const { hkShell, hkCrackle, bfFade, hkSleep } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkCrackle, bfFade, hkSleep, hkWhere } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -9986,7 +10020,8 @@
     const { sv, rnd, anim, el } = sh.kit;
     const { sub, field, caption, pill, later } = sh;
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const asleep = hkSleep.get();                                // Will and Mike are asleep upstairs: the fort is empty and no moments play
+    const away = !hkSleep.get() && !hkWhere.here("fort");                                       // awake, but somewhere else in the house: the fort is empty
+    const asleep = hkSleep.get(), empty = asleep || away;                                // Will and Mike are asleep upstairs: the fort is empty and no moments play
     const say = t => { caption.textContent = t; };
     const W = 360, H = 540, hits = [];
     let leaving = false, tid = 0, nHand = 0, nWalkie = 0, nLights = 0, nTorch = 0, nCorn = 0, nComic = 0, nDraw = 0;
@@ -10176,10 +10211,12 @@
       tid = setTimeout(step, readTime(text));
     };
     const EMPTY_SAY = ["Nobody inside. The quilt is still warm in two places.", "The fairy lights twinkle for nobody. Everyone is asleep upstairs.", "An empty fort: popcorn, comics, a flashlight, and a lot of quiet."];
+    const AWAY_SAY = ["Nobody inside. The quilt is still warm in two places.", "The fairy lights twinkle for nobody. The popcorn bowl is still half full.", "An empty fort. A flashlight rolls slowly off a comic and nobody catches it."];
+    const NOBODY = asleep ? EMPTY_SAY : AWAY_SAY;
     let nEmpty = 0;
-    const play = i => { if (asleep) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(FI_KEY, String(mi)); } catch {} say("Inside: fairy lights, popcorn, and two people sitting very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
-    const another = () => { if (asleep) { say(EMPTY_SAY[nEmpty++ % EMPTY_SAY.length]); return; } let n = Math.floor(Math.random() * (FI_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
-    const next = () => { if (asleep) { say(EMPTY_SAY[nEmpty++ % EMPTY_SAY.length]); return; } if (playing) step(); else another(); };
+    const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(FI_KEY, String(mi)); } catch {} say("Inside: fairy lights, popcorn, and two people sitting very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } let n = Math.floor(Math.random() * (FI_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
+    const next = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } if (playing) step(); else another(); };
     sh.onClose = () => { clearTimeout(tid); hideBubble(); };
     let first = Math.floor(Math.random() * FI_MOMENTS.length);
     try { const last = parseInt(localStorage.getItem(FI_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < FI_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (FI_MOMENTS.length - 1))) % FI_MOMENTS.length; } catch {}
@@ -10319,7 +10356,7 @@
        ["n", "They are both laughing too hard to say anything else. Whoever those two were, they’ll never know the whole fort heard them, and that Mike and Will are keeping the best lines.", Object.assign({ hearts: 3 }, FI_HOLD)]]
     ];
     const walkieTalk = () => {
-      if (asleep) { hkCrackle(); say("Static, and then nothing. Nobody is on the other end tonight. Over."); return; }
+      if (empty) { hkCrackle(); say("Static, and then nothing. Nobody is on the other end tonight. Over."); return; }
       clearTimeout(tid); playing = false; hideBubble();
       const seq = WALKIE_TALKS[nWalkie++ % WALKIE_TALKS.length]; let i = 0;
       const run = () => {
@@ -10341,13 +10378,14 @@
     hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     sub.textContent = "hawkins · the basement · inside the fort";
     const out = () => { if (leaving) return; leaving = true; say("You back out on your hands and knees."); bfFade(sh, () => openBasementFort(true)); };
+    if (away) pill("✦ call them here", "Call Will and Mike into the fort", () => { if (leaving) return; leaving = true; hkWhere.call("fort"); say("You whisper through the blanket. Two shapes crawl in, giggling…"); bfFade(sh, () => ctx.world.openFortInside(true)); });
     pill("\u{1F4AC} next", "Hear the next line sooner", next);
     pill("\u{1F501} another", "A different moment", another);
     pill("\u{1F4FB} station", "Change the radio station (paste a YouTube link)", station);
     pill("◀ outside", "Back out of the fort", out);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { sh.close(); openHawkins(false); });
     document.body.appendChild(sh.back);
-    if (asleep) { bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none"); say("Inside the fort: fairy lights, popcorn and comics, and nobody. Everyone is asleep upstairs."); }
+    if (empty) { bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none"); say(asleep ? "Inside the fort: fairy lights, popcorn and comics, and nobody. Everyone is asleep upstairs." : "Inside the fort: fairy lights, popcorn and comics, and nobody." + hkWhere.hint()); }
     else play(first);
     if (arrive) {
       const v = el("div", `position:absolute;inset:0;background:#000;opacity:1;pointer-events:none;z-index:30;transition:opacity ${reduce ? 0 : 0.6}s;`);
@@ -10365,7 +10403,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["mikes-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkSeason, hkVoice } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkSeason, hkVoice, hkWhere } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const { bsKit } = ctx.lib["figures"];
   const { gyHash } = ctx.shared;
@@ -10374,6 +10412,7 @@
   const openBasement = (...args) => world.openBasement(...args);
   const openWheelers = (...args) => world.openWheelers(...args);
   const openHawkins = (...args) => world.openHawkins(...args);
+  const openKitchen = (...args) => world.openKitchen(...args);
 
   // ── Mike's room (reached through his window from the front lawn, or up the stairs from the basement) ──
   // The room, its furniture and the ways in and out, and now Will and Mike in the bed (see "in the bed" below): the same figures as at
@@ -10521,6 +10560,7 @@
       tail: t.done.length ? ficTail() : (wxKind !== "clear" && MR_GN_TAIL[wxKind]) || MR_GN_TAIL[season] || MR_GN_TAIL.clear
     };
   }
+  const MR_AWAY_SAY = ["The comforter is rumpled and the bed is empty. They’re somewhere else in the house.", "Nobody here. A comic lies open on the pillow, still warm.", "The room is quiet. Wherever they went, they left the lamp on."];
   const MR_ASLEEP_SAY = ["Fast asleep. Will’s breathing is slow and even, and Mike has not let go of his hand.", "Mike mumbles something about dragons and burrows a little closer. Best to leave them be.", "The room is dark and the covers rise and fall, slow as a tide. Tap the lamp when you want them awake.", "Somebody under the comforter lets out a very small, very soft snore. Nobody mentions it."];
   const MR_KEY = "ao3-mr-moment";                          // the last moment played (the only thing saved here), so it is never the same one twice running
   const MR_MOMENTS = [
@@ -10617,7 +10657,8 @@
     const W = 360, H = 540, hitsA = [], hitsB = [];
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     let cur = hitsA, view = "A", stage = "bed", prop = null;                                                          // stage: where they are ("bed" or "carpet"); prop: what is between them on the carpet
-    let leaving = false, nSign = 0, nCloset = 0, nHand = 0, nAsleep = 0, tid = 0;
+    let leaving = false, nSign = 0, nCloset = 0, nHand = 0, nAsleep = 0, nAway = 0, tid = 0;
+    const away = !hkSleep.get() && !hkWhere.here("room");                                                        // awake, but somewhere else in the house: the bed is empty and the lamp is left on
     let scene = false, asleep = hkSleep.get();                                                                      // scene: the going-to-sleep or waking scene is playing; asleep: they are in bed asleep (saved, shared with the other scenes)
     const tm = HK_TIMES[hkTimeGet()];
     sh.box.style.background = "#0f1a2c";
@@ -11037,7 +11078,7 @@
     };
     // the lamp has three taps: a colour, then bed (the lamp goes out, they cuddle, say goodnight and sleep), then, while they sleep, a tap wakes them and the lamp is amber again
     const lampScene = color => {
-      asleep = true; hkSleep.set(true); nLamp = 1;
+      asleep = true; hkSleep.set(true); nLamp = 1; hkWhere.set("room");
       const COL = color === "blue" ? "blue" : color === "yellow" ? "yellow" : "amber";
       const gn = mrGoodnightBeats(HK_WX[hkWxGet()][0]);                                                               // tonight's goodnight (see MR_GN)
       const back = stage === "carpet" ? [["n", "They scramble up off the carpet and back under the comforter, one after the other. It’s late.", { reset: true }]] : [];
@@ -11077,7 +11118,7 @@
       return { beats };
     };
     const wakeUp = () => {
-      asleep = false; hkSleep.set(false); nLamp = 0;
+      asleep = false; hkSleep.set(false); nLamp = 0; hkWhere.set("room");                                              // awake again, and in the room for the next while
       runBeats([
         ["n", "The lamp clicks back on, warm amber. Two heads surface from under the comforter, squinting.", { reset: true, lamp: "base", zz: false, a: { mood: "o", look: -1 }, b: { mood: "o", look: 1 } }],
         ["w", "…Mike? Is it morning?", { a: { mood: "calm", look: 1 } }],
@@ -11093,12 +11134,14 @@
     const tapLamp = () => {
       if (scene) { say("Not yet. They’re still settling in."); return; }
       if (asleep) { wakeUp(); return; }
+      if (away && nLamp === 1) { nLamp = 0; setLamp("base"); say("The lamp clicks back to amber. Nobody here to put to bed."); return; }
       if (nLamp === 0) { const key = Math.random() < 0.5 ? "blue" : "yellow"; nLamp = 1; setLamp(key); say(LAMP[key].say[Math.floor(Math.random() * LAMP[key].say.length)]); }
       else lampScene(lampKey);
     };
 
     // ── the ways out, and the tappable furniture ──
     const goDown = () => { if (leaving) return; leaving = true; say("Down the stairs, one creaky step at a time…"); bfFade(sh, () => openBasement()); };
+    const goKitchen = () => { if (leaving) return; leaving = true; say("Down the stairs, and into the kitchen…"); bfFade(sh, () => openKitchen()); };
     const goOutside = () => { if (leaving) return; leaving = true; say("Down the stairs, past the kitchen, and out the front door…"); bfFade(sh, () => openWheelers()); };
     const hit = (x, y, w, h, label, fn) => cur.push([x, y, w, h, label, fn]);
     const goWindow = () => { if (leaving) return; leaving = true; say("You lean out of the window. The lawn is a long way down, and so is the bike on it."); bfFade(sh, () => openWheelers()); };
@@ -11118,7 +11161,7 @@
     hit(120, 440, 150, 80, "The carpet", () => say("The carpet in the lamplight. The best spot in the room."));
     const emptyBed = () => say("The comforter is rumpled and empty. Nobody’s up there: they’re down on the carpet.");
     hit(128, 244, 62, 82, "Will", () => stage === "carpet" ? emptyBed() : next()); hit(190, 240, 72, 86, "Mike", () => stage === "carpet" ? emptyBed() : next());
-    hit(170, 324, 40, 30, "Their hands", () => { if (stage === "carpet") { emptyBed(); return; } if (asleep) { say("Still holding hands, even in their sleep."); return; } say(MR_SAY[nHand++ % MR_SAY.length]); puff(3); });
+    hit(170, 324, 40, 30, "Their hands", () => { if (stage === "carpet") { emptyBed(); return; } if (asleep) { say("Still holding hands, even in their sleep."); return; } if (away) { say(MR_AWAY_SAY[nAway++ % MR_AWAY_SAY.length]); return; } say(MR_SAY[nHand++ % MR_SAY.length]); puff(3); });
     cur = hitsB;
     hit(2, 452, 38, 52, "Turn to the bed wall", () => setView("A"));
     hit(120, 60, 120, 124, "The window, and the way out to the lawn", goWindow);
@@ -11213,11 +11256,12 @@
       if (who === "n") { hideBubble(); say(text); } else speak(who, text);
       tid = setTimeout(step, readTime(text));
     };
-    const play = i => { if (asleep || scene) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); const M = MR_MOMENTS[mi]; start(M.stage); try { localStorage.setItem(MR_KEY, String(mi)); } catch {} say(M.intro || "Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const play = i => { if (asleep || away || scene) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); const M = MR_MOMENTS[mi]; start(M.stage); try { localStorage.setItem(MR_KEY, String(mi)); } catch {} say(M.intro || "Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
     const another = () => { let n = Math.floor(Math.random() * (MR_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
     const next = () => {
       if (leaving || view !== "A" || scene) return;
       if (asleep) { say(MR_ASLEEP_SAY[nAsleep++ % MR_ASLEEP_SAY.length]); puff(1); return; }
+      if (away) { say(MR_AWAY_SAY[nAway++ % MR_AWAY_SAY.length]); return; }
       if (playing) step(); else another();
     };
     // plays a list of beats, like a moment, but locked: nothing else runs until it ends (the lamp scenes use it)
@@ -11304,13 +11348,13 @@
     };
     sh.onClose = () => { clearTimeout(tid); clearTimeout(tmTick); clearTimeout(tmDone); hideBubble(); if (voice) voice.stop(); amb.stop(); snd.stop(); };
     if (asleep) { setPj(true); showLumps(true); P.a = Object.assign({}, MR_BASE.a, MR_SLEEP.a); P.b = Object.assign({}, MR_BASE.b, MR_SLEEP.b); drawFig("a", P.a); drawFig("b", P.b); setLamp("off"); setZz(true); }   // still asleep from last time: lamp out, z's rising
-    else start();                                                                                                      // otherwise they are in the bed from the moment you walk in
+    else { start(); if (away) [FIG.a, FIG.b].forEach(F => { F.g1.style.display = F.g2.style.display = "none"; }); }    // otherwise they are in the bed from the moment you walk in (or nowhere in sight: they are elsewhere)
     let first = Math.floor(Math.random() * MR_MOMENTS.length);
     try { const last = parseInt(localStorage.getItem(MR_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < MR_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (MR_MOMENTS.length - 1))) % MR_MOMENTS.length; } catch {}
-    if (!asleep) tid = setTimeout(() => play(first), reduce ? 400 : 1800);
+    if (!asleep && !away) tid = setTimeout(() => play(first), reduce ? 400 : 1800);
 
     sub.textContent = "hawkins · mike’s room";
-    say(asleep ? "Mike’s room in the dark. The lamp is off, and the two of them are fast asleep." : "Mike’s room: blue walls, a lamp left on, and a ONE WAY sign over the closet.");
+    say(asleep ? "Mike’s room in the dark. The lamp is off, and the two of them are fast asleep." : away ? "Mike’s room: blue walls, a lamp left on, a rumpled comforter and nobody home." + hkWhere.hint() : "Mike’s room: blue walls, a lamp left on, and a ONE WAY sign over the closet.");
     const turnBtn = pill("\u2194 window wall", "Turn to look at the other side of the room", () => setView(view === "A" ? "B" : "A"));
     sndBtn = pill("☾ sleep sound", "A sound for the night: rain, a fan, soft snoring or crickets", tapSound);                // these two only show while they sleep
     tmBtn = pill("◷ timer", "Sleep timer: fades the sound out after 15, 30 or 60 minutes", tapTimer);
@@ -11319,7 +11363,7 @@
       if (scene) { say("They’re settling in. Give them a moment."); return; }
       view = v;
       if (v === "B") { clearTimeout(tid); hideBubble(); playing = false; }
-      else if (!leaving && !asleep) { clearTimeout(tid); tid = setTimeout(another, reduce ? 300 : 900); }
+      else if (!leaving && !asleep && !away) { clearTimeout(tid); tid = setTimeout(another, reduce ? 300 : 900); }
       A.style.opacity = v === "A" ? 1 : 0; B.style.opacity = v === "B" ? 1 : 0;
       gA.style.display = v === "A" ? "" : "none"; gB.style.display = v === "B" ? "" : "none";
       turnBtn.textContent = v === "A" ? "\u2194 window wall" : "\u2194 bed wall";
@@ -11327,6 +11371,8 @@
       if (v === "A") say(asleep ? "Back to the bed. The lamp is off and the covers rise and fall." : "Back to the bed, the lamp and the closet.");
       else say(asleep ? "The window wall in the dark. The fairy lights are the only thing awake." : "The window wall. Fairy lights, the desk, and a chair pushed out in a hurry.");
     };
+    if (away) pill("✦ call them here", "Call Will and Mike up to the room", () => { if (leaving) return; leaving = true; hkWhere.call("room"); say("You shout down the stairs. Two sets of feet come thumping up…"); bfFade(sh, () => openMikesRoom()); });
+    pill("▦ kitchen", "Down the stairs and into the kitchen", goKitchen);
     pill("\u{1FA9C} downstairs", "Down the stairs to the basement", goDown);
     pill("\u{1F3E1} outside", "Out the front door to the lawn", goOutside);
     hkSoundPill(pill, { refresh: () => { amb.refresh(); snd.refresh(); } });
@@ -11335,6 +11381,218 @@
   }
 
   return { openMikesRoom };
+};
+
+// ════════ kitchen.js ════════
+// kitchen.js — the Wheelers' kitchen (openKitchen).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["kitchen"] = function (ctx) {
+  'use strict';
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkWindowSky } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
+  const world = ctx.world;
+  const openMikesRoom = (...args) => world.openMikesRoom(...args);
+  const openHawkins = (...args) => world.openHawkins(...args);
+
+  // ── the Wheelers' kitchen: the ROOM ONLY (nothing to tap, nobody in it, no sound; the way in is the "kitchen" pill in Mike's room) ──
+  // Styled after the reference photo: dark mahogany cabinets with small silver knobs, red laminate counters, a cream retro fridge, a cream stove under a
+  // hood, a window over the sink with butter-yellow curtains and a hanging plant, a microwave, a toaster, a coffee maker, a utensil crock and a potted plant
+  // on the counter, an island in front with a fruit bowl, a brown and cream checkered floor and a pale lilac wall.
+  // Same stage size as the other Hawkins rooms: 360 x 540, seen from the doorway with the back wall in the middle and the left and right walls running
+  // in toward it. The one live thing is the window, which shows the shared sky (time of day and weather), like the basement window.
+  // Perspective: every line that runs into the room points at the vanishing point VP (180, 160). The back wall is x 44..316, y 48..300, and
+  // `LW` / `RW` place a point on the left / right wall, where s = 1 is the back corner and s = 1.3235 is the edge of the picture.
+  // When things are added later (taps, Will and Mike, sounds), they go below the "ROOM" block.
+  function openKitchen() {
+    const sh = hkShell("ao3-kitchen", "▦ The kitchen");
+    const { sv, rnd } = sh.kit;
+    const { sub, field, caption, pill, close } = sh;
+    const W = 360, H = 540;
+    sh.box.style.background = "#2a1c1a";
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, y1, y2, stops) => { const g = sv("linearGradient", { id, x1: 0, y1, x2: 0, y2 }, defs); stops.forEach(([o, c, a]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": a == null ? 1 : a }, g)); };
+    grad("kt-back", 0, 1, [["0%", "#c6cadf"], ["100%", "#aab0c9"]]);
+    grad("kt-left", 0, 1, [["0%", "#aeb4cd"], ["100%", "#8d94b2"]]);
+    grad("kt-right", 0, 1, [["0%", "#c0c5da"], ["100%", "#a4abc6"]]);
+    grad("kt-ceil", 0, 1, [["0%", "#f1e6cf"], ["100%", "#dccfb4"]]);
+    grad("kt-top", 0, 1, [["0%", "#b83a3a"], ["100%", "#982c2c"]]);
+    const lamp = sv("radialGradient", { id: "kt-lamp", cx: "50%", cy: "50%", r: "50%" }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#fff0c4", "stop-opacity": "0.55" }, lamp);
+    sv("stop", { offset: "100%", "stop-color": "#fff0c4", "stop-opacity": "0" }, lamp);
+    const vig = sv("radialGradient", { id: "kt-vig", cx: "50%", cy: "50%", r: "75%" }, defs);
+    sv("stop", { offset: "58%", "stop-color": "#140a0a", "stop-opacity": "0" }, vig);
+    sv("stop", { offset: "100%", "stop-color": "#140a0a", "stop-opacity": "0.5" }, vig);
+    const tm = HK_TIMES[hkTimeGet()], kind = HK_WX[hkWxGet()][0];
+
+    // ── ROOM ──
+    // Built in real measurements (metres) and projected with ONE camera, so the proportions come out like a real kitchen: ceiling 2.4 m, worktops 0.9 m,
+    // wall cupboards from 1.5 m to 2.2 m, a room 4 m wide, base cupboards and worktops 0.6 m deep, an aisle of 0.9 m to the island, tiles 0.4 m.
+    // x runs left to right (0 is the middle of the picture), h is the height above the floor, z is the distance from the camera. The back wall is at z = D.
+    // The camera stands 1.5 m up, in the middle, D = 3.6 m from the back wall (focal length F). P() turns (x, h, z) into a point in the picture.
+    const D = 3.6, F = 248, VX = 180, VY = 170, CAM = 1.5, HW = 2, CEIL = 2.4, ZN = 0.4;
+    const P = (x, h, z) => [VX + x * F / z, VY + (CAM - h) * F / z];
+    const pts = a => a.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+    const poly = (a, fill, extra) => sv("polygon", Object.assign({ points: pts(a), fill }, extra || {}), svg);
+    const rect = (x, y, w, h, fill, extra) => sv("rect", Object.assign({ x: +(+x).toFixed(1), y: +(+y).toFixed(1), width: +(+w).toFixed(1), height: +(+h).toFixed(1), fill }, extra || {}), svg);
+    const poly3 = (a, fill, extra) => poly(a.map(q => P(q[0], q[1], q[2])), fill, extra);
+    const front = (x0, x1, h0, h1, z, fill, extra) => { const a = P(x0, h1, z), b = P(x1, h0, z); return rect(a[0], a[1], b[0] - a[0], b[1] - a[1], fill, extra); };   // a face looking at you, at distance z
+    const top = (x0, x1, h, z0, z1, fill, extra) => poly3([[x0, h, z0], [x1, h, z0], [x1, h, z1], [x0, h, z1]], fill, extra);                              // a flat surface, z0 far, z1 near
+    const sideX = (x, h0, h1, z0, z1, fill, extra) => poly3([[x, h1, z0], [x, h1, z1], [x, h0, z1], [x, h0, z0]], fill, extra);                            // a face on a side wall's plane, z0 far, z1 near
+    const dot = (x, h, z, r, fill, extra) => { const p = P(x, h, z); return sv("circle", Object.assign({ cx: p[0].toFixed(1), cy: p[1].toFixed(1), r, fill }, extra || {}), svg); };
+    const line = (a, b, stroke, w, extra) => sv("path", Object.assign({ d: `M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}`, stroke, "stroke-width": w, fill: "none", "stroke-linecap": "round" }, extra || {}), svg);
+    const WOOD = "#5b201c", WOOD_D = "#3a1210", WOOD_L = "#7d2f28", KNOB = "#d6d1c6";
+
+    // the floor: brown and cream tiles, 0.4 m square, running out from the back wall
+    poly3([[-HW, 0, D], [HW, 0, D], [HW, 0, ZN], [-HW, 0, ZN]], "#e6d8bb");
+    for (let i = 0; i < 9; i++) for (let j = 0; j < 10; j++) {
+      if ((i + j) % 2 === 0) continue;
+      const za = D - 0.4 * i, zb = D - 0.4 * (i + 1), xa = -HW + 0.4 * j, xb = xa + 0.4;
+      if (zb < ZN - 0.05) continue;
+      poly3([[xa, 0, za], [xb, 0, za], [xb, 0, zb], [xa, 0, zb]], "#6a3a2e");
+    }
+    // ceiling and walls (lilac), with the crown moulding and skirting
+    poly3([[-HW, CEIL, D], [HW, CEIL, D], [HW, CEIL, 1], [-HW, CEIL, 1]], "url(#kt-ceil)");
+    front(-HW, HW, 0, CEIL, D, "url(#kt-back)");
+    sideX(-HW, 0, CEIL, D, 1, "url(#kt-left)");
+    sideX(HW, 0, CEIL, D, 1, "url(#kt-right)");
+    poly3([[0.3, CEIL, 2.9], [1.5, CEIL, 2.9], [1.5, CEIL, 2.0], [0.3, CEIL, 2.0]], "#fff4d6");                             // the ceiling light panel, glowing
+    { const c = P(0.9, CEIL, 2.45); sv("ellipse", { cx: c[0], cy: c[1] + 10, rx: 120, ry: 62, fill: "url(#kt-lamp)" }, svg); }
+    front(-HW, HW, CEIL - 0.1, CEIL, D, "#efe6d5"); front(-HW, HW, CEIL - 0.105, CEIL - 0.1, D, "#b7ad98", { opacity: 0.6 });
+    sideX(-HW, CEIL - 0.1, CEIL, D, 1, "#e3d9c4"); sideX(HW, CEIL - 0.1, CEIL, D, 1, "#f0e8d8");
+    front(-HW, HW, 0, 0.1, D, "#d9cfbd"); sideX(-HW, 0, 0.1, D, 1, "#cfc4ae"); sideX(HW, 0, 0.1, D, 1, "#6b5646");
+
+    // the back wall: the window over the sink (0.7 m wide, sill at 1.1 m), butter-yellow curtains with a gathered valance
+    { const w0 = -0.55, w1 = 0.15, s0 = 1.1, s1 = 2.05;
+      front(w0 - 0.04, w1 + 0.04, s0 - 0.04, s1 + 0.04, D, "#efe7d6");
+      const a = P(w0, s1, D), b = P(w1, s0, D);
+      hkWindowSky(sv, rnd, svg, a[0], a[1], b[0] - a[0], b[1] - a[1], tm, kind);
+      front((w0 + w1) / 2 - 0.018, (w0 + w1) / 2 + 0.018, s0, s1, D, "#efe7d6");
+      front(w0, w1, s0 + (s1 - s0) / 3 - 0.018, s0 + (s1 - s0) / 3 + 0.018, D, "#efe7d6"); front(w0, w1, s0 + 2 * (s1 - s0) / 3 - 0.018, s0 + 2 * (s1 - s0) / 3 + 0.018, D, "#efe7d6");
+      front(w0 - 0.08, w1 + 0.08, s0 - 0.07, s0 - 0.04, D, "#e3d9c4");
+      [[w0 - 0.27, w0 - 0.02], [w1 + 0.02, w1 + 0.27]].forEach(([x0, x1]) => {
+        poly3([[x0, 2.12, D - 0.04], [x1, 2.12, D - 0.04], [x1 + 0.01, 1.05, D - 0.04], [x0 - 0.01, 1.05, D - 0.04]], "#d9be80");
+        for (let k = 1; k < 5; k++) { const x = x0 + (x1 - x0) * k / 5; line(P(x, 2.1, D - 0.04), P(x, 1.07, D - 0.04), "#b89a5a", 0.7, { opacity: 0.6 }); }
+      });
+      front(w0 - 0.3, w1 + 0.3, 2.0, 2.16, D - 0.05, "#e2c98e"); front(w0 - 0.3, w1 + 0.3, 2.0, 2.03, D - 0.05, "#b89a5a", { opacity: 0.55 });
+      for (let k = 0; k < 9; k++) { const x = w0 - 0.3 + (w1 - w0 + 0.6) * k / 8; line(P(x, 2.15, D - 0.05), P(x, 2.02, D - 0.05), "#b89a5a", 0.6, { opacity: 0.55 }); }
+    }
+
+    // wall cupboards: dark mahogany, a raised panel and a small silver knob on every door; 0.35 m deep, from 1.5 m up to 2.2 m (they stop short of the fridge and the window)
+    const ZU = D - 0.35;
+    const doorF = (x0, x1, h0, h1, z, knob) => {                                                                          // knob: "l"/"r" and "t"/"b"
+      front(x0, x1, h0, h1, z, WOOD, { stroke: WOOD_D, "stroke-width": 0.8 });
+      front(x0 + 0.03, x1 - 0.03, h0 + 0.03, h1 - 0.03, z, "none", { stroke: WOOD_L, "stroke-width": 0.6, opacity: 0.7 });
+      dot(knob[0] === "l" ? x0 + 0.06 : x1 - 0.06, knob[1] === "t" ? h1 - 0.08 : h0 + 0.08, z, 1.3, KNOB);
+    };
+    const doorS = (x, z0, z1, h0, h1, knobZ, knobH, fill) => {                                                            // a door on a side wall's cupboard run
+      sideX(x, h0, h1, z0, z1, fill || WOOD, { stroke: WOOD_D, "stroke-width": 0.8 });
+      sideX(x, h0 + 0.03, h1 - 0.03, z0 - 0.03, z1 + 0.03, "none", { stroke: WOOD_L, "stroke-width": 0.6, opacity: 0.7 });
+      dot(x, knobH, knobZ, 1.3, KNOB);
+    };
+    doorF(-HW, -1.4, 1.5, 2.2, ZU, "rb"); doorF(-1.4, -0.8, 1.5, 2.2, ZU, "lb");                                           // over the microwave and toaster
+    sideX(-HW + 0.35, 1.5, 2.2, ZU, 2.65, "none"); doorS(-HW + 0.35, ZU, 2.65, 1.5, 2.2, 2.74, 1.58);                          // the one door on the left wall
+    doorF(0.95, 1.35, 1.5, 2.2, ZU, "rb"); doorF(1.35, HW, 1.9, 2.2, ZU, "lb");                                           // right of the hood, and above the fridge
+
+    // the hanging plant, in front of the left curtain (a dark bowl on rope, leaves above, a few vines below)
+    { const top0 = P(-0.66, CEIL, 3.4), bowl = P(-0.66, 1.78, 3.4), bw = 0.3 * F / 3.4;
+      [-1, 0, 1].forEach(k => line(top0, [bowl[0] + k * bw * 0.45, bowl[1] - 1], "#8a7a64", 0.9));
+      for (let k = 0; k < 9; k++) { const a = -150 + k * 37, r = bw * (0.5 + rnd("hp" + k) * 0.4), cx = bowl[0] + Math.cos(a * Math.PI / 180) * r * 0.9, cy = bowl[1] - 3 - Math.abs(Math.sin(a * Math.PI / 180)) * r; sv("ellipse", { cx: cx.toFixed(1), cy: cy.toFixed(1), rx: 5, ry: 2.4, fill: k % 2 ? "#2f6a3a" : "#3f7f4a", transform: `rotate(${a} ${cx.toFixed(1)} ${cy.toFixed(1)})` }, svg); }
+      sv("path", { d: `M${bowl[0] - bw / 2} ${bowl[1]} Q${bowl[0]} ${bowl[1] + bw * 0.6} ${bowl[0] + bw / 2} ${bowl[1]} Q${bowl[0]} ${bowl[1] - 4} ${bowl[0] - bw / 2} ${bowl[1]} Z`, fill: "#3a2018", stroke: "#24120e", "stroke-width": 0.8 }, svg);
+      sv("path", { d: `M${bowl[0] - bw / 2 + 2} ${bowl[1] + 3} Q${bowl[0] - bw / 2 - 1} ${bowl[1] + 12} ${bowl[0] - bw / 2 + 1} ${bowl[1] + 17} M${bowl[0] + bw / 2 - 2} ${bowl[1] + 3} Q${bowl[0] + bw / 2 + 1} ${bowl[1] + 10} ${bowl[0] + bw / 2 - 1} ${bowl[1] + 14}`, stroke: "#3f7f4a", "stroke-width": 1.4, fill: "none", "stroke-linecap": "round" }, svg); }
+
+    // the range hood over the stove (0.6 m wide, from 1.5 m up)
+    poly3([[0.5, 1.82, D], [0.8, 1.82, D], [0.95, 1.5, 3.05], [0.35, 1.5, 3.05]], "#efe6d2", { stroke: "#b7ad98", "stroke-width": 0.7 });
+    front(0.35, 0.95, 1.46, 1.5, 3.05, "#cfc6ad");
+
+    // the back worktop run (red laminate, a darker lip), 0.6 m deep, over base cupboards; the sink is let into it
+    const ZC = D - 0.6;
+    top(-1.4, 1.35, 0.9, D, ZC, "url(#kt-top)");
+    front(-1.4, 1.35, 0.86, 0.9, ZC, "#741e1e");
+    [[-1.4, -0.95, "rt"], [-0.95, -0.5, "lt"], [-0.5, -0.05, "rt"], [-0.05, 0.35, "lt"]].forEach(([a, b, k]) => doorF(a, b, 0.1, 0.86, ZC, k));
+    doorF(0.95, 1.35, 0.1, 0.86, ZC, "lt");
+    front(-1.4, 1.35, 0, 0.1, ZC + 0.05, "#1f0a08");                                                                       // the toe kick
+    top(-0.5, 0.05, 0.9, 3.45, 3.12, "#3a2a30"); top(-0.46, 0.01, 0.9, 3.4, 3.17, "#6a5a62", { opacity: 0.6 });
+    { const t0 = P(-0.22, 0.9, 3.5), t1 = P(-0.22, 1.18, 3.55), t2 = P(-0.1, 1.2, 3.5); sv("path", { d: `M${t0[0].toFixed(1)} ${t0[1].toFixed(1)} L${t1[0].toFixed(1)} ${t1[1].toFixed(1)} Q${t1[0].toFixed(1)} ${(t1[1] - 6).toFixed(1)} ${t2[0].toFixed(1)} ${(t2[1] - 4).toFixed(1)}`, stroke: "#2a2024", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round" }, svg); }
+
+    // the cream stove (0.6 m wide) in the run, with two rings on top and the knobs on the back panel
+    front(0.35, 0.95, 0, 0.9, ZC, "#e8dcc0", { stroke: "#a99c78", "stroke-width": 0.7 });
+    front(0.4, 0.9, 0.12, 0.7, ZC, "#efe3c6", { stroke: "#a99c78", "stroke-width": 0.8 }); front(0.45, 0.85, 0.28, 0.6, ZC, "#2a2428");
+    top(0.35, 0.95, 0.9, D, ZC, "#d9cba8", { stroke: "#a99c78", "stroke-width": 0.6 });
+    [[0.52, 3.2], [0.78, 3.2], [0.52, 3.45], [0.78, 3.45]].forEach(([x, z]) => { const c = P(x, 0.905, z), r = 0.11 * F / z; sv("ellipse", { cx: c[0].toFixed(1), cy: c[1].toFixed(1), rx: r.toFixed(1), ry: (r * 0.3).toFixed(1), fill: "#2a2224" }, svg); sv("ellipse", { cx: c[0].toFixed(1), cy: c[1].toFixed(1), rx: (r * 0.5).toFixed(1), ry: (r * 0.15).toFixed(1), fill: "#463c3e" }, svg); });
+    front(0.35, 0.95, 0.9, 1.0, D, "#e8dcc0", { stroke: "#a99c78", "stroke-width": 0.5 });
+    [0.45, 0.58, 0.72, 0.85].forEach(x => dot(x, 0.95, D, 1.3, "#3a3032"));
+
+    // on the worktop: the microwave, a chopping board against the wall, the toaster; then a coffee maker and a utensil crock
+    front(-1.37, -0.92, 0.9, 1.2, 3.25, "#2a2220", { rx: 2, stroke: "#14100f", "stroke-width": 0.8 }); front(-1.34, -1.11, 0.93, 1.17, 3.25, "#150f0e", { rx: 1 }); front(-1.08, -0.97, 0.93, 1.17, 3.25, "#3a302c", { rx: 1 });
+    [1.05, 1.1, 1.15].forEach(h => dot(-1.025, h, 3.25, 0.9, "#8a7a70"));
+    front(-1.48, -1.4, 0.9, 1.3, 3.5, "#5a3a2a", { rx: 2 }); dot(-1.44, 1.22, 3.5, 1.4, "#2a1a12");
+    front(-0.8, -0.55, 0.9, 1.08, 3.3, "#d9ceb4", { rx: 2, stroke: "#a99c78", "stroke-width": 0.6 }); front(-0.76, -0.59, 1.06, 1.08, 3.3, "#3a3032");
+    front(1.0, 1.15, 0.9, 1.28, 3.35, "#e4dcc8", { rx: 2, stroke: "#a99c78", "stroke-width": 0.6 }); front(1.02, 1.13, 0.9, 1.1, 3.35, "#3a2c28", { rx: 1.5 }); front(1.02, 1.13, 1.18, 1.26, 3.35, "#cfc6ad");
+    front(1.2, 1.3, 0.9, 1.07, 3.3, "#1a1416", { rx: 1.5 });
+    [[1.22, 1.2, 0.05], [1.25, 1.24, 0], [1.28, 1.21, -0.04]].forEach(([x, h, dx]) => line(P(x, 1.06, 3.3), P(x + dx, h + 0.04, 3.3), "#2a2224", 1.6));
+
+    // the cream retro fridge (0.65 m wide, 1.75 m tall), standing in the right corner: rounded at the top, chrome handles, a seam between the doors
+    { const ZF = 2.9;
+      sideX(1.35, 0, 1.75, D, ZF, "#cdbf8c", { stroke: "#b3a577", "stroke-width": 0.7 });
+      const f = front(1.35, HW, 0, 1.75, ZF, "#ecdfb0", { stroke: "#b3a577", "stroke-width": 0.9 }); f.setAttribute("rx", 7);
+      front(1.4, 1.95, 1.72, 1.745, ZF, "#d6d1c4", { opacity: 0.9 });
+      front(1.35, HW, 1.1, 1.125, ZF, "#8a7d58", { opacity: 0.9 });
+      front(1.39, 1.425, 1.2, 1.55, ZF, "#d7d3c8", { rx: 1.2, stroke: "#9a9588", "stroke-width": 0.4 }); front(1.39, 1.425, 0.7, 1.05, ZF, "#d7d3c8", { rx: 1.2, stroke: "#9a9588", "stroke-width": 0.4 });
+      front(1.5, 1.7, 1.6, 1.64, ZF, "#b9b29a", { rx: 1 }); front(1.35, HW, 0, 0.05, ZF, "#3a3128", { opacity: 0.7 }); }
+
+    // the left worktop run, along the left wall (0.6 m deep, it ends at z = 2.5): a dial phone and a potted plant in an orange basket on it
+    { const ZE = 2.5;
+      top(-HW, -1.4, 0.9, D, ZE, "url(#kt-top)");
+      sideX(-1.4, 0.86, 0.9, D, ZE, "#741e1e"); front(-HW, -1.4, 0.86, 0.9, ZE, "#741e1e");
+      sideX(-1.4, 0.1, 0.86, 3.0, ZE, WOOD, { stroke: WOOD_D, "stroke-width": 0.8 });
+      doorS(-1.4, 3.0, 2.75, 0.1, 0.86, 2.82, 0.8); doorS(-1.4, 2.75, ZE, 0.1, 0.86, 2.68, 0.8);
+      front(-HW, -1.4, 0, 0.86, ZE, "#4a1a16", { stroke: WOOD_D, "stroke-width": 0.8 }); front(-HW, -1.4, 0, 0.1, ZE, "#1f0a08");
+      const ph = P(-1.78, 0.9, 2.95), r = 0.17 * F / 2.95;
+      sv("ellipse", { cx: ph[0].toFixed(1), cy: (ph[1] - 1).toFixed(1), rx: r.toFixed(1), ry: (r * 0.38).toFixed(1), fill: "#16120f" }, svg);
+      sv("ellipse", { cx: ph[0].toFixed(1), cy: (ph[1] - 3).toFixed(1), rx: (r * 0.7).toFixed(1), ry: (r * 0.26).toFixed(1), fill: "#2a2522" }, svg);
+      sv("ellipse", { cx: ph[0].toFixed(1), cy: (ph[1] - 3.2).toFixed(1), rx: (r * 0.42).toFixed(1), ry: (r * 0.15).toFixed(1), fill: "none", stroke: "#e8e2d6", "stroke-width": 0.7 }, svg);
+      sv("path", { d: `M${(ph[0] - r * 0.9).toFixed(1)} ${(ph[1] - 5).toFixed(1)} Q${ph[0].toFixed(1)} ${(ph[1] - 9).toFixed(1)} ${(ph[0] + r * 0.9).toFixed(1)} ${(ph[1] - 5).toFixed(1)}`, stroke: "#16120f", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }, svg);
+      const pb = P(-1.78, 0.9, 3.3), bw = 0.26 * F / 3.3;
+      for (let k = 0; k < 7; k++) { const a = -80 + k * 27, cx = pb[0] + Math.sin(a * Math.PI / 180) * bw * 0.28, cy = pb[1] - bw * 0.7 - Math.abs(Math.cos(a * Math.PI / 180)) * bw * 0.3; sv("ellipse", { cx: cx.toFixed(1), cy: cy.toFixed(1), rx: (bw * 0.34).toFixed(1), ry: (bw * 0.14).toFixed(1), fill: k % 2 ? "#2f6a3a" : "#43804d", transform: `rotate(${a - 90 + (a < -30 ? -10 : a > 30 ? 10 : 0)} ${cx.toFixed(1)} ${cy.toFixed(1)})` }, svg); }
+      sv("path", { d: `M${(pb[0] - bw * 0.5).toFixed(1)} ${(pb[1] - bw * 0.8).toFixed(1)} H${(pb[0] + bw * 0.5).toFixed(1)} L${(pb[0] + bw * 0.42).toFixed(1)} ${pb[1].toFixed(1)} H${(pb[0] - bw * 0.42).toFixed(1)} Z`, fill: "#d98a2a", stroke: "#a8661a", "stroke-width": 0.7 }, svg);
+      [0.3, 0.55].forEach(t => line([pb[0] - bw * 0.46, pb[1] - bw * 0.8 * (1 - t)], [pb[0] + bw * 0.46, pb[1] - bw * 0.8 * (1 - t)], "#a8661a", 0.8, { opacity: 0.8 })); }
+
+    // the island: 1.2 m wide and 0.8 m deep, about a 1 m aisle in front of the worktop and off to the right of the middle. Red top with a darker lip and an overhang, dark mahogany
+    // panels, a bowl of fruit on top. Drawn last, so it stands in front of everything (and hides the lower part of the back cupboards, as it would).
+    { const IZ0 = 1.95, IZ1 = 1.15, IX0 = -0.3, IX1 = 0.9, BZ = 1.25;
+      const sh0 = P(0.3, 0, 1.7); sv("ellipse", { cx: sh0[0].toFixed(1), cy: (P(0.3, 0, BZ)[1] + 4).toFixed(1), rx: (0.6 * F / BZ).toFixed(1), ry: 9, fill: "#000", opacity: 0.3 }, svg);
+      front(IX0 + 0.1, IX1 - 0.1, 0, 0.86, BZ, "#4a1a16", { stroke: WOOD_D, "stroke-width": 0.9 });
+      front(IX0 + 0.1, IX1 - 0.1, 0, 0.07, BZ, "#2a0c0a", { opacity: 0.7 });
+      const mid = (IX0 + IX1) / 2;
+      [[IX0 + 0.16, mid - 0.03], [mid + 0.03, IX1 - 0.16]].forEach(([a, b]) => { front(a, b, 0.12, 0.74, BZ, "none", { stroke: WOOD_L, "stroke-width": 0.8, opacity: 0.65 }); front(a + 0.04, b - 0.04, 0.16, 0.7, BZ, "none", { stroke: "#2a0c0a", "stroke-width": 0.6, opacity: 0.6 }); });
+      top(IX0, IX1, 0.9, IZ0, IZ1, "url(#kt-top)");
+      front(IX0, IX1, 0.855, 0.9, IZ1, "#741e1e"); front(IX0 + 0.1, IX1 - 0.1, 0.8, 0.855, IZ1, "#1a0806", { opacity: 0.45 });
+      line(P(IX0 + 0.15, 0.9, 2.0), P(IX1 - 0.15, 0.9, 2.0), "#e07a7a", 1, { opacity: 0.35 });
+      const bp = P(0.3, 0.9, 1.55), bs = 0.95;
+      const bowl = sv("g", { transform: `translate(${bp[0].toFixed(1)} ${(bp[1] - 3).toFixed(1)}) scale(${bs}) translate(-190 -395)` }, svg);
+      sv("ellipse", { cx: 190, cy: 399, rx: 30, ry: 5, fill: "#000", opacity: 0.28 }, bowl);
+      [[176, 390, 6, "#e0862a"], [186, 387, 6.4, "#d6402e"], [199, 390, 6, "#e0a032"], [206, 392, 4.8, "#d6402e"]].forEach(([cx, cy, r, f]) => sv("circle", { cx, cy, r, fill: f }, bowl));
+      sv("path", { d: "M184 390 Q195 383 208 388 Q197 386 186 393 Z", fill: "#e8cf4a", stroke: "#b89a2a", "stroke-width": 0.6 }, bowl);
+      sv("path", { d: "M160 393 Q190 412 220 393 Q190 388 160 393 Z", fill: "#1f1a24", stroke: "#0e0a10", "stroke-width": 0.8 }, bowl);
+      sv("path", { d: "M166 395 Q190 401 214 395", stroke: "#4a4252", "stroke-width": 0.8, fill: "none", opacity: 0.7 }, bowl); }
+
+    // the evening: a faint blue wash after dark, a rose one at dusk, then a soft vignette over everything
+    if (tm.name === "night") rect(0, 0, W, H, "#0b1030", { opacity: 0.18, "pointer-events": "none" });
+    else if (tm.name === "dusk" || tm.name === "dawn") rect(0, 0, W, H, "#4a2030", { opacity: 0.07, "pointer-events": "none" });
+    rect(0, 0, W, H, "url(#kt-vig)", { "pointer-events": "none" });
+
+    // ── frame ──
+    field.appendChild(svg);
+    sub.textContent = "hawkins · the kitchen";
+    caption.textContent = "The Wheelers’ kitchen: dark cupboards, red counters, a checkered floor and a window over the sink.";
+    pill("▲ upstairs", "Back up the stairs to Mike’s room", () => { close(); openMikesRoom(); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
+    document.body.appendChild(sh.back);
+  }
+
+  return { openKitchen };
 };
 
 // ════════ softlanding.js ════════
