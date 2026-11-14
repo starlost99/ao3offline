@@ -11514,7 +11514,7 @@
   // The moments in the kitchen. Each moment: props lying on the island, then beats [who, text, patch?]. who: "w" Will, "m" Mike, "n" the caption only.
   // A patch changes the pose from that beat on: { a: Will's, b: Mike's } (mood, eyes, head [dx, dy, tilt], sx, blush, lean, L / R hands: a point [x, y] on the
   // picture, with a held thing as a third entry: "mug", "cookie", "plate", "glass", "pad"), plus hearts: n (a puff of hearts), jig: true (a happy wiggle).
-  // The island's top is at about y 250 to 295. Everything is gentle and innocent.
+  // More pose keys: dy (the whole figure down), Lb / Rb (that hand goes AROUND the other person's back: a point on the picture, drawn behind both bodies, so only the hand that\n  // comes out on the far side shows; used for hugs), and on the beat's patch itself: glide: ms (both figures slide to their new sx while keeping the old pose, then the new pose\n  // appears) or glideAfter: ms (the new pose appears at once, then they slide). Hugs: the one who is in front is drawn later, Mrs. Wheeler over Mike.\n  // The island's top is at about y 250 to 295. Everything is gentle and innocent.
   const KT_KEY = "ao3-kt-moment";
   const KT_BASE = { a: { sx: 0, head: [1, 1, 3], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: 0, head: [-1, 1, -3], mood: "smile", look: -1, L: "lap", R: "lap" }, c: { sx: 0, head: [1, 1, 3], mood: "smile", look: 1, L: "lap", R: "lap" } };
   const KT_MOMENTS = [
@@ -11580,6 +11580,7 @@
   // Mike and his mother (the split place "mom": Will is alone upstairs). Same beat format; who: "k" is Mrs. Wheeler, "m" Mike, "n" the caption only.
   // Only Mike's pose (patch.b) changes. Mrs. Wheeler is a rough placeholder figure for now (see drawKaren in openKitchen).
   const KT_MOM_KEY = "ao3-kt-mom";
+  const KT_OPEN_L = [146, 230], KT_OPEN_R = [207, 229];                                                          // Mrs. Wheeler's arms held open (she stands at the island's left, sx 0)
   const KT_MOM = [
     { name: "the test", props: [], intro: "Mrs. Wheeler at the island with a pile of mail, and Mike next to her, making himself small.", beats: [
       ["n", "Mrs. Wheeler sorts the mail with great calm. Mike has been standing very still for a while now, in the hope of being forgotten."],
@@ -11656,14 +11657,20 @@
       ["n", "Mike nods, very fast, because if he opens his mouth anything could come out.", { hearts: 2, b: { mood: "smile", look: 1, blush: true } }]] },
     { name: "come here", props: [], intro: "A mother with her arms already half open, and a son who knows exactly what is coming.", beats: [
       ["n", "Mike has gone quiet in the way that means something is on his mind. Mrs. Wheeler puts the mail down.", { c: { mood: "calm", look: 1 }, b: { mood: "calm", look: 0 } }],
-      ["k", "Come here.", { c: { mood: "smile", look: 1 } }],
+      ["k", "Come here.", { c: { mood: "smile", look: 1, L: KT_OPEN_L, R: KT_OPEN_R } }],
       ["m", "Mom, you’re doing the thing.", { b: { mood: "smirk", look: 1, blush: true } }],
-      ["k", "I am hugging my son. It’s allowed.", { hearts: 2, c: { eyes: "happy", mood: "smile", look: 1 } }],
-      ["n", "Mike lets himself be hugged for exactly as long as is dignified, and then a little longer.", { b: { eyes: "happy", mood: "smile", look: 1, blush: true } }],
-      ["m", "…Thanks for being so nice about Will. I thought you’d be, I don’t know.", { b: { eyes: "open", mood: "calm", look: 1, blush: true } }],
-      ["k", "Sweetheart. All I want is for you to be loved. And I can see it from across the room.", { c: { mood: "smile", look: 1 } }],
-      ["m", "Okay. Okay, stop, I’m going to go pink.", { b: { mood: "grin", look: 1, blush: true, head: [0, 2, -4] } }],
-      ["k", "You already are.", { hearts: 3, c: { mood: "grin", look: 1 } }]] }
+      ["n", "Mike holds out for exactly one more second. Then he steps in, and her arms close around him.", { glide: 1000, hearts: 2,
+        c: { sx: 9, dy: 0, lean: 3, head: [0, 1, 5], mood: "smile", eyes: "happy", look: 1, L: "lap", R: "lap", Rb: [248, 237] },
+        b: { sx: -26, dy: 0, lean: -3, head: [-1, 2, -5], mood: "smile", eyes: "happy", look: -1, blush: true, L: "lap", R: "lap", Lb: [163, 237] } }],
+      ["k", "I am hugging my son. It’s allowed.", { c: { eyes: "happy", mood: "smile", look: 1 } }],
+      ["n", "Mike lets himself be hugged for exactly as long as is dignified, and then a little longer.", { hearts: 2, b: { eyes: "happy", mood: "smile", look: 1, blush: true } }],
+      ["m", "…Thanks for being so nice about Will. I thought you’d be, I don’t know.", { b: { eyes: "open", mood: "calm", look: 1, blush: true, head: [-1, 2, -3] } }],
+      ["k", "Sweetheart. All I want is for you to be loved. And I can see it from across the room.", { c: { eyes: "open", mood: "smile", look: 0 } }],
+      ["m", "Okay. Okay, stop, I’m going to go pink.", { b: { eyes: "happy", mood: "grin", look: 1, blush: true, head: [-1, 2, -6] } }],
+      ["k", "You already are.", { hearts: 3, c: { eyes: "happy", mood: "grin", look: 1 } }],
+      ["n", "She lets go, eventually. Mike straightens a sweater that does not need straightening and pretends none of it happened.", { glideAfter: 900,
+        c: { sx: 0, dy: 0, lean: 0, head: [1, 1, 3], mood: "smile", eyes: "open", look: 1, L: "lap", R: "lap", Rb: null },
+        b: { sx: 0, dy: 0, lean: 0, head: [-1, 1, -3], mood: "smirk", eyes: "open", look: -1, blush: true, L: "lap", R: "lap", Lb: null } }]] }
   ];
 
   function openKitchen() {
@@ -11890,8 +11897,10 @@
     const propG = sv("g", {}, svg);                                                                                  // things lying on the island top
     const armL = sv("g", {}, svg);                                                                                   // arms and held things, in front of the island
     const { drawArm, torsoA, torsoB, torsoC, headA, headB, headC, headShift } = bsKit(sv, anim, FIG);
+    const wrapG = sv("g", {}, bodyL);                                                                               // arms that go around the other person's back: behind every body, so only the hand on the far side shows
     (mom ? ["a", "b", "c"] : ["a", "b"]).forEach(key => {
       const F = FIG[key], br = key === "a" ? 4.2 : key === "c" ? 5.2 : 4.8;
+      F.w1 = sv("g", {}, wrapG); F.wb = anim(sv("g", {}, F.w1), `animation:hkBreathe ${br}s ease-in-out infinite;`);
       F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL); F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
       F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`);
     });
@@ -11921,11 +11930,14 @@
       else if (kind === "glass") sv("rect", { x: x - 4.5, y: y - 9, width: 9, height: 11, rx: 1.5, fill: "#fff", opacity: 0.7, stroke: "#9a968a", "stroke-width": 0.6 }, g);
       else if (kind === "pad") { const Pp = sv("g", { transform: `translate(${x} ${y}) rotate(-8)` }, g); sv("rect", { x: -11, y: -16, width: 22, height: 16, rx: 1.2, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.6 }, Pp); sv("path", { d: "M-8 -12 h16 M-8 -8.5 h14 M-8 -5 h12", stroke: "#8a7a5a", "stroke-width": 0.7 }, Pp); sv("circle", { cx: 6, cy: -3, r: 2, fill: "#b8782a", opacity: 0.6 }, Pp); }
     };
+    const trans = (key, sx, dy) => {                                                                                 // where a figure stands (its bodies, its arms and its arms-around-the-back all move together)
+      const F = FIG[key], tr = `translate(${(F.cx + (sx || 0)).toFixed(1)} ${(F.sy + (dy || 0)).toFixed(1)}) scale(${F.s})`;
+      F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr); F.w1.setAttribute("transform", tr);
+    };
     const drawFig = (key, p) => {
       const F = FIG[key], isA = key === "a";
-      clear(F.b1); clear(F.b2);
-      const tr = `translate(${(F.cx + (p.sx || 0)).toFixed(1)} ${(F.sy + (p.dy || 0)).toFixed(1)}) scale(${F.s})`;
-      F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr);
+      clear(F.b1); clear(F.b2); clear(F.wb);
+      trans(key, p.sx, p.dy);
       const lean = p.lean || 0, la = lean * Math.PI / 180, lc = Math.cos(la), ls = Math.sin(la);
       const tg = sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1);
       const shoulder = left => { const S = left ? F.sl : F.sr, rx = S[0], ry = S[1] - 58; return [rx * lc - ry * ls, rx * ls + ry * lc + 58]; };
@@ -11938,32 +11950,69 @@
         const Hd = drawArm(F.b2, key, left, toLocal(t), 0, 0, 0, shoulder(left));
         if (t[2]) prop(F.b2, t[2], Hd[0], Hd[1]);
       };
-      hand(false, p.R || "lap"); hand(true, p.L || "lap");
+      const around = (left, t) => {                                                                                  // a hand round the other one's back: drawn behind both bodies, so only the hand on the far side shows.
+        const u0 = F.u, f0 = F.f; F.u = u0 * 1.9; F.f = f0 * 1.9;                                                    // The hidden part of the arm is longer than usual, because it has to reach across a whole back
+        try { drawArm(F.wb, key, left, toLocal(t), 0, 0, 0, shoulder(left)); } finally { F.u = u0; F.f = f0; }
+      };
+      if (p.Rb) around(false, p.Rb); else hand(false, p.R || "lap");
+      if (p.Lb) around(true, p.Lb); else hand(true, p.L || "lap");
       const hg = key === "c" ? sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1) : tg;   // Karen's head (and her curls) is drawn after her resting arms, so her hair falls in front of the sleeves, not behind them
       ({ a: headA, b: headB, c: headC })[key](hg, p);
     };
     // ── hearts, the speech bubble and the director ──
     const heartsG = sv("g", { "pointer-events": "none" }, svg);
     const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z", HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
-    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(213 + (Math.random() - 0.5) * 50).toFixed(1)} ${(150 + Math.random() * 20).toFixed(1)}) scale(${(1.2 + Math.random() * 0.7).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
+    const heartX = () => (mom && PS.b && PS.c) ? (FIG.b.cx + (PS.b.sx || 0) + FIG.c.cx + (PS.c.sx || 0)) / 2 : 213;       // the hearts rise between the two of them
+    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(heartX() + (Math.random() - 0.5) * 50).toFixed(1)} ${(150 + Math.random() * 20).toFixed(1)}) scale(${(1.2 + Math.random() * 0.7).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
     if (!document.getElementById("ao3-bf-css")) { const s = document.createElement("style"); s.id = "ao3-bf-css"; s.textContent = "@keyframes bfHeart{0%{opacity:0;transform:translate(0,0) scale(.4)}15%{opacity:.95}70%{opacity:.8}100%{opacity:0;transform:translate(var(--dx,0px),-92px) scale(1.15)}}@keyframes bfPop{0%{opacity:0;transform:translate(-50%,-100%) scale(.85)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}"; (document.head || document.documentElement).appendChild(s); }
     // ── the speech bubble: one at a time, above whoever is speaking ──
     const HEADX = { w: 177, m: 249 };
+    const headX = who => who === "m" ? FIG.b.cx + ((PS.b && PS.b.sx) || 0) : who === "k" ? FIG.c.cx + ((PS.c && PS.c.sx) || 0) : HEADX.w;
     let bub = null;
     const hideBubble = () => { if (bub) { bub.remove(); bub = null; } };
     const speak = (who, text) => {
       hideBubble();
-      const anchor = who !== "m" ? 33 : 67, headPct = HEADX[who === "m" ? "m" : "w"] / W * 100, cw = wrap.clientWidth || 360;
+      const hxu = headX(who), moved = who === "m" ? !!(PS.b && PS.b.sx) : who === "k" ? !!(PS.c && PS.c.sx) : false;
+      const headPct = hxu / W * 100, anchor = moved ? Math.max(30, Math.min(70, headPct)) : (who !== "m" ? 33 : 67), cw = wrap.clientWidth || 360;   // once they have stepped together the bubble sits right over whoever speaks
       bub = el("div", `position:absolute;left:${anchor}%;top:${(150 / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.35);pointer-events:none;z-index:5;`, text);
       const tail = el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((headPct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`);
       bub.appendChild(tail); ov.appendChild(bub);
     };
     const PS = { a: null, b: null, c: null };
-    const setPose = patch => {
-      ["a", "b", "c"].forEach(k => { if (patch[k] && PS[k]) PS[k] = Object.assign({}, PS[k], patch[k]); });
-      ["a", "b", "c"].forEach(k => { if (patch[k] && PS[k]) drawFig(k, PS[k]); });
+    let glide = null;                                                                                               // a slide in progress: { raf, done }
+    const finishGlide = () => { if (glide) { const g = glide; glide = null; cancelAnimationFrame(g.raf); g.done(); } };
+    const KEYS = ["a", "b", "c"];
+    const merge = (patch, noSx) => KEYS.forEach(k => { if (patch[k] && PS[k]) { const q = Object.assign({}, patch[k]); if (noSx) delete q.sx; PS[k] = Object.assign({}, PS[k], q); } });
+    const redraw = patch => KEYS.forEach(k => { if (patch[k] && PS[k]) drawFig(k, PS[k]); });
+    const extras = patch => {
       if (patch.jig && !reduce) ["a", "b"].forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-4px)" }, { transform: "translateY(0)" }, { transform: "translateY(-2px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
       if (patch.hearts) puff(patch.hearts);
+      moveHits();
+    };
+    const slide = (from, to, ms, done) => {                                                                         // the figures walk from one place to another (only their x changes)
+      const t0 = performance.now(), ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const g = glide = { raf: 0, done };
+      const frame = now => {
+        if (glide !== g) return;
+        if (!sh.back.isConnected) { glide = null; return; }
+        const t = Math.min(1, (now - t0) / ms);
+        Object.keys(from).forEach(k => trans(k, from[k] + (to[k] - from[k]) * ease(t), PS[k].dy));
+        if (t < 1) g.raf = requestAnimationFrame(frame); else { glide = null; done(); }
+      };
+      g.raf = requestAnimationFrame(frame);
+    };
+    const setPose = patch => {
+      finishGlide();
+      const ms = patch.glide || patch.glideAfter || 0, from = {}, to = {};
+      KEYS.forEach(k => { if (patch[k] && PS[k]) { from[k] = PS[k].sx || 0; to[k] = patch[k].sx != null ? patch[k].sx : from[k]; } });
+      if (ms && !reduce && Object.keys(from).some(k => from[k] !== to[k])) {
+        if (patch.glideAfter) {                                                                                     // new pose first (arms down, say), then they drift apart
+          merge(patch, true); redraw(patch);
+          slide(from, to, ms, () => { KEYS.forEach(k => { if (to[k] !== undefined && PS[k]) PS[k].sx = to[k]; }); redraw(patch); extras(patch); });
+        } else slide(from, to, ms, () => { merge(patch); redraw(patch); extras(patch); });                          // they step together with the old pose, then the arms close
+        return;
+      }
+      merge(patch); redraw(patch); extras(patch);
     };
     if (mom) FIG.a.g1.style.display = FIG.a.g2.style.display = "none";                                                // Will is upstairs
     const start = patch => { PS.a = Object.assign({}, KT_BASE.a); PS.b = Object.assign({}, KT_BASE.b); if (mom) PS.c = Object.assign({}, KT_BASE.c); drawProps(MOMS[mi].props || []); drawFig("a", PS.a); drawFig("b", PS.b); if (mom) drawFig("c", PS.c); if (patch) setPose(patch); };
@@ -11982,10 +12031,10 @@
     const AWAY_SAY = ["Nobody in the kitchen. The island is still warm where somebody leaned on it.", "An empty kitchen. A cookie plate sits there looking guilty.", "The fridge hums for nobody. A chair is pushed out, and its owner is somewhere else."];
     const NOBODY = asleep ? EMPTY_SAY : AWAY_SAY;
     let nEmpty = 0;
-    const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(MKEY, String(mi)); } catch {} say(MOMS[mi].intro || "In the kitchen: two people at the island, with the whole house to themselves."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const play = i => { if (empty) return; clearTimeout(tid); if (glide) { cancelAnimationFrame(glide.raf); glide = null; } mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(MKEY, String(mi)); } catch {} say(MOMS[mi].intro || "In the kitchen: two people at the island, with the whole house to themselves."); tid = setTimeout(step, reduce ? 300 : 1100); };
     const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } let n = Math.floor(Math.random() * (MOMS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
     const next = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } if (playing) step(); else another(); };
-    sh.onClose = () => { clearTimeout(tid); hideBubble(); amb.stop(); };
+    sh.onClose = () => { clearTimeout(tid); if (glide) { cancelAnimationFrame(glide.raf); glide = null; } hideBubble(); amb.stop(); };
     const amb = hkAmbience({ muffled: true, owner: sh.back });                                                       // the weather outside, heard through the walls (like Mike's room and the basement)
     amb.set(HK_WX[hkWxGet()][0], HK_TIMES[hkTimeGet()].name);
     sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
@@ -12012,8 +12061,9 @@
     hit(120, 300, 250, 150, "The island", tap("island"));
     hit(mom ? 150 : 150, mom ? 170 : 150, mom ? 52 : 60, mom ? 86 : 100, mom ? "Mrs. Wheeler" : "Will", next);
     hit(218, 142, 62, 108, "Mike", next);
-    const hitG = sv("g", {}, svg);
-    hits.slice().reverse().forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
+    const hitG = sv("g", {}, svg), hitRect = {};
+    const moveHits = () => { if (hitRect["Mike"]) hitRect["Mike"].setAttribute("x", 218 + ((PS.b && PS.b.sx) || 0)); if (mom && hitRect["Mrs. Wheeler"]) hitRect["Mrs. Wheeler"].setAttribute("x", 150 + ((PS.c && PS.c.sx) || 0)); };   // the two of them can step together
+    hits.slice().reverse().forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); hitRect[label] = r; r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
 
     // the evening: a faint blue wash after dark, a rose one at dusk, then a soft vignette over everything
     if (tm.name === "night") rect(0, 0, W, H, "#0b1030", { opacity: 0.18, "pointer-events": "none" });
