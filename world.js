@@ -11939,7 +11939,8 @@
         if (t[2]) prop(F.b2, t[2], Hd[0], Hd[1]);
       };
       hand(false, p.R || "lap"); hand(true, p.L || "lap");
-      ({ a: headA, b: headB, c: headC })[key](tg, p);
+      const hg = key === "c" ? sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1) : tg;   // Karen's head (and her curls) is drawn after her resting arms, so her hair falls in front of the sleeves, not behind them
+      ({ a: headA, b: headB, c: headC })[key](hg, p);
     };
     // ── hearts, the speech bubble and the director ──
     const heartsG = sv("g", { "pointer-events": "none" }, svg);
