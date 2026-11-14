@@ -11471,6 +11471,8 @@
       else say(asleep ? "The window wall in the dark. The fairy lights are the only thing awake." : "The window wall. Fairy lights, the desk, and a chair pushed out in a hurry.");
     };
     if (away) pill("✦ call them here", "Call Will and Mike up to the room", () => { if (leaving) return; leaving = true; hkWhere.call("room"); say("You shout down the stairs. Two sets of feet come thumping up…"); bfFade(sh, () => openMikesRoom()); });
+    if (!asleep && !solo) pill("\u{1F469} Mike & Karen", "Send Mike down to the kitchen with his mother (Will stays up here)", () => { if (leaving) return; leaving = true; hkWhere.call("mom"); say("Downstairs, a voice calls: “Michael! A word, please.”"); bfFade(sh, () => openKitchen()); });
+    if (solo) pill("✦ call Mike up", "Bring Mike back up to the room", () => { if (leaving) return; leaving = true; hkWhere.call("room"); say("You shout down the stairs. Mike comes thumping up…"); bfFade(sh, () => openMikesRoom()); });
     pill("▦ kitchen", "Down the stairs and into the kitchen", goKitchen);
     pill("\u{1FA9C} downstairs", "Down the stairs to the basement", goDown);
     pill("\u{1F3E1} outside", "Out the front door to the lawn", goOutside);
@@ -11963,6 +11965,8 @@
     pill("\u{1FA9C} basement", "Down the basement stairs", () => { if (leaving) return; leaving = true; close(); openBasement(); });
     pill("\u{1F3E1} outside", "Out through the garage to the front lawn", () => { if (leaving) return; leaving = true; close(); openWheelers(); });
     if (away) pill("✦ call them here", "Call Will and Mike into the kitchen", () => { if (leaving) return; leaving = true; hkWhere.call("kitchen"); say("You shout down the hall. Two sets of footsteps come thundering in…"); bfFade(sh, () => ctx.world.openKitchen()); });
+    if (!asleep && !mom) pill("\u{1F469} Mike & Karen", "Send Mike to the kitchen with his mother (Will waits upstairs)", () => { if (leaving) return; leaving = true; hkWhere.call("mom"); say("Downstairs, a voice calls: “Michael! A word, please.”"); bfFade(sh, () => ctx.world.openKitchen()); });
+    if (mom) pill("✦ call Will down", "Bring Will down to the kitchen so the two of them are together again", () => { if (leaving) return; leaving = true; hkWhere.call("kitchen"); say("Mike shouts up the stairs. Will comes down, fast…"); bfFade(sh, () => ctx.world.openKitchen()); });
     pill("\u{1F4AC} next", "Hear the next line sooner", next);
     pill("\u{1F501} another", "A different moment", another);
     hkSoundPill(pill, amb);
