@@ -8571,12 +8571,13 @@
   const world = ctx.world;
   const openWheelers = (...args) => world.openWheelers(...args);
   const openHollowbrook = (...args) => world.openHollowbrook(...args);
+  const openWillsHouse = (...args) => world.openWillsHouse(...args);
 
   // ── 🚌 HAWKINS, INDIANA ──
   // The bus stop in Hollowbrook (tap the shelter at the end of the Hawkins road, answer "board") takes you here:
   // a simplified night-time map of the town. Everything is drawn from scratch as flat shapes (no artwork reused).
-  // For now only ONE place can be entered, the Wheelers' house (top right): its front lawn, and through the basement
-  // window, the basement. The rest are labelled but closed, and tapping one just says so. The bus parked at the bottom
+  // Two places can be entered: the Wheelers' house (top right): its front lawn, and through the basement
+  // window, the basement; and Will's house, the Byers' (middle), from the front yard only. The rest are labelled but closed, and tapping one just says so. The bus parked at the bottom
   // takes you back to Hollowbrook.
   //  · openHawkins(arrive)  the map. arrive = true plays the short bus ride in first (tap to skip).
   //  · openWheelers()       the front of the house: Mike's lit window, the glowing basement window (the way in), weather and season.
@@ -8643,6 +8644,12 @@
     litRect(138, 262, 28, 4, 0.95, 16);                                   // the marquee
     building(222, 250, 54, 30, "#8a3a3a", "#2f2540", "Town hall", { pitch: 9 });
     building(148, 362, 48, 20, "#8a7a60", "#3a3040", "The Byers\u2019", { pitch: 9 });
+    // the Byers' house is open too (exterior only): a soft ring, and a tap walks up to Will's front yard
+    const byRing = anim(sv("ellipse", { cx: 172, cy: 373, rx: 36, ry: 21, fill: "none", stroke: "#ffd98a", "stroke-width": 1.2, "stroke-dasharray": "3 4" }, svg), "animation:hkPulse 2.8s ease-in-out infinite;");
+    byRing.setAttribute("pointer-events", "none");
+    const byHit = sv("rect", { x: 144, y: 346, width: 56, height: 48, fill: "transparent" }, svg);
+    byHit.style.cursor = "pointer"; byHit.setAttribute("role", "button"); byHit.setAttribute("aria-label", "Walk up to Will\u2019s house");
+    byHit.addEventListener("click", () => { close(); openWillsHouse(); });
     building(298, 384, 46, 22, "#5a4030", "#2a2236", "Hopper\u2019s cabin", { pitch: 8 });
     building(20, 416, 54, 58, "#4a5570", "#2a2236", "Hawkins Lab");
     building(196, 68, 40, 34, "#2a4a5a", "#23203a", "The Creels\u2019", { pitch: 12 });
@@ -8701,6 +8708,7 @@
     });
     [[110, 400], [250, 470]].forEach(([mx, my], i) => anim(sv("ellipse", { cx: mx, cy: my, rx: 60, ry: 10, fill: "#c8bee6", opacity: 0.1 }, svg), `animation:hkMist ${10 + i * 3}s ease-in-out infinite;`));
     const lit = sv("g", {}, svg);
+    lit.style.pointerEvents = "none";                    // glows never block a tap on a building
     lits.forEach(f => f(lit));
     const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
     const title = sv("text", { x: 180, y: 24, "text-anchor": "middle", "font-family": "Georgia,serif", "font-weight": 700, "font-size": 14, "letter-spacing": 3, fill: "#e6dcf5", opacity: 0.55 }, svg); title.textContent = "HAWKINS";
@@ -8723,6 +8731,7 @@
     paintWx();
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(false); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u{1F3E1} Wheelers\u2019", "Walk up to the Wheelers\u2019 house", () => { close(); openWheelers(); });
+    pill("\u{1F3E0} Will\u2019s", "Walk up to Will\u2019s house", () => { close(); openWillsHouse(); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
     applyTime(true);
     document.body.appendChild(sh.back);
@@ -11271,7 +11280,7 @@
     hit(200, 462, 70, 36, "The pile of clothes", () => say(asleep ? "A striped sweater and a dark knit, shed in a hurry, lie on top of the heap." : "A heap of clothes at the foot of the bed. Clean or dirty is anyone’s guess."));
     hit(120, 440, 150, 80, "The carpet", () => say("The carpet in the lamplight. The best spot in the room."));
     const emptyBed = () => say("The comforter is rumpled and empty. Nobody’s up there: they’re down on the carpet.");
-    hit(128, 244, 62, 82, "Will", () => stage === "carpet" ? emptyBed() : next()); hit(190, 240, 72, 86, "Mike", () => stage === "carpet" ? emptyBed() : solo ? say("Mike’s side of the bed is empty, with a dent in the pillow, and the sound of a lecture comes up through the floor.") : next());
+    hit(128, 244, 62, 82, "Will", () => stage === "carpet" ? emptyBed() : next()); hit(190, 240, 72, 86, "Mike", () => stage === "carpet" ? emptyBed() : next());
     hit(170, 324, 40, 30, "Their hands", () => { if (stage === "carpet") { emptyBed(); return; } if (asleep) { say("Still holding hands, even in their sleep."); return; } if (solo) { say("Will’s hand rests on the covers, next to the dent where somebody else usually is."); return; } if (away) { say(MR_AWAY_SAY[nAway++ % MR_AWAY_SAY.length]); return; } say(MR_SAY[nHand++ % MR_SAY.length]); puff(3); });
     cur = hitsB;
     hit(2, 452, 38, 52, "Turn to the bed wall", () => setView("A"));
@@ -12093,6 +12102,266 @@
   }
 
   return { openKitchen };
+};
+
+// ════════ willshouse.js ════════
+// willshouse.js — Will's house, the Byers' place, from the front yard (openWillsHouse).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["willshouse"] = function (ctx) {
+  'use strict';
+  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
+  const world = ctx.world;
+  const openHawkins = (...args) => world.openHawkins(...args);
+
+  // ── Will's house, from the front yard ──
+  // The EXTERIOR ONLY: nothing to tap, nobody in it, no sound. A small, tired one-storey clapboard house out at the edge of the woods:
+  // faded sage siding, a front gable with a round attic vent, a brick chimney, a picture window with one lamp on behind the curtains,
+  // a small dark window, a crooked screen door under a little porch roof with a bare porch bulb, a lean-to shed, a woodpile, a rusty
+  // mailbox, an old brown car, a leaning power pole with wires, tall pines all round. Time of day, weather and season come from the
+  // shared live environment (no buttons here); the only control is the map pill back to Hawkins.
+  // Built in the same flat-shape style as the Wheelers' lawn (wheelers.js). To add things later, put them in the matching block below.
+  function openWillsHouse() {
+    const sh = hkShell("ao3-willshouse", "\u{1F3E0} Will\u2019s house");
+    const { sv, rnd, anim } = sh.kit;
+    const { box, sub, field, caption, pill, close } = sh;
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const season = hkSeason();
+    const snowy = () => season === "winter" || HK_WX[wxI][0] === "snow";
+    let tI = hkTimeGet(), wxI = hkWxGet();
+    const W = 360, H = 540;
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const glow = sv("radialGradient", { id: "wl-glow" }, defs);
+    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.8" }, glow);
+    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
+    const lits = [];                                                                                         // everything that glows, drawn after the house
+    const SIDING = "#76866e", SIDING_LINE = "#5d6b58", TRIM = "#d4cfbc", ROOF = "#2f2828", WOOD = "#4a3b30";
+    const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
+
+    // a pine: a trunk and four stacked skirts, w wide at the bottom, h tall
+    const pine = (g, x, base, h, w, shade) => {
+      const dark = shade ? "#122019" : "#16281f", mid = shade ? "#1a2e24" : "#1d3528";
+      sv("rect", { x: x - 2.2, y: base - 10, width: 4.4, height: 10, fill: "#2a1f1a" }, g);
+      for (let i = 0; i < 4; i++) {
+        const t0 = base - 6 - i * h * 0.2, hw = w * (0.5 - i * 0.09), top = t0 - h * 0.34;
+        sv("polygon", { points: `${x - hw},${t0} ${x + hw},${t0} ${x},${top}`, fill: i % 2 ? mid : dark }, g);
+      }
+    };
+
+    // sky, stars, moon
+    const starG = sv("g", {}, svg);
+    for (let i = 0; i < 40; i++) sv("circle", { cx: (rnd("lsx" + i) * W).toFixed(1), cy: (rnd("lsy" + i) * 150).toFixed(1), r: (0.5 + rnd("lsr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("lso" + i) * 0.6).toFixed(2) }, starG);
+    const moonG = sv("g", {}, svg);
+    const moonDisc = sv("circle", { cx: 70, cy: 46, r: 14, fill: "#efe6bd" }, moonG);
+    sv("circle", { cx: 70, cy: 46, r: 30, fill: "url(#wl-glow)", opacity: 0.28 }, moonG);
+
+    // the woods behind: a ragged line of pines, then the ground
+    const backG = sv("g", {}, svg);
+    for (let i = 0; i < 17; i++) pine(backG, i * 22 + rnd("lbp" + i) * 12, 304 + rnd("lbq" + i) * 10, 96 + rnd("lbh" + i) * 48, 40 + rnd("lbw" + i) * 14, true);
+    sv("rect", { x: 0, y: 300, width: W, height: 180, fill: "#1d2a24" }, svg);
+    for (let i = 0; i < 14; i++) sv("ellipse", { cx: (rnd("ldx" + i) * W).toFixed(1), cy: (362 + rnd("ldy" + i) * 108).toFixed(1), rx: (14 + rnd("ldr" + i) * 26).toFixed(1), ry: (3 + rnd("lds" + i) * 4).toFixed(1), fill: "#2a2620", opacity: 0.7 }, svg);   // bare dirt in the yard
+    for (let i = 0; i < 70; i++) { const gx = 6 + rnd("lgx" + i) * (W - 12), gy = 352 + rnd("lgy" + i) * 124; sv("path", { d: `M${gx.toFixed(1)} ${gy.toFixed(1)} l-2 -6 M${gx.toFixed(1)} ${gy.toFixed(1)} l0 -8 M${gx.toFixed(1)} ${gy.toFixed(1)} l2 -6`, stroke: "#3f5f4a", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round", opacity: 0.55 }, svg); }   // tall, uncut grass
+    sv("rect", { x: 0, y: 478, width: W, height: 62, fill: "#25221e" }, svg);                                  // the dirt lane
+    for (let i = 0; i < 50; i++) sv("circle", { cx: (rnd("lpx" + i) * W).toFixed(1), cy: (482 + rnd("lpy" + i) * 54).toFixed(1), r: (0.8 + rnd("lpr" + i) * 0.9).toFixed(1), fill: "#3a352d", opacity: 0.8 }, svg);
+    sv("path", { d: "M0 500 H360 M0 522 H360", stroke: "#1a1814", "stroke-width": 5, opacity: 0.45 }, svg);   // wheel ruts
+    sv("polygon", { points: "222,357 268,357 282,478 168,478", fill: "#3a3329" }, svg);                          // the dirt path from the porch step
+    for (let i = 0; i < 18; i++) sv("circle", { cx: (200 + rnd("lqx" + i) * 70 - (1 - i / 18) * 8).toFixed(1), cy: (362 + rnd("lqy" + i) * 112).toFixed(1), r: 1, fill: "#4a4236", opacity: 0.8 }, svg);
+
+    // two big pines flanking the house, standing behind it
+    const sideG = sv("g", {}, svg);
+    pine(sideG, 10, 342, 210, 66, false);
+    pine(sideG, 328, 336, 180, 56, true);
+
+    // the power pole at the right edge, with wires over the house and away to the left
+    sv("rect", { x: 346, y: 124, width: 5, height: 330, fill: "#2a211c" }, svg);
+    sv("rect", { x: 334, y: 134, width: 28, height: 3, fill: "#2a211c" }, svg);
+    [338, 358].forEach(ix => sv("rect", { x: ix - 1, y: 130, width: 2.4, height: 4, fill: "#6a6a78" }, svg));
+    sv("path", { d: "M338 132 Q170 168 -6 154", stroke: "#15111c", "stroke-width": 0.9, fill: "none" }, svg);
+    sv("path", { d: "M358 132 Q344 196 316 238", stroke: "#15111c", "stroke-width": 0.9, fill: "none" }, svg);
+
+    // ── the house ──
+    sv("rect", { x: 262, y: 172, width: 16, height: 56, fill: "#6a3a30" }, svg);                                // the brick chimney, rising behind the gable
+    for (let yy = 178; yy < 226; yy += 6) sv("path", { d: `M262 ${yy} H278`, stroke: "#4a2620", "stroke-width": 0.8, opacity: 0.8 }, svg);
+    sv("rect", { x: 259, y: 168, width: 22, height: 5, fill: "#2f2828" }, svg);
+    sv("polygon", { points: "44,240 316,240 180,170", fill: SIDING }, svg);                                     // the front gable
+    for (let yy = 178; yy < 240; yy += 6) { const hw = (yy - 170) * 1.943; sv("path", { d: `M${(180 - hw + 4).toFixed(1)} ${yy} H${(180 + hw - 4).toFixed(1)}`, stroke: SIDING_LINE, "stroke-width": 0.9, opacity: 0.8 }, svg); }
+    sv("path", { d: "M40 243 L180 166 L320 243", stroke: ROOF, "stroke-width": 5, fill: "none", "stroke-linejoin": "round" }, svg);     // the roof edge
+    sv("path", { d: "M44 240 L180 170 L316 240", stroke: TRIM, "stroke-width": 2.6, fill: "none", "stroke-linejoin": "round" }, svg);     // the barge boards
+    sv("rect", { x: 44, y: 239, width: 272, height: 4, fill: TRIM }, svg);                                      // the fascia
+    sv("rect", { x: 56, y: 243, width: 248, height: 103, fill: SIDING }, svg);                                  // the front wall
+    for (let yy = 249; yy < 346; yy += 6) sv("path", { d: `M56 ${yy} H304`, stroke: SIDING_LINE, "stroke-width": 0.9, opacity: 0.8 }, svg);
+    sv("rect", { x: 54, y: 243, width: 4, height: 103, fill: TRIM }, svg);                                      // the corner boards
+    sv("rect", { x: 302, y: 243, width: 4, height: 103, fill: TRIM }, svg);
+    // the round attic vent in the gable
+    sv("circle", { cx: 180, cy: 211, r: 9.5, fill: TRIM }, svg);
+    sv("circle", { cx: 180, cy: 211, r: 7.4, fill: "#120d22" }, svg);
+    sv("path", { d: "M180 203.6 V218.4 M172.6 211 H187.4", stroke: TRIM, "stroke-width": 1, opacity: 0.9 }, svg);
+    lits.push(g => sv("circle", { cx: 180, cy: 211, r: 6.6, fill: "#f0b45a", opacity: 0.3 }, g));
+    // a drainpipe and a rusty stain under the vent
+    sv("rect", { x: 306, y: 250, width: 3, height: 96, fill: "#8a8a90", opacity: 0.8 }, svg);
+    sv("path", { d: "M176 222 q-1 8 0 16", stroke: "#6a4a30", "stroke-width": 2, opacity: 0.35, fill: "none" }, svg);
+
+    // the picture window: warm lamplight, curtains, a lamp
+    const PX = 76, PY = 270, PW = 62, PH = 48;
+    sv("rect", { x: PX - 3, y: PY - 3, width: PW + 6, height: PH + 6, fill: TRIM }, svg);
+    sv("rect", { x: PX, y: PY, width: PW, height: PH, fill: "#120d22" }, svg);
+    sv("rect", { x: PX - 5, y: PY + PH + 3, width: PW + 10, height: 4, fill: TRIM }, svg);                       // the sill
+    lits.push(g => {
+      sv("circle", { cx: PX + PW / 2, cy: PY + PH / 2, r: 50, fill: "url(#wl-glow)", opacity: 0.6 }, g);
+      anim(sv("rect", { x: PX, y: PY, width: PW, height: PH, fill: "#ffc86a" }, g), "animation:hkFlicker 4.2s ease-in-out infinite;");
+      sv("path", { d: `M${PX} ${PY} H${PX + 16} Q${PX + 11} ${PY + 24} ${PX + 14} ${PY + PH} H${PX} Z M${PX + PW} ${PY} H${PX + PW - 16} Q${PX + PW - 11} ${PY + 24} ${PX + PW - 14} ${PY + PH} H${PX + PW} Z`, fill: "#a8683a", opacity: 0.85 }, g);   // the curtains
+      sv("path", { d: `M${PX + 5} ${PY + 6} v36 M${PX + 10} ${PY + 3} v38 M${PX + PW - 5} ${PY + 6} v36 M${PX + PW - 10} ${PY + 3} v38`, stroke: "#7a4a26", "stroke-width": 0.8, opacity: 0.6 }, g);
+      sv("polygon", { points: `${PX + 38},${PY + 24} ${PX + 48},${PY + 24} ${PX + 46},${PY + 33} ${PX + 40},${PY + 33}`, fill: "#fff0c0" }, g);      // the lamp shade
+      sv("rect", { x: PX + 42, y: PY + 33, width: 2, height: 9, fill: "#7a5a3a" }, g);
+      sv("rect", { x: PX + 39, y: PY + 42, width: 8, height: 2, fill: "#7a5a3a" }, g);
+      sv("path", { d: `M${PX + 24} ${PY} V${PY + PH} M${PX + 38} ${PY} V${PY + PH} M${PX} ${PY + 20} H${PX + PW}`, stroke: TRIM, "stroke-width": 1.4 }, g);           // the muntins
+    });
+    // the small window beside it: dark, a curtain drawn
+    sv("rect", { x: 153, y: 273, width: 30, height: 40, fill: TRIM }, svg);
+    sv("rect", { x: 156, y: 276, width: 24, height: 34, fill: "#120d22" }, svg);
+    sv("rect", { x: 156, y: 276, width: 24, height: 34, fill: "#4a4263", opacity: 0.6 }, svg);
+    sv("path", { d: "M168 276 V310 M156 293 H180", stroke: TRIM, "stroke-width": 1.2 }, svg);
+    sv("rect", { x: 150, y: 313, width: 36, height: 4, fill: TRIM }, svg);
+
+    // the porch: roof, posts, deck, rail, step
+    sv("rect", { x: 190, y: 266, width: 114, height: 6, fill: "#000", opacity: 0.25 }, svg);                    // shadow under the porch roof
+    sv("rect", { x: 236, y: 282, width: 32, height: 64, fill: "#34302a", stroke: "#1f1c18", "stroke-width": 1 }, svg);          // the front door
+    sv("rect", { x: 241, y: 288, width: 10, height: 15, fill: "#1a1530" }, svg);
+    sv("rect", { x: 253, y: 288, width: 10, height: 15, fill: "#1a1530" }, svg);
+    sv("circle", { cx: 262, cy: 322, r: 1.5, fill: "#b8a070" }, svg);
+    sv("polygon", { points: "234,280 268,283 268,346 234,346", fill: "none", stroke: "#e6e0d2", "stroke-width": 1.8, "stroke-linejoin": "round" }, svg);   // the screen door, hanging a little crooked
+    sv("polygon", { points: "236,283 266,285 266,344 236,344", fill: "#8a8a8a", opacity: 0.18 }, svg);
+    for (let i = 1; i < 6; i++) sv("path", { d: `M236 ${283 + i * 10} L266 ${285 + i * 10}`, stroke: "#c8c4b8", "stroke-width": 0.5, opacity: 0.4 }, svg);
+    sv("path", { d: "M236 334 L266 336", stroke: "#e6e0d2", "stroke-width": 1.4 }, svg);
+    sv("rect", { x: 190, y: 262, width: 4, height: 84, fill: TRIM }, svg);
+    sv("rect", { x: 300, y: 262, width: 4, height: 84, fill: TRIM }, svg);
+    sv("polygon", { points: "180,267 314,267 304,251 190,251", fill: ROOF }, svg);                               // the porch roof
+    sv("path", { d: "M190 251 L304 251", stroke: "#4a3d3d", "stroke-width": 1.6 }, svg);
+    sv("rect", { x: 180, y: 266, width: 134, height: 2.6, fill: TRIM }, svg);
+    sv("rect", { x: 194, y: 326, width: 36, height: 3, fill: TRIM }, svg);                                       // the rail
+    sv("rect", { x: 270, y: 326, width: 30, height: 3, fill: TRIM }, svg);
+    for (let xx = 197; xx < 230; xx += 5) sv("path", { d: `M${xx} 329 V346`, stroke: TRIM, "stroke-width": 1, opacity: 0.85 }, svg);
+    for (let xx = 273; xx < 300; xx += 5) sv("path", { d: `M${xx} 329 V346`, stroke: TRIM, "stroke-width": 1, opacity: 0.85 }, svg);
+    sv("rect", { x: 184, y: 346, width: 128, height: 6, fill: WOOD }, svg);                                      // the deck
+    for (let xx = 196; xx < 312; xx += 14) sv("path", { d: `M${xx} 346 V352`, stroke: "#2a2018", "stroke-width": 0.8 }, svg);
+    sv("rect", { x: 226, y: 352, width: 44, height: 5, fill: "#3f3329" }, svg);                                  // the step
+    sv("rect", { x: 222, y: 357, width: 52, height: 4, fill: "#362c23" }, svg);
+    sv("path", { d: "M252 267 V273", stroke: "#1a1612", "stroke-width": 0.9 }, svg);                             // the bare porch bulb on its cord
+    sv("circle", { cx: 252, cy: 275.4, r: 2.8, fill: "#ffe9a8" }, svg);
+    const porch = sv("g", {}, svg);
+    lits.push(g => { porch.setAttribute("class", "hk-anim"); porch.style.cssText = "animation:hkFlicker 2.8s ease-in-out infinite;"; sv("circle", { cx: 252, cy: 280, r: 34, fill: "url(#wl-glow)" }, porch); g.appendChild(porch); });
+    // the house number
+    const num = sv("text", { x: 208, y: 296, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 7, "font-weight": 700, fill: "#c8c2ae" }, svg); num.textContent = "19";
+    // foundation, with two little vents
+    sv("rect", { x: 54, y: 346, width: 252, height: 8, fill: "#3a3a3c" }, svg);
+    [90, 150, 280].forEach(vx => { sv("rect", { x: vx, y: 348, width: 12, height: 4, fill: "#15151a" }, svg); sv("path", { d: `M${vx + 3} 348 V352 M${vx + 6} 348 V352 M${vx + 9} 348 V352`, stroke: "#4a4a50", "stroke-width": 0.6 }, svg); });
+
+    // the lean-to shed on the right
+    sv("rect", { x: 306, y: 296, width: 36, height: 50, fill: "#5a4c3c" }, svg);
+    for (let xx = 312; xx < 342; xx += 6) sv("path", { d: `M${xx} 296 V346`, stroke: "#3f352a", "stroke-width": 0.9, opacity: 0.8 }, svg);
+    sv("polygon", { points: "302,302 346,294 346,287 302,295", fill: ROOF }, svg);
+    sv("rect", { x: 317, y: 312, width: 17, height: 34, fill: "#3a2e24", stroke: "#241c15", "stroke-width": 1 }, svg);
+    sv("path", { d: "M317 312 L334 346 M334 312 L317 346", stroke: "#241c15", "stroke-width": 0.8, opacity: 0.7 }, svg);
+    sv("circle", { cx: 331, cy: 330, r: 1.3, fill: "#a89060" }, svg);
+    sv("rect", { x: 306, y: 346, width: 36, height: 5, fill: "#3a3a3c" }, svg);
+
+    // the woodpile against the left wall, under a bit of tin
+    sv("rect", { x: 22, y: 308, width: 34, height: 3, fill: "#6a6a72" }, svg);
+    sv("rect", { x: 24, y: 311, width: 3, height: 35, fill: "#3a2e24" }, svg);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) sv("circle", { cx: 32 + c * 7.4 + (r % 2) * 3, cy: 341 - r * 7.4, r: 3.5, fill: (r + c) % 2 ? "#7a5a3a" : "#8a6a44", stroke: "#4a3424", "stroke-width": 0.8 }, svg);
+
+    // bushes at the corners, a bucket and a coiled hose by the step
+    [[66, 351, 22, 9], [172, 352, 16, 6], [296, 352, 14, 5]].forEach(([bx, by, rx, ry]) => { sv("ellipse", { cx: bx, cy: by, rx, ry, fill: "#1b2f26" }, svg); sv("ellipse", { cx: bx - 3, cy: by - 2, rx: rx * 0.6, ry: ry * 0.6, fill: "#233b30" }, svg); });
+    sv("path", { d: "M182 346 l-2 12 h10 l-2 -12 Z", fill: "#6a6a72" }, svg);
+    sv("ellipse", { cx: 181, cy: 346, rx: 5, ry: 1.4, fill: "#2a2a30" }, svg);
+    sv("ellipse", { cx: 292, cy: 357, rx: 9, ry: 3.2, fill: "none", stroke: "#2f6a42", "stroke-width": 2.2 }, svg);
+
+    // the old brown car, nose to the right, parked in the yard
+    sv("ellipse", { cx: 62, cy: 464, rx: 54, ry: 5, fill: "#000", opacity: 0.35 }, svg);
+    sv("rect", { x: 14, y: 438, width: 96, height: 19, rx: 5, fill: "#6a4a38" }, svg);
+    sv("path", { d: "M32 439 L43 420 L84 420 L98 439 Z", fill: "#6a4a38" }, svg);
+    sv("path", { d: "M38 437 L46 424 L61 424 L61 437 Z M65 437 L65 424 L82 424 L92 437 Z", fill: "#171722" }, svg);
+    sv("path", { d: "M42 435 L48 426 M70 435 L70 426", stroke: "#3a3a4c", "stroke-width": 1, opacity: 0.8 }, svg);
+    sv("ellipse", { cx: 28, cy: 449, rx: 6, ry: 3, fill: "#4a2c20", opacity: 0.7 }, svg);                       // rust
+    sv("ellipse", { cx: 76, cy: 452, rx: 8, ry: 2.4, fill: "#4a2c20", opacity: 0.6 }, svg);
+    sv("rect", { x: 12, y: 452, width: 6, height: 4, fill: "#8a8a90" }, svg);
+    sv("rect", { x: 106, y: 442, width: 5, height: 5, rx: 1, fill: "#c9b88a", opacity: 0.8 }, svg);              // the headlight
+    sv("path", { d: "M14 446 H110", stroke: "#4a3426", "stroke-width": 0.8, opacity: 0.8 }, svg);
+    [34, 88].forEach(cx => { sv("circle", { cx, cy: 457, r: 8.5, fill: "#111016" }, svg); sv("circle", { cx, cy: 457, r: 4, fill: "#7a7a84" }, svg); sv("circle", { cx, cy: 457, r: 1.4, fill: "#2a2a30" }, svg); });
+
+    // the rusty mailbox on its leaning post
+    sv("rect", { x: 306, y: 440, width: 4, height: 32, fill: "#2a211c", transform: "rotate(4 308 472)" }, svg);
+    sv("rect", { x: 294, y: 422, width: 36, height: 17, rx: 7, fill: "#4a4036" }, svg);
+    sv("path", { d: "M298 425 Q312 422 326 425", stroke: "#6a5a4a", "stroke-width": 1, fill: "none" }, svg);
+    sv("ellipse", { cx: 320, cy: 432, rx: 3.6, ry: 2.4, fill: "#6a3a26", opacity: 0.7 }, svg);
+    sv("rect", { x: 327, y: 412, width: 2.2, height: 14, fill: "#c9482e" }, svg);                               // the flag, up
+    sv("polygon", { points: "329,412 337,414 329,418", fill: "#c9482e" }, svg);
+    const mt = sv("text", { x: 311, y: 433.6, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 7, "font-weight": 700, "letter-spacing": 0.6, fill: "#d4cfbc" }, svg); mt.textContent = "BYERS";
+
+    // a bare yard lamp-post is left out on purpose; the only light outside is the porch bulb. Leaves, in autumn
+    const seasonG = sv("g", {}, svg);
+    seasonG.style.pointerEvents = "none";
+    if (season === "autumn" || season === "halloween") for (let i = 0; i < 22; i++) sv("ellipse", { cx: (10 + rnd("llf" + i) * 340).toFixed(1), cy: (362 + rnd("llg" + i) * 112).toFixed(1), rx: 3, ry: 1.5, fill: ["#d9731f", "#b5541a", "#e0a032"][i % 3], opacity: 0.7 }, seasonG);
+    if (season === "summer" && !reduce) for (let i = 0; i < 14; i++) anim(sv("circle", { cx: (10 + rnd("lff" + i) * 340).toFixed(1), cy: (340 + rnd("lfg" + i) * 120).toFixed(1), r: 1.7, fill: "#e8ff8a" }, seasonG), `animation:hkFirefly ${(4 + rnd("lfd" + i) * 4).toFixed(1)}s ease-in-out -${(rnd("lfz" + i) * 5).toFixed(1)}s infinite;`);
+    // winter: coloured lights drooping along the porch roof
+    if (season === "winter") lits.push(g => {
+      const x0 = 184, x1 = 310, y0 = 269, d = 5, n = 11, cx = (x0 + x1) / 2, cy = y0 + d * 2;
+      sv("path", { d: `M${x0} ${y0} Q${cx} ${cy} ${x1} ${y0}`, stroke: "#2a1d1a", "stroke-width": 0.7, fill: "none" }, g);
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1), u = 1 - t, bx = (u * u * x0 + 2 * u * t * cx + t * t * x1).toFixed(1), by = (u * u * y0 + 2 * u * t * cy + t * t * y0 + 1).toFixed(1), col = BULB[i % BULB.length];
+        sv("circle", { cx: bx, cy: by, r: 3, fill: col, opacity: 0.22 }, g);
+        anim(sv("circle", { cx: bx, cy: by, r: 1.2, fill: col }, g), `animation:hkTwinkle ${(1.6 + rnd("ltw" + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("ltz" + i) * 3).toFixed(1)}s infinite;`);
+      }
+    });
+
+    const dynG = sv("g", {}, svg);                                                                             // snow cover: rebuilt when the weather changes
+    dynG.style.pointerEvents = "none";
+    const lit = sv("g", {}, svg);
+    lit.style.pointerEvents = "none";
+    lits.forEach(f => f(lit));
+    const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
+    field.style.background = "linear-gradient(to top,#25221e 0,#25221e 35%,transparent 35%)";                                                                       // the lane carries on below the picture on tall screens
+    field.appendChild(svg);
+
+    const paintSnow = () => {
+      dynG.textContent = "";
+      if (!snowy()) return;
+      sv("rect", { x: 0, y: 356, width: W, height: 122, fill: "#e8eefc", opacity: 0.2 }, dynG);
+      for (let i = 0; i < 16; i++) sv("ellipse", { cx: (rnd("lsa" + i) * W).toFixed(1), cy: (364 + rnd("lsb" + i) * 108).toFixed(1), rx: (20 + rnd("lsc" + i) * 22).toFixed(1), ry: (3.5 + rnd("lsd" + i) * 3).toFixed(1), fill: "#dfe8fb", opacity: 0.5 }, dynG);
+      sv("path", { d: "M44 238 L180 168 L316 238", stroke: "#eef2ff", "stroke-width": 3.4, fill: "none", "stroke-linejoin": "round", opacity: 0.95 }, dynG);   // the gable edges
+      sv("path", { d: "M190 250 H304", stroke: "#eef2ff", "stroke-width": 3.4, opacity: 0.95 }, dynG);                                                     // the porch roof
+      sv("rect", { x: 257, y: 164, width: 26, height: 4, rx: 2, fill: "#f4f7ff" }, dynG);                                                                  // the chimney
+      sv("path", { d: "M302 292 L346 285", stroke: "#eef2ff", "stroke-width": 3, opacity: 0.9 }, dynG);                                                   // the shed
+      sv("rect", { x: 22, y: 305, width: 34, height: 3.4, rx: 1.7, fill: "#f4f7ff" }, dynG);                                                              // the woodpile's tin
+      sv("path", { d: "M34 420 L44 418 L84 418 L98 420", stroke: "#f4f7ff", "stroke-width": 3, opacity: 0.9, "stroke-linecap": "round" }, dynG);         // the car roof
+      sv("ellipse", { cx: 312, cy: 421, rx: 14, ry: 2.6, fill: "#f4f7ff" }, dynG);                                                                       // the mailbox
+      for (let i = 0; i < 9; i++) { const t = i / 8; sv("ellipse", { cx: (176 + t * 70 + (i % 2 ? 3 : -3)).toFixed(1), cy: (476 - t * 118).toFixed(1), rx: 2, ry: 3.2, fill: "#a7b4d6", opacity: 0.6 }, dynG); }   // footprints to the step
+    };
+
+    const applyTime = () => {
+      const t = HK_TIMES[tI], kind = HK_WX[wxI][0];
+      const over = kind === "clear" ? 1 : kind === "fog" ? 0.4 : 0.2;                                          // cloud hides the stars and dims the moon
+      box.style.background = t.sky;
+      starG.setAttribute("opacity", t.stars * over);
+      moonDisc.setAttribute("fill", t.orb);
+      moonG.setAttribute("transform", `translate(0 ${t.dy})`);
+      moonG.setAttribute("opacity", over < 1 ? 0.3 + over * 0.5 : 1);
+      lit.setAttribute("opacity", Math.min(1, t.lit + (kind === "snow" ? 0.12 : 0)));
+      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.name === "day" ? 0.16 : t.tint[1]);
+      sub.textContent = "hawkins \u00B7 " + t.name + " \u00B7 " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
+      paintSnow();
+      hkWxOverlay(box, kind, reduce);
+    };
+    caption.textContent = "The Byers\u2019 house. Small, tired and a long way from the road, with one lamp on in the front window.";
+    pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
+    hkEnvWatch(box, (t, w) => { if (t !== tI || w !== wxI) { tI = t; wxI = w; applyTime(); } });
+    applyTime();
+    document.body.appendChild(sh.back);
+  }
+
+  return { openWillsHouse };
 };
 
 // ════════ softlanding.js ════════
