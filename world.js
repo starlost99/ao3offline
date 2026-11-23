@@ -882,7 +882,7 @@
       const [E, Hd] = solveArm(S, T, F.u, F.f, left);
       const w = isA ? 10.6 : isC ? 10.4 : 11.8, seg = (p, q, col, ww, cap) => sv("path", { d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke: col, "stroke-width": ww, "stroke-linecap": cap || "round", fill: "none" }, g);
       if (isC) { seg(mixPt(S, E, 0.6), E, "#1b1320", w - 3).setAttribute("opacity", 0.18); seg(E, Hd, "#1b1320", w - 3.4).setAttribute("opacity", 0.18); }   // Karen: a faint shadow under the bare forearm only
-      else { seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35); }
+      else if (!(pj && !isA)) { seg(S, E, "#1b1320", w + 1.6).setAttribute("opacity", 0.35); seg(E, Hd, "#1b1320", w - 0.2).setAttribute("opacity", 0.35); }   // Mike in his sleep tee gets no halo: it showed as a dark outline round the sleeve and forearm
       if (isC) {                                                                                      // Karen: a short striped sleeve with a turned-up cuff, then a bare forearm
         const M = mixPt(S, E, 0.6), ddx = M[0] - S[0], ddy = M[1] - S[1], dl = Math.hypot(ddx, ddy) || 1, ux = ddx / dl, uy = ddy / dl, nx = -uy, ny = ux, hw = w / 2;
         const P = (a, b) => `${(a).toFixed(1)} ${(b).toFixed(1)}`, T0 = [S[0] - ux * 4.5, S[1] - uy * 4.5];
@@ -1128,7 +1128,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["graveyard"] = function (ctx) {
   'use strict';
-  const { nvEnsureCss, daysSince, fmtWords, setManualAbandoned, renderDashboard, gyStore } = ctx.core;
+  const { nvEnsureCss, daysSince, fmtWords, setManualAbandoned, renderDashboard, gyStore, getTracked, getRemoved, saveTracked } = ctx.core;
   const { gyHash } = ctx.shared;
   const {
     abandonedFics, gyRec, gyEpitaph, gySetEpitaph, gyAgo, gyLeft, gyLight, gyTotal, GY_FLOWERS, gyAddFlower
@@ -1296,7 +1296,7 @@
         ["Born", born || "—"],
         ["Last breath", f.lastUpdate ? `${f.lastUpdate}${quiet != null ? ` (${quiet}d ago)` : ""}` : "—"],
         ["Silent for", quiet != null ? gyAgo(quiet) : "—"],
-        ["Cause", f.manualAbandoned === true ? "Laid to rest by you" : `Silence${quiet != null ? ` (${quiet} days)` : ""}`],
+        ["Cause", f.goneFromAO3 ? "Gone from AO3" : f.manualAbandoned === true ? "Laid to rest by you" : `Silence${quiet != null ? ` (${quiet} days)` : ""}`],
         ["Lived", lived != null ? `${lived} days` : "—"],
         ["Chapters", `${posted}/${plannedRaw}`],
         ["You read to", readTo ? `ch ${readTo}` : "—"],
@@ -1411,6 +1411,7 @@
       visitBtn.type = "button";
       visitBtn.title = "Open the fic on AO3";
       visitBtn.onclick = () => { location.href = `https://archiveofourown.org/works/${f.workId}`; };
+      if (String(f.workId).startsWith("gone-")) visitBtn.style.display = "none"; // no AO3 page to visit
       const raiseBtn = el("button", btnCss, "↺ Resurrect");
       raiseBtn.type = "button";
       raiseBtn.title = "Move it back to your active fics";
@@ -1433,6 +1434,105 @@
       ov.addEventListener("click", e => { if (e.target === ov) closeE(); });
       document.addEventListener("keydown", onKeyE, true);
       document.body.appendChild(ov);
+    };
+
+    // ── bury a fic you never tracked (it's already gone from AO3) ──
+    // Adds it to the tracker as a manually-abandoned fic flagged goneFromAO3, so it gets a tombstone
+    // and counts in the stats like any other, and the app never tries to fetch it from AO3.
+    const openBury = () => {
+      const prev = document.getElementById("ao3-bury");
+      if (prev) prev.remove();
+      const ov = el("div", "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000003;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;");
+      ov.id = "ao3-bury";
+      const bx = el("div", "position:relative;background:linear-gradient(180deg,#26203d,#171128);color:#e9e4f5;border:1px solid rgba(190,170,255,0.35);border-radius:14px;width:100%;max-width:420px;max-height:90%;overflow-y:auto;overflow-x:hidden;padding:16px 16px 14px;box-sizing:border-box;");
+      ov.appendChild(bx);
+      bx.appendChild(el("div", "font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(217,208,245,0.6);text-align:center;", "🪦 Bury a fic"));
+      bx.appendChild(el("div", "font-size:11.5px;color:rgba(217,208,245,0.6);text-align:center;margin:4px 0 12px;line-height:1.4;", "For a fic that's already gone from AO3 and was never tracked. Only the title is needed."));
+      const inCss = "width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:7px 10px;border-radius:8px;border:1px solid rgba(190,170,255,0.3);background:rgba(0,0,0,0.25);color:#e9e4f5;outline:none;color-scheme:dark;";
+      const field = (label, type, ph) => {
+        const w = el("div", "flex:1;min-width:0;margin-bottom:9px;");
+        w.appendChild(el("div", "font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:rgba(217,208,245,0.55);margin-bottom:3px;", label));
+        const i = el("input", inCss);
+        i.type = type; if (ph) i.placeholder = ph;
+        if (type === "number") { i.min = "0"; i.inputMode = "numeric"; }
+        w.appendChild(i);
+        return { w, i };
+      };
+      const row = (...fs) => { const r = el("div", "display:flex;gap:8px;"); fs.forEach(f => r.appendChild(f.w)); return r; };
+      const fTitle = field("Title", "text", "Fic title");
+      const fLink  = field("AO3 link or work ID (optional)", "text", "archiveofourown.org/works/…");
+      const fRead  = field("You read to ch.", "number", "—");
+      const fHad   = field("It had ch.", "number", "—");
+      const fWords = field("Words", "number", "—");
+      const fPost  = field("First posted", "date");
+      const fLast  = field("Last update", "date");
+      bx.appendChild(fTitle.w); bx.appendChild(fLink.w);
+      bx.appendChild(row(fRead, fHad, fWords));
+      bx.appendChild(row(fPost, fLast));
+      const msg = el("div", "min-height:16px;font-size:11.5px;color:#f2b8c6;margin:0 0 8px;line-height:1.35;");
+      bx.appendChild(msg);
+      const btnCss = "cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;border-radius:8px;padding:7px 12px;border:1px solid rgba(190,170,255,0.35);background:rgba(255,255,255,0.07);color:#e9e4f5;";
+      const btns = el("div", "display:flex;justify-content:center;gap:8px;");
+      const okBtn = el("button", btnCss, "Bury it"); okBtn.type = "button";
+      const noBtn = el("button", btnCss + "opacity:.8;", "Cancel"); noBtn.type = "button";
+      btns.appendChild(okBtn); btns.appendChild(noBtn);
+      bx.appendChild(btns);
+      const closeB = () => { ov.remove(); document.removeEventListener("keydown", onKeyB, true); };
+      const onKeyB = e => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); closeB(); } };
+      noBtn.onclick = closeB;
+      ov.addEventListener("click", e => { if (e.target === ov) closeB(); });
+      document.addEventListener("keydown", onKeyB, true);
+      okBtn.onclick = () => {
+        const title = fTitle.i.value.trim();
+        if (!title) { msg.textContent = "Give it a title first."; fTitle.i.focus(); return; }
+        const rawLink = fLink.i.value.trim();
+        const m = rawLink.match(/works\/(\d+)/) || rawLink.match(/^\s*(\d{3,})\s*$/);
+        const wid = m ? m[1] : null;
+        if (rawLink && !wid) { msg.textContent = "I couldn't find a work ID in that. Paste the full AO3 link, just the number, or leave it empty."; return; }
+        const num = v => { const n = parseInt(v.i.value, 10); return Number.isFinite(n) && n >= 0 ? n : null; };
+        const read = num(fRead), had = num(fHad), words = num(fWords);
+        const posted = fPost.i.value || null, last = fLast.i.value || null;
+        if (posted && last && posted > last) { msg.textContent = "First posted can't be after the last update."; return; }
+        if (read && had && read > had) { msg.textContent = "You can't have read past the last chapter."; return; }
+        const list = getTracked();
+        if (wid && (typeof getRemoved === "function" ? getRemoved() : []).some(x => String(x.workId) === wid)) {
+          msg.textContent = "That fic is in your Removed list. Restore it from the Fic Tracker instead."; return;
+        }
+        const existing = wid ? list.find(x => String(x.workId) === wid) : null;
+        if (existing) {
+          if (existing.finished) { msg.textContent = "That fic is already tracked as Finished."; return; }
+          existing.manualAbandoned = true;
+          existing.goneFromAO3 = true;
+          saveTracked(list);
+        } else {
+          const id = wid || ("gone-" + Date.now().toString(36));
+          const total = had || read || 1;
+          const entry = {
+            workId: id, title, url: wid ? `https://archiveofourown.org/works/${wid}` : "", words,
+            lastUpdate: last, caughtUp: false, caughtUpAtTotal: null,
+            currentChapter: read || null, totalChapters: total, chaptersLabel: `${total}/?`,
+            finished: false, completeOnAO3: false, aka: "",
+            trackedAt: new Date().toISOString(), fandoms: [],
+            manualAbandoned: true, goneFromAO3: true,
+          };
+          if (posted) entry.chapterDates = [posted];
+          list.push(entry);
+          saveTracked(list);
+        }
+        closeB();
+        try { renderDashboard(); } catch {}
+        openGraveyard();
+      };
+      document.body.appendChild(ov);
+      setTimeout(() => { try { fTitle.i.focus(); } catch {} }, 50);
+    };
+    const mkBuryBtn = () => {
+      if (typeof saveTracked !== "function") return el("span", "");   // the host app has not handed saveTracked over
+      const b = el("button", "cursor:pointer;font:inherit;font-size:10px;border-radius:999px;padding:2px 8px;border:none;background:none;color:rgba(217,208,245,0.4);white-space:nowrap;", "+ bury a fic");
+      b.type = "button";
+      b.title = "Add a fic that's already gone from AO3 and was never tracked";
+      b.onclick = openBury;
+      return b;
     };
 
     // ── tombstones ──
@@ -1557,6 +1657,7 @@
     chipsRow.appendChild(allBtn);
     chipsRow.appendChild(silenceBtn);
     chipsRow.appendChild(statsBtn);
+    chipsRow.appendChild(mkBuryBtn());
     const stats = el("div", "display:none;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin:0 auto 14px;max-width:560px;");
     statsBtn.onclick = () => {
       const on = stats.style.display === "none";
@@ -1611,6 +1712,7 @@
       empty.appendChild(el("div", "font-size:40px;", "🌱"));
       empty.appendChild(el("div", "font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#d9d0f5;margin-top:8px;", "No fallen fics. Not yet."));
       empty.appendChild(el("div", "font-size:12px;color:rgba(217,208,245,0.6);margin-top:4px;", "Everything you track is either still going or finished."));
+      { const bw = el("div", "margin-top:14px;"); bw.appendChild(mkBuryBtn()); empty.appendChild(bw); }
       body.appendChild(empty);
     } else {
       const words = fics.reduce((a, f) => a + (f.words || 0), 0);
@@ -10616,6 +10718,47 @@
     "It has been a very long day, and neither of them has anything left to say about it.",
     "Tonight there are no jokes. Mike just pulls the comforter over Will’s shoulder and leaves his hand there."];
   const MR_GN_LATE = "It is far too late to be awake, and they both know it. Everything comes out in whispers.";
+  // ── today's log shapes the tone (tone only: nobody names a symptom, a mood or the log itself). Three extra pools: rough (a low mood or a heavy mind), body (a hurting or worn-out body, or a sick day) and good (an easy day). ──
+  MR_GN.rough = [
+    [["m", "Hey. Nothing needs fixing tonight."], ["w", "Okay."], ["m", "Just breathe with me. I’ve got you."], ["w", "…Goodnight, Mike."]],
+    [["w", "Can you just stay close?"], ["m", "Not going anywhere. Not even a little."], ["w", "Okay. Goodnight."], ["m", "Goodnight, Will. Tomorrow’s allowed to be easier."]],
+    [["m", "You made it to the end of it. That counts."], ["w", "It doesn’t feel like it counts."], ["m", "It does. Sleep. I’ll keep the lamp-click for you."]],
+    [["w", "My head’s too loud."], ["m", "Then I’ll be quiet with you. Tell the loud part goodnight."], ["w", "…Goodnight, loud part."], ["m", "Goodnight, Will."]]];
+  MR_GN.body = [
+    [["w", "I’m so tired. Everything is heavy."], ["m", "Then let the bed hold it. Come here."], ["w", "Mm. Goodnight, Mike."]],
+    [["m", "Extra pillow. Don’t argue."], ["w", "I wasn’t going to."], ["m", "Good. Goodnight, Will."]],
+    [["w", "Today was a lot for one body."], ["m", "Then it gets to stop now. Goodnight."], ["w", "Goodnight…"]],
+    [["m", "Cold hands again?"], ["w", "Always."], ["m", "Give them here. Warm in about a minute. Goodnight, Will."]]];
+  MR_GN.good = [
+    [["w", "That was actually a good day."], ["m", "Yeah. Let’s remember it a little."], ["w", "Goodnight, Mike."], ["m", "Goodnight, Will."]],
+    [["m", "I’m weirdly not tired of today."], ["w", "Same. That’s new."], ["m", "Don’t jinx it. Goodnight."]],
+    [["w", "Easy day."], ["m", "The best kind."], ["w", "Goodnight, Mike."]]];
+  const MR_FEEL_TAIL = {
+    rough: "Nobody asks anything of anybody. The room just gets quiet and warm and stays that way.",
+    body: "The comforter is pulled up to the chin, and everything hurts a little less under it.",
+    good: "A light, ordinary kind of night. The room hums along like nothing is wrong with the world."
+  };
+  const MR_FEEL_LEAD = {
+    rough: "Tonight is soft and slow. Nobody is trying to be anything.",
+    body: "Tonight is for lying very still."
+  };
+  // today's entry from the dashboard's mood log ({ date, mood 1-5, energy 1-5, sick, symptoms: [...] }): returns "rough", "body", "good" or null
+  const MR_HEAVY_MIND = ["PMDD", "Hopelessness", "Sad", "Self critical", "Anxiety", "Overthinking", "Irritable", "Emotional", "Taking it personally", "Over it"];
+  const MR_HURTING = ["Cramps", "Pre-period cramps", "Ovulation pain", "Spasms", "Headache", "Muscle aches", "PMS flu", "Fatigue", "Tender breasts", "Bloating"];
+  const MR_LIGHT = ["Calm", "Confident", "Feeling okay", "Sociable"];
+  function mrFeel() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(core.MOOD_KEY || "ao3_mood_log_v1") || "[]");
+      const e = Array.isArray(raw) ? raw.find(x => x && x.date === mrDay(new Date())) : null;
+      if (!e) return null;
+      const sy = Array.isArray(e.symptoms) ? e.symptoms : [], mood = Number(e.mood) || 0, energy = Number(e.energy) || 0;
+      const mind = sy.filter(x => MR_HEAVY_MIND.includes(x)).length, ache = sy.filter(x => MR_HURTING.includes(x)).length, light = sy.filter(x => MR_LIGHT.includes(x)).length;
+      if ((mood && mood <= 2) || mind >= 2 || sy.includes("PMDD") || sy.includes("Hopelessness")) return "rough";
+      if (e.sick === true || ache >= 2 || (energy && energy <= 2) || (ache >= 1 && mind >= 1)) return "body";
+      if ((mood >= 4 && mind === 0 && ache === 0) || (light >= 1 && mind === 0 && ache === 0 && mood >= 3)) return "good";
+    } catch {}
+    return null;
+  }
   const MR_GN_KEY = "ao3-mr-goodnight";
   const mrPad = n => (n < 10 ? "0" : "") + n;
   const mrDay = d => d.getFullYear() + "-" + mrPad(d.getMonth() + 1) + "-" + mrPad(d.getDate());
@@ -10636,10 +10779,10 @@
   // tonight's goodnight: { lines: [[who, text]...], lead: caption before it or "", tail: caption after it, soft: bool }
   function mrGoodnight(wxKind) {
     const now = new Date(), day = mrDay(now), t = mrToday(), season = hkSeason();
-    const late = now.getHours() < 5, soft = t.chapters >= 6 || late;                                                 // a long day: a lot of chapters, or it is past midnight
+    const feel = mrFeel(), late = now.getHours() < 5, soft = t.chapters >= 6 || late || feel === "rough" || feel === "body";                                                 // a long day: a lot of chapters, or it is past midnight
     let rec = {}; try { rec = JSON.parse(localStorage.getItem(MR_GN_KEY) || "{}") || {}; } catch {}
     const prev = rec.day === day ? rec.prev : rec.id;                                                                  // never the same as the day before
-    let pool = t.done.length ? "done" : soft ? "soft" : ["rain", "storm", "fog", "snow", "leaves", "clear"].includes(wxKind) && gyHash(day + "cat") % 10 < 4 ? wxKind : gyHash(day + "cat") % 10 < 7 && MR_GN[season] ? season : "plain";
+    let pool = feel === "rough" || feel === "body" ? feel : t.done.length ? "done" : feel === "good" ? "good" : soft ? "soft" : ["rain", "storm", "fog", "snow", "leaves", "clear"].includes(wxKind) && gyHash(day + "cat") % 10 < 4 ? wxKind : gyHash(day + "cat") % 10 < 7 && MR_GN[season] ? season : "plain";
     if (!MR_GN[pool]) pool = "plain";
     let i = gyHash(day + pool) % MR_GN[pool].length;
     if (pool + ":" + i === prev) i = (i + 1) % MR_GN[pool].length;
@@ -10648,8 +10791,8 @@
     const ficTail = () => { const n = t.done.length, ttl = t.done[0].length > 44 ? t.done[0].slice(0, 43) + "…" : t.done[0]; return (n > 1 ? n + " stories ended today" : t.done[0] === "a story" ? "A story ended today" : "“" + ttl + "” ended today") + ", and the room feels like the last page of something: finished, and warm."; };
     return {
       lines: MR_GN[pool][i], soft,
-      lead: soft ? (late ? MR_GN_LATE : MR_GN_SOFT[gyHash(day + "lead") % MR_GN_SOFT.length]) : "",
-      tail: t.done.length ? ficTail() : (wxKind !== "clear" && MR_GN_TAIL[wxKind]) || MR_GN_TAIL[season] || MR_GN_TAIL.clear
+      lead: soft ? (feel && MR_FEEL_LEAD[feel] ? MR_FEEL_LEAD[feel] : late ? MR_GN_LATE : MR_GN_SOFT[gyHash(day + "lead") % MR_GN_SOFT.length]) : "",
+      tail: feel && MR_FEEL_TAIL[feel] && !t.done.length ? MR_FEEL_TAIL[feel] : t.done.length ? ficTail() : (wxKind !== "clear" && MR_GN_TAIL[wxKind]) || MR_GN_TAIL[season] || MR_GN_TAIL.clear
     };
   }
   const MR_AWAY_SAY = ["The comforter is rumpled and the bed is empty. They’re somewhere else in the house.", "Nobody here. A comic lies open on the pillow, still warm.", "The room is quiet. Wherever they went, they left the lamp on."];
@@ -11251,7 +11394,7 @@
       ], () => { tid = setTimeout(another, reduce ? 400 : 1600); });
     };
     const tapLamp = () => {
-      if (scene) { say("Not yet. They’re still settling in."); return; }
+      if (scene) { advanceScene(); return; }
       if (asleep) { wakeUp(); return; }
       if (solo && nLamp === 1) { nLamp = 0; setLamp("base"); say("The lamp clicks back to amber. Will looks at the empty half of the bed. Not without Mike."); return; }
       if (away && nLamp === 1) { nLamp = 0; setLamp("base"); say("The lamp clicks back to amber. Nobody here to put to bed."); return; }
@@ -11338,6 +11481,7 @@
       const headPct = (C ? FIGC[k].cx + (PC[k].sx || 0) + PC[k].head[0] * 0.45 * FIGC[k].s : HEADX[who]) / W * 100;
       bub = el("div", `position:absolute;left:${anchor}%;top:${((C ? 398 : 238) / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.45);${reduce ? "" : "animation:bfPop .22s ease-out both;"}`, text);
       const tail = el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((headPct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`);
+      bub.style.pointerEvents = "auto"; bub.style.cursor = "pointer"; bub.addEventListener("click", () => { if (scene) advanceScene(); else next(); });   // tap the bubble for the next line
       bub.appendChild(tail); ov.appendChild(bub);
     };
     let voice = null;                                                                                                   // Karen's call from downstairs, while it plays (see hkVoice)
@@ -11380,23 +11524,30 @@
     const play = i => { if (asleep || away || scene) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); const M = MOMS[mi]; start(M.stage); try { localStorage.setItem(MKEY, String(mi)); } catch {} say(M.intro || "Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
     const another = () => { let n = Math.floor(Math.random() * (MOMS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
     const next = () => {
-      if (leaving || view !== "A" || scene) return;
+      if (leaving || view !== "A") return;
+      if (scene) { advanceScene(); return; }
       if (asleep) { say(MR_ASLEEP_SAY[nAsleep++ % MR_ASLEEP_SAY.length]); puff(1); return; }
       if (away) { say(MR_AWAY_SAY[nAway++ % MR_AWAY_SAY.length]); return; }
       if (playing) step(); else another();
     };
     // plays a list of beats, like a moment, but locked: nothing else runs until it ends (the lamp scenes use it)
+    let sceneGo = null, skipping = false, skipBtn = null;
+    const showSkip = on => { if (skipBtn) skipBtn.style.display = on ? "" : "none"; };
+    const advanceScene = () => { if (sceneGo && !skipping) sceneGo(); };
+    const skipScene = () => { if (!sceneGo || skipping) return; skipping = true; hideBubble(); sceneGo(); };
     const runBeats = (list, done, fast) => {                                                                          // fast: shorter read times (the bedtime scene); a beat's own patch.ms overrides them
-      clearTimeout(tid); hideBubble(); playing = false; scene = true;
+      clearTimeout(tid); hideBubble(); playing = false; scene = true; skipping = false; showSkip(true);
       let i = 0;
       const go = () => {
         clearTimeout(tid);
-        if (i >= list.length) { scene = false; hideBubble(); if (done) done(); return; }
-        const [who, text, patch] = list[i++];
+        if (i >= list.length) { scene = false; skipping = false; sceneGo = null; showSkip(false); hideBubble(); if (done) done(); return; }
+        const [who, text, patch0] = list[i++];
+        const patch = skipping && patch0 && patch0.voice ? Object.assign({}, patch0, { voice: null }) : patch0;           // skipping: no call through the floor
         setPose(patch || {});
         if (who === "n") { hideBubble(); say(text); } else speak(who, text);
-        tid = setTimeout(go, (patch && patch.ms) || (fast ? Math.min(3400, 1200 + text.length * 28) : readTime(text)));
+        tid = setTimeout(go, skipping ? 150 : (patch && patch.ms) || (fast ? Math.min(3400, 1200 + text.length * 28) : readTime(text)));
       };
+      sceneGo = go;                                                                                                     // a tap on them, their bubble or the lamp jumps to the next beat; the skip pill races through the rest
       go();
     };
     // ── wind-down, while they sleep: one slow breath (BREATH seconds) paces the covers, their hands, their bodies and the z's, a sleep sound can play
@@ -11477,6 +11628,7 @@
     sub.textContent = "hawkins · mike’s room";
     say(asleep ? "Mike’s room in the dark. The lamp is off, and the two of them are fast asleep." : solo ? "Mike’s room: blue walls, a lamp left on, and Will on his own, with the other half of the bed empty." : away ? "Mike’s room: blue walls, a lamp left on, a rumpled comforter and nobody home." + hkWhere.hint() : "Mike’s room: blue walls, a lamp left on, and a ONE WAY sign over the closet.");
     const turnBtn = pill("\u2194 window wall", "Turn to look at the other side of the room", () => setView(view === "A" ? "B" : "A"));
+    skipBtn = pill("⏭ skip", "Skip ahead through the bedtime or waking scene (or tap them for the next line)", skipScene); skipBtn.style.display = "none";
     sndBtn = pill("☾ sleep sound", "A sound for the night: rain, a fan, soft snoring or crickets", tapSound);                // these two only show while they sleep
     tmBtn = pill("◷ timer", "Sleep timer: fades the sound out after 15, 30 or 60 minutes", tapTimer);
     sndBtn.style.display = tmBtn.style.display = zzOn ? "" : "none"; sndLabel(); timerLabel();
