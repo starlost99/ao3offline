@@ -12257,263 +12257,684 @@
 };
 
 // ════════ willshouse.js ════════
-// willshouse.js — Will's house, the Byers' place, from the front yard (openWillsHouse).
+// willshouse.js — 🏚️ Will's house, the Byers' place, seen from the front yard (openWillsHouse).
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["willshouse"] = function (ctx) {
   'use strict';
-  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
-  // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
+  const { hkShell } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
+  const openByersLivingRoom = (...args) => world.openByersLivingRoom(...args);
 
-  // ── Will's house, from the front yard ──
-  // The EXTERIOR ONLY: nothing to tap, nobody in it, no sound. A small, tired one-storey clapboard house out at the edge of the woods:
-  // faded sage siding, a front gable with a round attic vent, a brick chimney, a picture window with one lamp on behind the curtains,
-  // a small dark window, a crooked screen door under a little porch roof with a bare porch bulb, a lean-to shed, a woodpile, a rusty
-  // mailbox, an old brown car, a leaning power pole with wires, tall pines all round. Time of day, weather and season come from the
-  // shared live environment (no buttons here); the only control is the map pill back to Hawkins.
-  // Built in the same flat-shape style as the Wheelers' lawn (wheelers.js). To add things later, put them in the matching block below.
+  // ── THE BYERS' HOUSE: THE EXTERIOR ONLY ──
+  // Drawn after the reference photo: a low grey cinder-block ranch house with a shallow grey roof, a white-trimmed porch with five
+  // white posts, a brown front door with a lantern each side, three white-framed windows, porch furniture (white metal chairs and
+  // a little table on the left, a dark chair, a red box, two kids' bikes, two white plastic chairs), a dark green hatchback parked
+  // on the grass, a gravel drive, dry yard, dense woods behind and a maple branch hanging in from the top left.
+  // Nothing is tappable and nothing moves: it is a still picture of a summer afternoon (no time of day, weather or sound yet).
+  // Every number below is in the photo's own pixels (1280 x 720), so to move something, measure it on the photo.
   function openWillsHouse() {
-    const sh = hkShell("ao3-willshouse", "\u{1F3E0} Will\u2019s house");
-    const { sv, rnd, anim } = sh.kit;
+    const sh = hkShell("ao3-willshouse", "\u{1F3DA}\uFE0F The Byers\u2019");
+    const { sv, rnd } = sh.kit;
     const { box, sub, field, caption, pill, close } = sh;
-    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const season = hkSeason();
-    const snowy = () => season === "winter" || HK_WX[wxI][0] === "snow";
-    let tI = hkTimeGet(), wxI = hkWxGet();
-    const W = 360, H = 540;
-    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
-    svg.style.cssText = "width:100%;height:auto;display:block;";
-    const defs = sv("defs", {}, svg);
-    const glow = sv("radialGradient", { id: "wl-glow" }, defs);
-    sv("stop", { offset: "0%", "stop-color": "#ffd98a", "stop-opacity": "0.8" }, glow);
-    sv("stop", { offset: "100%", "stop-color": "#ffd98a", "stop-opacity": "0" }, glow);
-    const lits = [];                                                                                         // everything that glows, drawn after the house
-    const SIDING = "#76866e", SIDING_LINE = "#5d6b58", TRIM = "#d4cfbc", ROOF = "#2f2828", WOOD = "#4a3b30";
-    const BULB = ["#ff7a7a", "#ffd36b", "#7ad6ff", "#9be58f", "#ffa6e8"];
+    sub.textContent = "will\u2019s house \u00B7 a summer afternoon";
+    caption.textContent = "Will\u2019s house, out at the end of the road.";
+    box.style.background = "#74add9";
 
-    // a pine: a trunk and four stacked skirts, w wide at the bottom, h tall
-    const pine = (g, x, base, h, w, shade) => {
-      const dark = shade ? "#122019" : "#16281f", mid = shade ? "#1a2e24" : "#1d3528";
-      sv("rect", { x: x - 2.2, y: base - 10, width: 4.4, height: 10, fill: "#2a1f1a" }, g);
-      for (let i = 0; i < 4; i++) {
-        const t0 = base - 6 - i * h * 0.2, hw = w * (0.5 - i * 0.09), top = t0 - h * 0.34;
-        sv("polygon", { points: `${x - hw},${t0} ${x + hw},${t0} ${x},${top}`, fill: i % 2 ? mid : dark }, g);
+    const VX = 140, VY = -430, VW = 800, VH = 1310;
+    const svg = sv("svg", { viewBox: `${VX} ${VY} ${VW} ${VH}`, preserveAspectRatio: "xMidYMax meet" });
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    grad("wh-sky", [["0%", "#74add9"], ["60%", "#a9cde8"], ["100%", "#d2e5f1"]]);
+    grad("wh-wallshade", [["0%", "#000", 0.42], ["100%", "#000", 0]]);
+    grad("wh-glass", [["0%", "#b9ccd3"], ["55%", "#8aa0a9"], ["100%", "#6b828c"]]);
+    grad("wh-rearglass", [["0%", "#9db8c4"], ["100%", "#46606d"]]);
+    const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
+    const R = (x, y, w, h, fill, o, parent) => A("rect", Object.assign({ x, y, width: w, height: h, fill }, o || {}), parent);
+    const PG = (pts, fill, o, parent) => A("polygon", Object.assign({ points: pts, fill }, o || {}), parent);
+    const E = (cx, cy, rx, ry, fill, o, parent) => A("ellipse", Object.assign({ cx, cy, rx, ry, fill }, o || {}), parent);
+    const C = (cx, cy, r, fill, o, parent) => A("circle", Object.assign({ cx, cy, r, fill }, o || {}), parent);
+    const L = (d, stroke, w, o, parent) => A("path", Object.assign({ d, stroke, "stroke-width": w, fill: "none", "stroke-linecap": "round" }, o || {}), parent);
+    const r1 = (k, a, b) => a + rnd(k) * (b - a);
+
+    // ── sky and clouds ──
+    R(VX, VY, VW, 1200, "url(#wh-sky)");
+    [[1000, 40, 150, 34], [900, 100, 120, 24], [1100, 120, 110, 22], [800, 20, 90, 18]].forEach(([cx, cy, rx, ry], i) => {
+      E(cx, cy, rx, ry, "#fff", { opacity: 0.8 });
+      E(cx - rx * 0.4, cy + ry * 0.3, rx * 0.6, ry * 0.7, "#fff", { opacity: 0.7 });
+      E(cx + rx * 0.4, cy - ry * 0.2, rx * 0.55, ry * 0.8, "#f1f6fa", { opacity: 0.8 });
+    });
+
+    // ── the woods behind: clusters of round foliage, dark at the bottom and lighter on top ──
+    const blob = (cx, cy, r, cols, seed, n) => {
+      for (let i = 0; i < (n || 9); i++) {
+        const a = rnd(seed + "a" + i) * 6.283, d = rnd(seed + "d" + i) * r * 0.75, rr = r * (0.35 + rnd(seed + "r" + i) * 0.4);
+        C((cx + Math.cos(a) * d).toFixed(1), (cy + Math.sin(a) * d * 0.8).toFixed(1), rr.toFixed(1), cols[Math.floor(rnd(seed + "c" + i) * cols.length)]);
       }
     };
+    const DARK = ["#1b3320", "#21402a", "#183024"], MID = ["#2c5a2c", "#336630", "#2a5228"], LIGHT = ["#4f8a33", "#5e9a36", "#477f31"], SUN = ["#86ad3c", "#9bbd45", "#76a03a"];
+    // tall dark pine on the right, with its top in the sky
+    const pine = sv("g", {}, svg);
+    [[975, 64, 28], [975, 100, 42], [980, 150, 56], [985, 205, 70], [990, 265, 84]].forEach(([cx, cy, w], i) => PG(`${cx},${cy - 40} ${cx + w},${cy + 22} ${cx - w},${cy + 22}`, i % 2 ? "#1d3a2e" : "#24442f", {}, pine));
+    R(972, 80, 6, 300, "#2a2420", {}, pine);
+    // the big sunlit tree in the middle, behind the roof
+    for (let i = 0; i < 6; i++) blob(640 + i * 42, 190 + (i % 2) * 36, 74, i % 2 ? SUN : LIGHT, "tm" + i, 8);
+    for (let i = 0; i < 9; i++) blob(150 + i * 100, 330 + (i % 3) * 14, 90, MID, "tb" + i, 8);
+    for (let i = 0; i < 8; i++) blob(120 + i * 105, 400 + (i % 2) * 20, 80, DARK, "td" + i, 8);
+    // the dark mass on the left and the bright bushes on the right
+    for (let i = 0; i < 6; i++) blob(132 + (i % 2) * 28, 230 + i * 42, 62, DARK, "tl" + i, 8);
+    for (let i = 0; i < 6; i++) blob(1010 + (i % 2) * 20, 300 + i * 32, 70, i % 2 ? LIGHT : MID, "tr" + i, 8);
+    for (let i = 0; i < 5; i++) blob(860 + i * 28, 410 + (i % 2) * 14, 56, i % 2 ? LIGHT : MID, "bt" + i, 8);
+    // a wire with vines on it
+    L("M850 356 Q930 372 1010 362 T1100 352", "#2a2a22", 1.2, { opacity: 0.8 });
+    for (let i = 0; i < 14; i++) C(860 + i * 16, 362 + Math.sin(i / 2) * 4, 5 + rnd("vn" + i) * 4, "#6aa04a", { opacity: 0.8 });
 
-    // sky, stars, moon
-    const starG = sv("g", {}, svg);
-    for (let i = 0; i < 40; i++) sv("circle", { cx: (rnd("lsx" + i) * W).toFixed(1), cy: (rnd("lsy" + i) * 150).toFixed(1), r: (0.5 + rnd("lsr" + i) * 0.9).toFixed(2), fill: "#fff", opacity: (0.25 + rnd("lso" + i) * 0.6).toFixed(2) }, starG);
-    const moonG = sv("g", {}, svg);
-    const moonDisc = sv("circle", { cx: 70, cy: 46, r: 14, fill: "#efe6bd" }, moonG);
-    sv("circle", { cx: 70, cy: 46, r: 30, fill: "url(#wl-glow)", opacity: 0.28 }, moonG);
-
-    // the woods behind: a ragged line of pines, then the ground
-    const backG = sv("g", {}, svg);
-    for (let i = 0; i < 17; i++) pine(backG, i * 22 + rnd("lbp" + i) * 12, 304 + rnd("lbq" + i) * 10, 96 + rnd("lbh" + i) * 48, 40 + rnd("lbw" + i) * 14, true);
-    sv("rect", { x: 0, y: 300, width: W, height: 180, fill: "#1d2a24" }, svg);
-    for (let i = 0; i < 14; i++) sv("ellipse", { cx: (rnd("ldx" + i) * W).toFixed(1), cy: (362 + rnd("ldy" + i) * 108).toFixed(1), rx: (14 + rnd("ldr" + i) * 26).toFixed(1), ry: (3 + rnd("lds" + i) * 4).toFixed(1), fill: "#2a2620", opacity: 0.7 }, svg);   // bare dirt in the yard
-    for (let i = 0; i < 70; i++) { const gx = 6 + rnd("lgx" + i) * (W - 12), gy = 352 + rnd("lgy" + i) * 124; sv("path", { d: `M${gx.toFixed(1)} ${gy.toFixed(1)} l-2 -6 M${gx.toFixed(1)} ${gy.toFixed(1)} l0 -8 M${gx.toFixed(1)} ${gy.toFixed(1)} l2 -6`, stroke: "#3f5f4a", "stroke-width": 1.1, fill: "none", "stroke-linecap": "round", opacity: 0.55 }, svg); }   // tall, uncut grass
-    sv("rect", { x: 0, y: 478, width: W, height: 62, fill: "#25221e" }, svg);                                  // the dirt lane
-    for (let i = 0; i < 50; i++) sv("circle", { cx: (rnd("lpx" + i) * W).toFixed(1), cy: (482 + rnd("lpy" + i) * 54).toFixed(1), r: (0.8 + rnd("lpr" + i) * 0.9).toFixed(1), fill: "#3a352d", opacity: 0.8 }, svg);
-    sv("path", { d: "M0 500 H360 M0 522 H360", stroke: "#1a1814", "stroke-width": 5, opacity: 0.45 }, svg);   // wheel ruts
-    sv("polygon", { points: "222,357 268,357 282,478 168,478", fill: "#3a3329" }, svg);                          // the dirt path from the porch step
-    for (let i = 0; i < 18; i++) sv("circle", { cx: (200 + rnd("lqx" + i) * 70 - (1 - i / 18) * 8).toFixed(1), cy: (362 + rnd("lqy" + i) * 112).toFixed(1), r: 1, fill: "#4a4236", opacity: 0.8 }, svg);
-
-    // two big pines flanking the house, standing behind it
-    const sideG = sv("g", {}, svg);
-    pine(sideG, 10, 342, 210, 66, false);
-    pine(sideG, 328, 336, 180, 56, true);
-
-    // the power pole at the right edge, with wires over the house and away to the left
-    sv("rect", { x: 346, y: 124, width: 5, height: 330, fill: "#2a211c" }, svg);
-    sv("rect", { x: 334, y: 134, width: 28, height: 3, fill: "#2a211c" }, svg);
-    [338, 358].forEach(ix => sv("rect", { x: ix - 1, y: 130, width: 2.4, height: 4, fill: "#6a6a78" }, svg));
-    sv("path", { d: "M338 132 Q170 168 -6 154", stroke: "#15111c", "stroke-width": 0.9, fill: "none" }, svg);
-    sv("path", { d: "M358 132 Q344 196 316 238", stroke: "#15111c", "stroke-width": 0.9, fill: "none" }, svg);
+    // ── the ground: dry yard, green on the left, tall grass on the right, a gravel drive ──
+    R(VX, 488, VW, 400, "#9a8b49");
+    PG(`${VX},500 440,534 220,880 ${VX},880`, "#6b7a3a");
+    PG(`${VX},500 300,520 330,548 ${VX},560`, "#5f7a38", { opacity: 0.9 });
+    PG("580,534 940,500 940,880 1210,880", "#a3924c", { opacity: 0.9 });
+    for (let i = 0; i < 230; i++) {                                                  // tufts of dry grass
+      const gx = r1("gx" + i, VX, 940), gy = r1("gy" + i, 520, 870);
+      L(`M${gx.toFixed(0)} ${gy.toFixed(0)} l-3 -9 M${gx.toFixed(0)} ${gy.toFixed(0)} l1 -11 M${gx.toFixed(0)} ${gy.toFixed(0)} l4 -8`, rnd("gc" + i) > 0.5 ? "#c0ad5c" : "#7d8a3f", 1.3, { opacity: 0.8 });
+    }
+    // the gravel drive: from the porch steps down to the bottom of the picture, widening
+    PG("436,532 584,534 1250,880 190,880", "#a39a86");
+    PG("436,532 450,532 300,880 190,880", "#8d8671", { opacity: 0.7 });
+    PG("500,536 560,536 790,880 570,880", "#b8b19c", { opacity: 0.5 });
+    for (let i = 0; i < 460; i++) {                                                   // stones
+      const t = rnd("gs" + i), y = 534 + Math.pow(t, 0.8) * 346, left = 436 - (436 - 190) * ((y - 532) / 348), right = 584 + (1250 - 584) * ((y - 534) / 346);
+      const x = left + rnd("gt" + i) * (right - left);
+      E(x.toFixed(1), y.toFixed(1), (1 + rnd("gu" + i) * 2.4).toFixed(1), (0.7 + rnd("gv" + i) * 1.2).toFixed(1), ["#d6d1c0", "#8a8470", "#c4bda9", "#6f6a5a"][Math.floor(rnd("gw" + i) * 4)], { opacity: 0.8 });
+    }
+    // worn ruts toward the car
+    L("M470 545 Q520 660 540 880", "#7e7864", 6, { opacity: 0.35 });
+    L("M560 545 Q700 680 960 880", "#7e7864", 7, { opacity: 0.3 });
 
     // ── the house ──
-    sv("rect", { x: 262, y: 172, width: 16, height: 56, fill: "#6a3a30" }, svg);                                // the brick chimney, rising behind the gable
-    for (let yy = 178; yy < 226; yy += 6) sv("path", { d: `M262 ${yy} H278`, stroke: "#4a2620", "stroke-width": 0.8, opacity: 0.8 }, svg);
-    sv("rect", { x: 259, y: 168, width: 22, height: 5, fill: "#2f2828" }, svg);
-    sv("polygon", { points: "44,240 316,240 180,170", fill: SIDING }, svg);                                     // the front gable
-    for (let yy = 178; yy < 240; yy += 6) { const hw = (yy - 170) * 1.943; sv("path", { d: `M${(180 - hw + 4).toFixed(1)} ${yy} H${(180 + hw - 4).toFixed(1)}`, stroke: SIDING_LINE, "stroke-width": 0.9, opacity: 0.8 }, svg); }
-    sv("path", { d: "M40 243 L180 166 L320 243", stroke: ROOF, "stroke-width": 5, fill: "none", "stroke-linejoin": "round" }, svg);     // the roof edge
-    sv("path", { d: "M44 240 L180 170 L316 240", stroke: TRIM, "stroke-width": 2.6, fill: "none", "stroke-linejoin": "round" }, svg);     // the barge boards
-    sv("rect", { x: 44, y: 239, width: 272, height: 4, fill: TRIM }, svg);                                      // the fascia
-    sv("rect", { x: 56, y: 243, width: 248, height: 103, fill: SIDING }, svg);                                  // the front wall
-    for (let yy = 249; yy < 346; yy += 6) sv("path", { d: `M56 ${yy} H304`, stroke: SIDING_LINE, "stroke-width": 0.9, opacity: 0.8 }, svg);
-    sv("rect", { x: 54, y: 243, width: 4, height: 103, fill: TRIM }, svg);                                      // the corner boards
-    sv("rect", { x: 302, y: 243, width: 4, height: 103, fill: TRIM }, svg);
-    // the round attic vent in the gable
-    sv("circle", { cx: 180, cy: 211, r: 9.5, fill: TRIM }, svg);
-    sv("circle", { cx: 180, cy: 211, r: 7.4, fill: "#120d22" }, svg);
-    sv("path", { d: "M180 203.6 V218.4 M172.6 211 H187.4", stroke: TRIM, "stroke-width": 1, opacity: 0.9 }, svg);
-    lits.push(g => sv("circle", { cx: 180, cy: 211, r: 6.6, fill: "#f0b45a", opacity: 0.3 }, g));
-    // a drainpipe and a rusty stain under the vent
-    sv("rect", { x: 306, y: 250, width: 3, height: 96, fill: "#8a8a90", opacity: 0.8 }, svg);
-    sv("path", { d: "M176 222 q-1 8 0 16", stroke: "#6a4a30", "stroke-width": 2, opacity: 0.35, fill: "none" }, svg);
+    const WALL = "#8c8878";
+    R(228, 390, 590, 126, WALL);
+    // cinder blocks: a row every 11 px, joints offset every other row
+    let joints = "";
+    for (let y = 400, row = 0; y < 516; y += 11, row++) {
+      joints += `M228 ${y} H818 `;
+      for (let x = 228 + (row % 2) * 15; x < 818; x += 30) joints += `M${x} ${y - 11} V${y} `;
+    }
+    L(joints, "#6a665a", 1, { opacity: 0.55 });
+    for (let i = 0; i < 42; i++) R((r1("bk" + i, 232, 800)).toFixed(0), (400 + Math.floor(rnd("bl" + i) * 10) * 11 + 1).toFixed(0), 28, 9, rnd("bm" + i) > 0.5 ? "#9a9686" : "#7a766a", { opacity: 0.3 });
+    R(228, 390, 590, 34, "url(#wh-wallshade)");                                     // the porch roof shades the wall
+    R(228, 500, 590, 16, "#4d493f", { opacity: 0.22 });
 
-    // the picture window: warm lamplight, curtains, a lamp
-    const PX = 76, PY = 270, PW = 62, PH = 48;
-    sv("rect", { x: PX - 3, y: PY - 3, width: PW + 6, height: PH + 6, fill: TRIM }, svg);
-    sv("rect", { x: PX, y: PY, width: PW, height: PH, fill: "#120d22" }, svg);
-    sv("rect", { x: PX - 5, y: PY + PH + 3, width: PW + 10, height: 4, fill: TRIM }, svg);                       // the sill
-    lits.push(g => {
-      sv("circle", { cx: PX + PW / 2, cy: PY + PH / 2, r: 50, fill: "url(#wl-glow)", opacity: 0.6 }, g);
-      anim(sv("rect", { x: PX, y: PY, width: PW, height: PH, fill: "#ffc86a" }, g), "animation:hkFlicker 4.2s ease-in-out infinite;");
-      sv("path", { d: `M${PX} ${PY} H${PX + 16} Q${PX + 11} ${PY + 24} ${PX + 14} ${PY + PH} H${PX} Z M${PX + PW} ${PY} H${PX + PW - 16} Q${PX + PW - 11} ${PY + 24} ${PX + PW - 14} ${PY + PH} H${PX + PW} Z`, fill: "#a8683a", opacity: 0.85 }, g);   // the curtains
-      sv("path", { d: `M${PX + 5} ${PY + 6} v36 M${PX + 10} ${PY + 3} v38 M${PX + PW - 5} ${PY + 6} v36 M${PX + PW - 10} ${PY + 3} v38`, stroke: "#7a4a26", "stroke-width": 0.8, opacity: 0.6 }, g);
-      sv("polygon", { points: `${PX + 38},${PY + 24} ${PX + 48},${PY + 24} ${PX + 46},${PY + 33} ${PX + 40},${PY + 33}`, fill: "#fff0c0" }, g);      // the lamp shade
-      sv("rect", { x: PX + 42, y: PY + 33, width: 2, height: 9, fill: "#7a5a3a" }, g);
-      sv("rect", { x: PX + 39, y: PY + 42, width: 8, height: 2, fill: "#7a5a3a" }, g);
-      sv("path", { d: `M${PX + 24} ${PY} V${PY + PH} M${PX + 38} ${PY} V${PY + PH} M${PX} ${PY + 20} H${PX + PW}`, stroke: TRIM, "stroke-width": 1.4 }, g);           // the muntins
-    });
-    // the small window beside it: dark, a curtain drawn
-    sv("rect", { x: 153, y: 273, width: 30, height: 40, fill: TRIM }, svg);
-    sv("rect", { x: 156, y: 276, width: 24, height: 34, fill: "#120d22" }, svg);
-    sv("rect", { x: 156, y: 276, width: 24, height: 34, fill: "#4a4263", opacity: 0.6 }, svg);
-    sv("path", { d: "M168 276 V310 M156 293 H180", stroke: TRIM, "stroke-width": 1.2 }, svg);
-    sv("rect", { x: 150, y: 313, width: 36, height: 4, fill: TRIM }, svg);
+    // windows: white frames, a pale reflective glass, white bars
+    const win = (x, y, w, h, cols, rows) => {
+      R(x - 4, y - 4, w + 8, h + 8, "#e9e7df");
+      R(x, y, w, h, "url(#wh-glass)");
+      PG(`${x},${y} ${x + w * 0.55},${y} ${x},${y + h * 0.6}`, "#fff", { opacity: 0.22 });
+      let d = "";
+      for (let i = 1; i < cols; i++) d += `M${x + (w * i) / cols} ${y} V${y + h} `;
+      for (let i = 1; i < rows; i++) d += `M${x} ${y + (h * i) / rows} H${x + w} `;
+      L(d, "#eeece4", 2.4);
+      R(x - 6, y + h + 4, w + 12, 4, "#d8d5ca");                                     // sill
+      R(x - 4, y - 4, w + 8, 3, "#000", { opacity: 0.18 });
+    };
+    win(302, 412, 42, 62, 2, 2);
+    win(530, 404, 74, 62, 2, 2);
+    R(566, 404, 3, 62, "#eeece4");
+    win(718, 412, 34, 62, 1, 2);
 
-    // the porch: roof, posts, deck, rail, step
-    sv("rect", { x: 190, y: 266, width: 114, height: 6, fill: "#000", opacity: 0.25 }, svg);                    // shadow under the porch roof
-    sv("rect", { x: 236, y: 282, width: 32, height: 64, fill: "#34302a", stroke: "#1f1c18", "stroke-width": 1 }, svg);          // the front door
-    sv("rect", { x: 241, y: 288, width: 10, height: 15, fill: "#1a1530" }, svg);
-    sv("rect", { x: 253, y: 288, width: 10, height: 15, fill: "#1a1530" }, svg);
-    sv("circle", { cx: 262, cy: 322, r: 1.5, fill: "#b8a070" }, svg);
-    sv("polygon", { points: "234,280 268,283 268,346 234,346", fill: "none", stroke: "#e6e0d2", "stroke-width": 1.8, "stroke-linejoin": "round" }, svg);   // the screen door, hanging a little crooked
-    sv("polygon", { points: "236,283 266,285 266,344 236,344", fill: "#8a8a8a", opacity: 0.18 }, svg);
-    for (let i = 1; i < 6; i++) sv("path", { d: `M236 ${283 + i * 10} L266 ${285 + i * 10}`, stroke: "#c8c4b8", "stroke-width": 0.5, opacity: 0.4 }, svg);
-    sv("path", { d: "M236 334 L266 336", stroke: "#e6e0d2", "stroke-width": 1.4 }, svg);
-    sv("rect", { x: 190, y: 262, width: 4, height: 84, fill: TRIM }, svg);
-    sv("rect", { x: 300, y: 262, width: 4, height: 84, fill: TRIM }, svg);
-    sv("polygon", { points: "180,267 314,267 304,251 190,251", fill: ROOF }, svg);                               // the porch roof
-    sv("path", { d: "M190 251 L304 251", stroke: "#4a3d3d", "stroke-width": 1.6 }, svg);
-    sv("rect", { x: 180, y: 266, width: 134, height: 2.6, fill: TRIM }, svg);
-    sv("rect", { x: 194, y: 326, width: 36, height: 3, fill: TRIM }, svg);                                       // the rail
-    sv("rect", { x: 270, y: 326, width: 30, height: 3, fill: TRIM }, svg);
-    for (let xx = 197; xx < 230; xx += 5) sv("path", { d: `M${xx} 329 V346`, stroke: TRIM, "stroke-width": 1, opacity: 0.85 }, svg);
-    for (let xx = 273; xx < 300; xx += 5) sv("path", { d: `M${xx} 329 V346`, stroke: TRIM, "stroke-width": 1, opacity: 0.85 }, svg);
-    sv("rect", { x: 184, y: 346, width: 128, height: 6, fill: WOOD }, svg);                                      // the deck
-    for (let xx = 196; xx < 312; xx += 14) sv("path", { d: `M${xx} 346 V352`, stroke: "#2a2018", "stroke-width": 0.8 }, svg);
-    sv("rect", { x: 226, y: 352, width: 44, height: 5, fill: "#3f3329" }, svg);                                  // the step
-    sv("rect", { x: 222, y: 357, width: 52, height: 4, fill: "#362c23" }, svg);
-    sv("path", { d: "M252 267 V273", stroke: "#1a1612", "stroke-width": 0.9 }, svg);                             // the bare porch bulb on its cord
-    sv("circle", { cx: 252, cy: 275.4, r: 2.8, fill: "#ffe9a8" }, svg);
-    const porch = sv("g", {}, svg);
-    lits.push(g => { porch.setAttribute("class", "hk-anim"); porch.style.cssText = "animation:hkFlicker 2.8s ease-in-out infinite;"; sv("circle", { cx: 252, cy: 280, r: 34, fill: "url(#wl-glow)" }, porch); g.appendChild(porch); });
-    // the house number
-    const num = sv("text", { x: 208, y: 296, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 7, "font-weight": 700, fill: "#c8c2ae" }, svg); num.textContent = "19";
-    // foundation, with two little vents
-    sv("rect", { x: 54, y: 346, width: 252, height: 8, fill: "#3a3a3c" }, svg);
-    [90, 150, 280].forEach(vx => { sv("rect", { x: vx, y: 348, width: 12, height: 4, fill: "#15151a" }, svg); sv("path", { d: `M${vx + 3} 348 V352 M${vx + 6} 348 V352 M${vx + 9} 348 V352`, stroke: "#4a4a50", "stroke-width": 0.6 }, svg); });
+    // the front door: cream frame, brown wooden door with panels, a brass knob
+    R(430, 396, 52, 108, "#e6e2d2");
+    R(436, 402, 40, 98, "#7a4a2c");
+    [[441, 408, 14, 40], [457, 408, 14, 40], [441, 454, 14, 40], [457, 454, 14, 40]].forEach(([x, y, w, h]) => { R(x, y, w, h, "#69402a"); R(x + 1, y + 1, w - 2, 2, "#946443", { opacity: 0.8 }); });
+    R(436, 402, 40, 98, "#000", { opacity: 0.08 });
+    C(471, 454, 2, "#d3b25a");
+    R(430, 500, 52, 4, "#bdb8a6");
+    // porch lanterns
+    [416, 493].forEach(x => { R(x, 404, 9, 15, "#1c1a18"); R(x + 2, 407, 5, 9, "#d9c88a", { opacity: 0.65 }); R(x - 1, 402, 11, 3, "#1c1a18"); });
 
-    // the lean-to shed on the right
-    sv("rect", { x: 306, y: 296, width: 36, height: 50, fill: "#5a4c3c" }, svg);
-    for (let xx = 312; xx < 342; xx += 6) sv("path", { d: `M${xx} 296 V346`, stroke: "#3f352a", "stroke-width": 0.9, opacity: 0.8 }, svg);
-    sv("polygon", { points: "302,302 346,294 346,287 302,295", fill: ROOF }, svg);
-    sv("rect", { x: 317, y: 312, width: 17, height: 34, fill: "#3a2e24", stroke: "#241c15", "stroke-width": 1 }, svg);
-    sv("path", { d: "M317 312 L334 346 M334 312 L317 346", stroke: "#241c15", "stroke-width": 0.8, opacity: 0.7 }, svg);
-    sv("circle", { cx: 331, cy: 330, r: 1.3, fill: "#a89060" }, svg);
-    sv("rect", { x: 306, y: 346, width: 36, height: 5, fill: "#3a3a3c" }, svg);
+    // the porch floor and its front
+    R(206, 503, 496, 6, "#b79a73");
+    R(206, 509, 496, 16, "#9c6a49");
+    for (let x = 214; x < 700; x += 22) R(x, 509, 1.2, 16, "#6e4631", { opacity: 0.7 });
+    R(206, 525, 496, 10, "#77746a");
+    R(206, 534, 496, 4, "#000", { opacity: 0.18 });
+    R(436, 527, 140, 12, "#a9a698");                                                // the stoop, off the gravel
+    R(436, 537, 140, 3, "#6f6c60");
 
-    // the woodpile against the left wall, under a bit of tin
-    sv("rect", { x: 22, y: 308, width: 34, height: 3, fill: "#6a6a72" }, svg);
-    sv("rect", { x: 24, y: 311, width: 3, height: 35, fill: "#3a2e24" }, svg);
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) sv("circle", { cx: 32 + c * 7.4 + (r % 2) * 3, cy: 341 - r * 7.4, r: 3.5, fill: (r + c) % 2 ? "#7a5a3a" : "#8a6a44", stroke: "#4a3424", "stroke-width": 0.8 }, svg);
+    // ── the roof: a low hip roof of grey shingles, white fascia, two chimneys and a vent pipe ──
+    PG("176,384 262,308 792,310 894,388", "#68707a");
+    let shingles = "";
+    for (let y = 316; y < 384; y += 6) shingles += `M${176 + (384 - y) * 0 + (y - 308) * 0.0} ${y} H894 `;
+    L(shingles, "#4a5159", 1, { opacity: 0.45 });
+    PG("176,384 262,308 300,308 232,384", "#5a626b", { opacity: 0.55 });                // the left hip
+    PG("894,388 792,310 756,310 850,388", "#5a626b", { opacity: 0.55 });                 // the right hip
+    R(262, 306, 530, 5, "#4a5159");                                                    // ridge
+    R(250, 296, 26, 16, "#4a4643"); R(247, 293, 32, 5, "#2f2c2a");
+    R(722, 299, 26, 14, "#4a4643"); R(719, 296, 32, 5, "#2f2c2a");
+    R(615, 298, 5, 22, "#2c2c2c"); R(612, 295, 11, 4, "#2c2c2c");
+    R(176, 382, 718, 12, "#e8e6de");                                                   // the fascia
+    R(176, 392, 718, 3, "#000", { opacity: 0.3 });
+    for (let i = 0; i < 16; i++) R(r1("pf" + i, 190, 870).toFixed(0), 383, r1("pw" + i, 6, 18).toFixed(0), 5, "#b9b5a6", { opacity: 0.7 });   // peeling paint
 
-    // bushes at the corners, a bucket and a coiled hose by the step
-    [[66, 351, 22, 9], [172, 352, 16, 6], [296, 352, 14, 5]].forEach(([bx, by, rx, ry]) => { sv("ellipse", { cx: bx, cy: by, rx, ry, fill: "#1b2f26" }, svg); sv("ellipse", { cx: bx - 3, cy: by - 2, rx: rx * 0.6, ry: ry * 0.6, fill: "#233b30" }, svg); });
-    sv("path", { d: "M182 346 l-2 12 h10 l-2 -12 Z", fill: "#6a6a72" }, svg);
-    sv("ellipse", { cx: 181, cy: 346, rx: 5, ry: 1.4, fill: "#2a2a30" }, svg);
-    sv("ellipse", { cx: 292, cy: 357, rx: 9, ry: 3.2, fill: "none", stroke: "#2f6a42", "stroke-width": 2.2 }, svg);
+    // ── the posts ──
+    const post = (x, y2) => { R(x, 394, 12, y2 - 394, "#ecebe4"); R(x + 8, 394, 4, y2 - 394, "#b7b5a9", { opacity: 0.8 }); R(x - 2, 394, 16, 4, "#d6d4c9"); R(x - 2, y2 - 6, 16, 6, "#d6d4c9"); };
+    post(207, 516); post(380, 516); post(544, 516); post(700, 516);
+    post(849, 464);
+    const num = A("text", { x: 389, y: 446, "font-family": "Arial,sans-serif", "font-weight": 700, "font-size": 11, fill: "#2a2a2a", transform: "rotate(-90 389 446)", "text-anchor": "middle" });
+    num.textContent = "148";
 
-    // the old brown car, nose to the right, parked in the yard
-    sv("ellipse", { cx: 62, cy: 464, rx: 54, ry: 5, fill: "#000", opacity: 0.35 }, svg);
-    sv("rect", { x: 14, y: 438, width: 96, height: 19, rx: 5, fill: "#6a4a38" }, svg);
-    sv("path", { d: "M32 439 L43 420 L84 420 L98 439 Z", fill: "#6a4a38" }, svg);
-    sv("path", { d: "M38 437 L46 424 L61 424 L61 437 Z M65 437 L65 424 L82 424 L92 437 Z", fill: "#171722" }, svg);
-    sv("path", { d: "M42 435 L48 426 M70 435 L70 426", stroke: "#3a3a4c", "stroke-width": 1, opacity: 0.8 }, svg);
-    sv("ellipse", { cx: 28, cy: 449, rx: 6, ry: 3, fill: "#4a2c20", opacity: 0.7 }, svg);                       // rust
-    sv("ellipse", { cx: 76, cy: 452, rx: 8, ry: 2.4, fill: "#4a2c20", opacity: 0.6 }, svg);
-    sv("rect", { x: 12, y: 452, width: 6, height: 4, fill: "#8a8a90" }, svg);
-    sv("rect", { x: 106, y: 442, width: 5, height: 5, rx: 1, fill: "#c9b88a", opacity: 0.8 }, svg);              // the headlight
-    sv("path", { d: "M14 446 H110", stroke: "#4a3426", "stroke-width": 0.8, opacity: 0.8 }, svg);
-    [34, 88].forEach(cx => { sv("circle", { cx, cy: 457, r: 8.5, fill: "#111016" }, svg); sv("circle", { cx, cy: 457, r: 4, fill: "#7a7a84" }, svg); sv("circle", { cx, cy: 457, r: 1.4, fill: "#2a2a30" }, svg); });
+    // ── porch things ──
+    // white metal lawn chairs and a small white table, far left
+    const metalChair = (x, y, flip) => {
+      const g = sv("g", { transform: flip ? `translate(${x * 2 + 40} 0) scale(-1 1)` : "" }, svg);
+      R(x, y, 9, 30, "#ecece8", { rx: 4 }, g); R(x + 2, y + 3, 5, 24, "#bfc0bc", { opacity: 0.6 }, g);
+      R(x - 2, y + 22, 40, 6, "#f2f2ee", { rx: 2 }, g);
+      L(`M${x} ${y + 28} v14 M${x + 34} ${y + 28} v14 M${x + 6} ${y + 28} v14`, "#e4e4e0", 2.4, {}, g);
+    };
+    metalChair(226, 474, false);
+    metalChair(306, 474, true);
+    E(284, 492, 17, 5, "#f0f0ec"); L("M268 494 L262 512 M300 494 L306 512 M284 496 V512", "#e4e4e0", 2.2);
+    R(280, 484, 8, 6, "#9c9a8c", { rx: 1 });
+    // dark chair and a terracotta pot by the second post
+    R(362, 472, 34, 27, "#3a2c24", { rx: 3 });
+    for (let i = 0; i < 3; i++) R(367 + i * 10, 476, 5, 19, "#54402f", { rx: 1 });
+    R(358, 497, 42, 7, "#271c16", { rx: 2 });
+    R(361, 504, 4, 7, "#271c16"); R(393, 504, 4, 7, "#271c16");
+    R(406, 498, 18, 14, "#b4663c"); R(404, 496, 22, 4, "#c27749");
+    blob(415, 491, 11, ["#3d7a3a", "#4f8e3f"], "pot", 6);
+    post(380, 516);                                                                    // the chair stands behind this post
+    const num2 = A("text", { x: 389, y: 446, "font-family": "Arial,sans-serif", "font-weight": 700, "font-size": 11, fill: "#2a2a2a", transform: "rotate(-90 389 446)", "text-anchor": "middle" });
+    num2.textContent = "148";
+    // the red box (a bench or a chest) and the kids' bikes
+    R(500, 475, 52, 28, "#8c4a37", { rx: 3 }); R(500, 475, 52, 6, "#a45a43", { rx: 3 }); R(500, 495, 52, 8, "#6a3527");
+    const bike = (x, y, body, tire) => {
+      [x, x + 50].forEach(cx => { C(cx, y, 15, "none", { stroke: tire, "stroke-width": 3 }); C(cx, y, 2.4, "#bbb"); L(`M${cx} ${y} L${cx + 6} ${y - 14} M${cx} ${y} L${cx - 8} ${y - 8}`, "#9a9a9a", 0.8); });
+      L(`M${x} ${y} L${x + 18} ${y - 20} L${x + 40} ${y - 22} L${x + 50} ${y} M${x + 18} ${y - 20} L${x + 24} ${y} L${x + 40} ${y - 22}`, body, 3);
+      L(`M${x + 40} ${y - 22} L${x + 38} ${y - 32} M${x + 33} ${y - 33} H${x + 46}`, "#2a2a2a", 2.4);
+      L(`M${x + 14} ${y - 26} H${x + 24}`, "#2a2a2a", 3);
+    };
+    bike(498, 516, "#d24a3a", "#222");
+    bike(522, 518, "#c85d77", "#1c1c1c");
+    // white plastic chairs with a little table between them
+    const plastic = x => { R(x, 463, 38, 32, "#f0efe9", { rx: 9 }); L(`M${x + 6} 470 V490 M${x + 14} 468 V492 M${x + 22} 468 V492 M${x + 30} 470 V490`, "#c9c8c0", 1.4); R(x - 1, 492, 40, 9, "#ecebe4", { rx: 3 }); R(x + 4, 500, 4, 7, "#e0dfd8"); R(x + 30, 500, 4, 7, "#e0dfd8"); };
+    plastic(590); plastic(655);
+    E(642, 481, 12, 3.4, "#f4f4ef"); R(640, 483, 3, 20, "#e2e1da");
+    // a small statue on the edge of the porch, and a tiny one by the left steps
+    R(660, 510, 9, 16, "#9b988a", { rx: 3 }); C(664.5, 508, 5, "#aaa799"); R(656, 524, 17, 5, "#7f7c70");
+    R(341, 522, 6, 14, "#8f8d80", { rx: 2 }); C(344, 521, 4, "#a09e90");
+    // a leafy plant at the right end of the porch
+    blob(716, 498, 24, ["#3a7a35", "#4a8f3f", "#2f6a30"], "rp", 8); R(708, 506, 18, 12, "#8a5a3c");
 
-    // the rusty mailbox on its leaning post
-    sv("rect", { x: 306, y: 440, width: 4, height: 32, fill: "#2a211c", transform: "rotate(4 308 472)" }, svg);
-    sv("rect", { x: 294, y: 422, width: 36, height: 17, rx: 7, fill: "#4a4036" }, svg);
-    sv("path", { d: "M298 425 Q312 422 326 425", stroke: "#6a5a4a", "stroke-width": 1, fill: "none" }, svg);
-    sv("ellipse", { cx: 320, cy: 432, rx: 3.6, ry: 2.4, fill: "#6a3a26", opacity: 0.7 }, svg);
-    sv("rect", { x: 327, y: 412, width: 2.2, height: 14, fill: "#c9482e" }, svg);                               // the flag, up
-    sv("polygon", { points: "329,412 337,414 329,418", fill: "#c9482e" }, svg);
-    const mt = sv("text", { x: 311, y: 433.6, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 7, "font-weight": 700, "letter-spacing": 0.6, fill: "#d4cfbc" }, svg); mt.textContent = "BYERS";
+    // ── the car: a dark green hatchback, seen from the back left ──
+    E(815, 574, 112, 13, "#000", { opacity: 0.35 });
+    PG("722,502 738,472 770,461 850,458 878,472 912,516 912,546 906,566 732,568 722,546", "#35463b");
+    PG("738,472 770,461 850,458 878,472 770,478", "#566b5c", { opacity: 0.8 });          // the roof catching the sun
+    PG("738,474 768,467 768,508 742,509", "#4a6470");                                     // the side window
+    PG("774,469 848,466 872,479 880,508 772,510", "url(#wh-rearglass)");                  // the back window
+    PG("782,470 812,469 790,508 774,509", "#fff", { opacity: 0.16 });
+    L("M722 512 H912", "#26332a", 2, { opacity: 0.8 });                                  // the hatch line
+    R(753, 518, 38, 12, "#9a2c2c", { rx: 2 }); R(756, 521, 14, 6, "#d24a3a", { rx: 1 });
+    R(864, 511, 40, 12, "#a83228", { rx: 2 }); R(886, 514, 14, 6, "#d85c48", { rx: 1 });
+    R(746, 531, 164, 17, "#cbccc5", { rx: 5 }); R(748, 533, 160, 3, "#fff", { rx: 1.5 }); R(748, 543, 160, 4, "#85867f", { rx: 2 });
+    R(818, 540, 31, 15, "#e9e7dc", { rx: 2, stroke: "#4b5a6a", "stroke-width": 1 }); L("M822 546 H845 M822 550 H840", "#4b5a6a", 1.4);
+    E(758, 570, 15, 8, "#141414"); E(886, 560, 15, 7, "#141414");
+    R(724, 548, 14, 18, "#26332a", { opacity: 0.7 });
 
-    // a bare yard lamp-post is left out on purpose; the only light outside is the porch bulb. Leaves, in autumn
-    const seasonG = sv("g", {}, svg);
-    seasonG.style.pointerEvents = "none";
-    if (season === "autumn" || season === "halloween") for (let i = 0; i < 22; i++) sv("ellipse", { cx: (10 + rnd("llf" + i) * 340).toFixed(1), cy: (362 + rnd("llg" + i) * 112).toFixed(1), rx: 3, ry: 1.5, fill: ["#d9731f", "#b5541a", "#e0a032"][i % 3], opacity: 0.7 }, seasonG);
-    if (season === "summer" && !reduce) for (let i = 0; i < 14; i++) anim(sv("circle", { cx: (10 + rnd("lff" + i) * 340).toFixed(1), cy: (340 + rnd("lfg" + i) * 120).toFixed(1), r: 1.7, fill: "#e8ff8a" }, seasonG), `animation:hkFirefly ${(4 + rnd("lfd" + i) * 4).toFixed(1)}s ease-in-out -${(rnd("lfz" + i) * 5).toFixed(1)}s infinite;`);
-    // winter: coloured lights drooping along the porch roof
-    if (season === "winter") lits.push(g => {
-      const x0 = 184, x1 = 310, y0 = 269, d = 5, n = 11, cx = (x0 + x1) / 2, cy = y0 + d * 2;
-      sv("path", { d: `M${x0} ${y0} Q${cx} ${cy} ${x1} ${y0}`, stroke: "#2a1d1a", "stroke-width": 0.7, fill: "none" }, g);
-      for (let i = 0; i < n; i++) {
-        const t = i / (n - 1), u = 1 - t, bx = (u * u * x0 + 2 * u * t * cx + t * t * x1).toFixed(1), by = (u * u * y0 + 2 * u * t * cy + t * t * y0 + 1).toFixed(1), col = BULB[i % BULB.length];
-        sv("circle", { cx: bx, cy: by, r: 3, fill: col, opacity: 0.22 }, g);
-        anim(sv("circle", { cx: bx, cy: by, r: 1.2, fill: col }, g), `animation:hkTwinkle ${(1.6 + rnd("ltw" + i) * 1.8).toFixed(1)}s ease-in-out -${(rnd("ltz" + i) * 3).toFixed(1)}s infinite;`);
+    // ── dappled shade: the maple throws patches on the roof, the wall, the car and the drive ──
+    const shade = sv("g", { opacity: 0.17, fill: "#10230f" }, svg);
+    [[330, 350, 80, 22], [470, 346, 70, 18], [600, 352, 60, 16], [300, 440, 55, 38], [420, 470, 46, 30], [560, 480, 44, 28], [470, 640, 80, 34], [660, 760, 110, 40]].forEach(([cx, cy, rx, ry]) => E(cx, cy, rx, ry, "#10230f", {}, shade));
+
+    // ── the maple branch hanging in from the top left ──
+    const branch = sv("g", {}, svg);
+    L("M140 100 Q200 90 290 30 T540 -430", "#3a2c22", 9, {}, branch);
+    L("M110 124 Q170 118 230 90", "#2f241c", 6, {}, branch);
+    const leaf = (cx, cy, r, rot, col, seed) => {
+      let d = "";
+      for (let k = 0; k <= 40; k++) {
+        const t = (k / 40) * 6.2832, rr = r * (0.5 + 0.5 * Math.pow(Math.abs(Math.cos(2.5 * t)), 0.55));
+        d += (k ? "L" : "M") + (Math.cos(t) * rr).toFixed(1) + " " + (Math.sin(t) * rr).toFixed(1) + " ";
       }
-    });
+      const g = sv("g", { transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(0)})` }, branch);
+      A("path", { d: d + "Z", fill: col }, g);
+      A("path", { d: `M${-r * 0.8} 0 H${r * 0.8} M0 0 L${r * 0.5} ${-r * 0.5} M0 0 L${r * 0.5} ${r * 0.5}`, stroke: "#9bc65a", "stroke-width": 1, opacity: 0.45, fill: "none" }, g);
+    };
+    const LEAFC = ["#33652a", "#3f7a2f", "#4d8a35", "#2c5a25", "#62a03e"];
+    for (let i = 0; i < 460; i++) {
+      const x = r1("lx" + i, 130, 820), y = r1("ly" + i, -430, 400);
+      const dens = Math.max(0, 1 - (x - 130) / 700) * Math.max(0, 1 - (y + 430) / 830);
+      if (rnd("lk" + i) > dens * 1.5) continue;
+      leaf(x, y, r1("lr" + i, 26, 50), r1("lo" + i, 0, 360), LEAFC[Math.floor(rnd("lc" + i) * LEAFC.length)], i);
+    }
+    for (let i = 0; i < 70; i++) {                                                  // the canopy runs right up to the top edge
+      const x = r1("tx" + i, 130, 780), y = r1("ty" + i, -440, -250);
+      if (rnd("tk" + i) > Math.max(0.12, 1 - (x - 130) / 560)) continue;
+      leaf(x, y, r1("tr" + i, 30, 54), r1("to" + i, 0, 360), LEAFC[Math.floor(rnd("tc" + i) * LEAFC.length)], "t" + i);
+    }
+    [[470, 340, 38], [505, 356, 42], [540, 340, 36], [575, 358, 38], [452, 364, 32], [520, 378, 30], [560, 380, 28], [590, 336, 30]].forEach(([x, y, r], i) => leaf(x, y, r, i * 47, LEAFC[i % LEAFC.length], "h" + i));
+    L("M505 300 Q512 330 505 356 M560 300 Q566 330 560 358", "#3a2c22", 2.4, { opacity: 0.8 }, branch);
 
-    const dynG = sv("g", {}, svg);                                                                             // snow cover: rebuilt when the weather changes
-    dynG.style.pointerEvents = "none";
-    const lit = sv("g", {}, svg);
-    lit.style.pointerEvents = "none";
-    lits.forEach(f => f(lit));
-    const tint = sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#000", opacity: 0, "pointer-events": "none" }, svg);
-    field.style.background = "linear-gradient(to top,#25221e 0,#25221e 35%,transparent 35%)";                                                                       // the lane carries on below the picture on tall screens
     field.appendChild(svg);
-
-    const paintSnow = () => {
-      dynG.textContent = "";
-      if (!snowy()) return;
-      sv("rect", { x: 0, y: 356, width: W, height: 122, fill: "#e8eefc", opacity: 0.2 }, dynG);
-      for (let i = 0; i < 16; i++) sv("ellipse", { cx: (rnd("lsa" + i) * W).toFixed(1), cy: (364 + rnd("lsb" + i) * 108).toFixed(1), rx: (20 + rnd("lsc" + i) * 22).toFixed(1), ry: (3.5 + rnd("lsd" + i) * 3).toFixed(1), fill: "#dfe8fb", opacity: 0.5 }, dynG);
-      sv("path", { d: "M44 238 L180 168 L316 238", stroke: "#eef2ff", "stroke-width": 3.4, fill: "none", "stroke-linejoin": "round", opacity: 0.95 }, dynG);   // the gable edges
-      sv("path", { d: "M190 250 H304", stroke: "#eef2ff", "stroke-width": 3.4, opacity: 0.95 }, dynG);                                                     // the porch roof
-      sv("rect", { x: 257, y: 164, width: 26, height: 4, rx: 2, fill: "#f4f7ff" }, dynG);                                                                  // the chimney
-      sv("path", { d: "M302 292 L346 285", stroke: "#eef2ff", "stroke-width": 3, opacity: 0.9 }, dynG);                                                   // the shed
-      sv("rect", { x: 22, y: 305, width: 34, height: 3.4, rx: 1.7, fill: "#f4f7ff" }, dynG);                                                              // the woodpile's tin
-      sv("path", { d: "M34 420 L44 418 L84 418 L98 420", stroke: "#f4f7ff", "stroke-width": 3, opacity: 0.9, "stroke-linecap": "round" }, dynG);         // the car roof
-      sv("ellipse", { cx: 312, cy: 421, rx: 14, ry: 2.6, fill: "#f4f7ff" }, dynG);                                                                       // the mailbox
-      for (let i = 0; i < 9; i++) { const t = i / 8; sv("ellipse", { cx: (176 + t * 70 + (i % 2 ? 3 : -3)).toFixed(1), cy: (476 - t * 118).toFixed(1), rx: 2, ry: 3.2, fill: "#a7b4d6", opacity: 0.6 }, dynG); }   // footprints to the step
-    };
-
-    const applyTime = () => {
-      const t = HK_TIMES[tI], kind = HK_WX[wxI][0];
-      const over = kind === "clear" ? 1 : kind === "fog" ? 0.4 : 0.2;                                          // cloud hides the stars and dims the moon
-      box.style.background = t.sky;
-      starG.setAttribute("opacity", t.stars * over);
-      moonDisc.setAttribute("fill", t.orb);
-      moonG.setAttribute("transform", `translate(0 ${t.dy})`);
-      moonG.setAttribute("opacity", over < 1 ? 0.3 + over * 0.5 : 1);
-      lit.setAttribute("opacity", Math.min(1, t.lit + (kind === "snow" ? 0.12 : 0)));
-      tint.setAttribute("fill", t.tint[0]); tint.setAttribute("opacity", t.name === "day" ? 0.16 : t.tint[1]);
-      sub.textContent = "hawkins \u00B7 " + t.name + " \u00B7 " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
-      paintSnow();
-      hkWxOverlay(box, kind, reduce);
-    };
-    caption.textContent = "The Byers\u2019 house. Small, tired and a long way from the road, with one lamp on in the front window.";
-    pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
-    hkEnvWatch(box, (t, w) => { if (t !== tI || w !== wxI) { tI = t; wxI = w; applyTime(); } });
-    applyTime();
+    pill("\u{1F6CB}\uFE0F living room", "Step inside to the living room", () => { close(); openByersLivingRoom(); });
+    pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
     document.body.appendChild(sh.back);
   }
 
   return { openWillsHouse };
+};
+
+// ════════ byers-living-room.js ════════
+// byers-living-room.js — 🛋️ the Byers' living room, with the alphabet wall (openByersLivingRoom).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["byers-living-room"] = function (ctx) {
+  'use strict';
+  const { hkShell } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
+  const world = ctx.world;
+  const openHawkins = (...args) => world.openHawkins(...args);
+  const openWillsHouse = (...args) => world.openWillsHouse(...args);
+
+  // ── THE BYERS' LIVING ROOM: THE ROOM ONLY ──
+  // Drawn after the reference photo (a square picture, 1332 x 1332): floral wallpaper under a dark wooden beam, the alphabet painted
+  // on the wall in black with a string of coloured Christmas lights wandering between the rows, a lamp with a pleated cream shade
+  // on the left and one with a glowing yellow shade on the right, a yellow-and-white striped sofa with a crocheted afghan over each
+  // arm and three pillows (embroidered fruit, granny squares, dark flowers), and a dark carved coffee table with a shell box, a
+  // wooden owl, a stack of books, a striped ashtray, a stack of magazines and a dark glass dish.
+  // Nothing is tappable and nothing moves yet: it is a still picture, lamps on (no time of day, weather or sound).
+  // Every number below is in the photo's own pixels, so to move something, measure it on the photo. The picture is drawn on a
+  // slightly taller canvas (extra ceiling above, the table's front and the floor below) so it fills a phone screen.
+  function openByersLivingRoom() {
+    const sh = hkShell("ao3-byers-living-room", "\u{1F6CB}️ The Byers’ living room");
+    const { sv, rnd } = sh.kit;
+    const { box, sub, field, caption, pill, close } = sh;
+    sub.textContent = "the byers’ · lamps on";
+    caption.textContent = "The Byers’ living room. Every letter is still up on the wall.";
+    box.style.background = "#150a0b";
+
+    const VX = 0, VY = -170, VW = 1332, VH = 1700;
+    const svg = sv("svg", { viewBox: `${VX} ${VY} ${VW} ${VH}`, preserveAspectRatio: "xMidYMid meet" });
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const rad = (id, stops) => {
+      const g = sv("radialGradient", { id, cx: 0.5, cy: 0.5, r: 0.5 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
+    const R = (x, y, w, h, fill, o, parent) => A("rect", Object.assign({ x, y, width: w, height: h, fill }, o || {}), parent);
+    const PG = (pts, fill, o, parent) => A("polygon", Object.assign({ points: pts, fill }, o || {}), parent);
+    const E = (cx, cy, rx, ry, fill, o, parent) => A("ellipse", Object.assign({ cx, cy, rx, ry, fill }, o || {}), parent);
+    const C = (cx, cy, r, fill, o, parent) => A("circle", Object.assign({ cx, cy, r, fill }, o || {}), parent);
+    const L = (d, stroke, w, o, parent) => A("path", Object.assign({ d, stroke, "stroke-width": w, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, o || {}), parent);
+    const P = (d, fill, o, parent) => A("path", Object.assign({ d, fill }, o || {}), parent);
+    const G = (o, parent) => sv("g", o || {}, parent || svg);
+    const r1 = (k, a, b) => a + rnd(k) * (b - a);
+    const clip = (id, shapeFn) => { const c = sv("clipPath", { id }, defs); shapeFn(c); return "url(#" + id + ")"; };
+
+    // ── gradients ──
+    grad("ly-ceil", [["0%", "#74552f"], ["100%", "#9a7a4e"]]);
+    grad("ly-wall", [["0%", "#9a7050"], ["45%", "#b08868"], ["100%", "#c29c70"]]);
+    grad("ly-beam", [["0%", "#8a4a2a"], ["12%", "#6b2f1c"], ["100%", "#52190f"]]);
+    grad("ly-wains", [["0%", "#8e4d2f"], ["100%", "#5e2a1e"]]);
+    grad("ly-shadeL", [["0%", "#f1dcb6"], ["60%", "#dcbf94"], ["100%", "#c9a77c"]]);
+    grad("ly-shadeR", [["0%", "#fbd75a"], ["55%", "#f1b82c"], ["100%", "#e29a18"]]);
+    grad("ly-tabletop", [["0%", "#6a3228"], ["50%", "#471f1d"], ["100%", "#321415"]]);
+    grad("ly-apron", [["0%", "#2c1516"], ["100%", "#160a0b"]]);
+    grad("ly-seat", [["0%", "#fff", 0.12], ["35%", "#fff", 0], ["100%", "#000", 0.38]]);
+    grad("ly-back", [["0%", "#fff", 0.1], ["100%", "#000", 0.22]]);
+    grad("ly-shadow", [["0%", "#000", 0.5], ["100%", "#000", 0]]);
+    grad("ly-lampbase", [["0%", "#7a4222"], ["45%", "#b9733a"], ["100%", "#7a4222"]], 1, 0);
+    grad("ly-bottle", [["0%", "#8a7448"], ["45%", "#d1b57a"], ["100%", "#7a6540"]], 1, 0);
+    grad("ly-arm", [["0%", "#2a2029"], ["100%", "#0f0b12"]], 1, 0);
+    rad("ly-glowL", [["0%", "#ffd890", 0.55], ["55%", "#ffc868", 0.2], ["100%", "#ffc060", 0]]);
+    rad("ly-glowR", [["0%", "#ffd070", 0.6], ["55%", "#ffb840", 0.22], ["100%", "#ffb030", 0]]);
+    rad("ly-vig", [["0%", "#000", 0], ["70%", "#000", 0.03], ["100%", "#000", 0.3]]);
+    rad("ly-ball", [["0%", "#fff", 0.95], ["40%", "#fff", 0.35], ["100%", "#fff", 0]]);
+    const BULBS = { w: "#fff1c9", g: "#6cf09a", b: "#6aa8ff", o: "#ffa23e", p: "#ff74d4", r: "#ff5a4a" };
+    Object.keys(BULBS).forEach(k => rad("ly-b" + k, [["0%", BULBS[k], 0.75], ["45%", BULBS[k], 0.25], ["100%", BULBS[k], 0]]));
+
+    // ── the ceiling (it runs on above the picture) and its seams ──
+    R(VX, VY, VW, 262, "url(#ly-ceil)");
+    L("M448 -170 L470 90 M968 -170 L1000 90 M-10 12 L1340 6", "#4a3220", 2, { opacity: 0.3 });
+    L("M452 -170 L474 90", "#c9a878", 1.4, { opacity: 0.25 });
+
+    // ── the wall: dusty rose-tan paper with sprays of small flowers ──
+    R(0, 88, VW, 640, "url(#ly-wall)");
+    const pat = sv("pattern", { id: "ly-floral", width: 120, height: 104, patternUnits: "userSpaceOnUse" }, defs);
+    const spray = (cx, cy, rot, s) => {
+      const g = sv("g", { transform: `translate(${cx} ${cy}) rotate(${rot}) scale(${s})` }, pat);
+      [[-26, 10, -50], [24, 8, 40], [0, 24, 5], [-18, -22, -120], [20, -20, 130]].forEach(([x, y, a]) => E(x, y, 4.2, 12, "#a08d62", { opacity: 0.55, transform: `rotate(${a} ${x} ${y})` }, g));
+      for (let i = 0; i < 5; i++) E(0, -8, 5.5, 9.5, "#cf9d90", { opacity: 0.6, transform: `rotate(${i * 72} 0 0)` }, g);
+      C(0, 0, 3.4, "#8a5546", { opacity: 0.7 }, g);
+      [[-28, -8], [26, -12]].forEach(([x, y]) => { C(x, y, 3.4, "#c58f84", { opacity: 0.6 }, g); });
+    };
+    spray(32, 30, -20, 1); spray(92, 82, 160, 0.95);
+    [[92, 24, 70], [30, 86, 240]].forEach(([x, y, a]) => { const g = sv("g", { transform: `translate(${x} ${y}) rotate(${a})` }, pat); E(0, 0, 3, 9, "#a08d62", { opacity: 0.45 }, g); C(0, -9, 3, "#c58f84", { opacity: 0.5 }, g); });
+    R(0, 88, VW, 640, "url(#ly-floral)");
+    R(0, 88, VW, 640, "#3a1a1a", { opacity: 0.12 });
+    C(60, 560, 420, "url(#ly-glowL)");
+    C(1190, 580, 440, "url(#ly-glowR)");
+
+    // ── the dark wooden beam under the ceiling ──
+    R(0, 88, VW, 46, "url(#ly-beam)");
+    R(0, 88, VW, 3, "#b27a4a", { opacity: 0.7 });
+    R(0, 130, VW, 6, "#000", { opacity: 0.35 });
+    for (let i = 0; i < 26; i++) L(`M${r1("bg" + i, 0, 1300).toFixed(0)} ${(95 + rnd("bh" + i) * 32).toFixed(0)} h${(60 + rnd("bi" + i) * 120).toFixed(0)}`, "#3a120c", 1.4, { opacity: 0.35 });
+
+    // ── the wainscot behind the sofa: a rail and vertical boards ──
+    R(0, 708, VW, 400, "url(#ly-wains)");
+    for (let x = 18; x < VW; x += 56) L(`M${x} 722 V1100`, "#2e130c", 2, { opacity: 0.55 });
+    for (let x = 20; x < VW; x += 56) L(`M${x} 722 V1100`, "#d99a58", 1, { opacity: 0.18 });
+    R(0, 704, VW, 18, "#4e2016");
+    R(0, 704, VW, 3, "#b27a4a", { opacity: 0.6 });
+    R(0, 720, VW, 4, "#000", { opacity: 0.4 });
+    // the heater grille on the right
+    R(1066, 738, 168, 68, "#6a3a22"); R(1072, 744, 156, 56, "#2a140c");
+    for (let y = 750; y < 798; y += 8) R(1074, y, 152, 4, "#9a6a40", { opacity: 0.75 });
+
+    // ── the bookshelf in the doorway on the right edge ──
+    R(1286, 214, 60, 620, "#190c14");
+    R(1286, 214, 14, 620, "#7a3a20"); R(1286, 214, 3, 620, "#c58a52", { opacity: 0.6 });
+    R(1286, 214, 60, 16, "#6b2f1c");
+    [322, 452, 566, 690].forEach(y => { R(1296, y, 40, 8, "#5a2c1a"); R(1296, y, 40, 2, "#a86a40", { opacity: 0.6 }); });
+    [[1304, 252, "#8c3b2a", 56], [1316, 270, "#d98b2a", 40], [1326, 258, "#3a5a6a", 52], [1306, 386, "#a8452c", 60], [1320, 372, "#cfa040", 74], [1332, 394, "#5a3a4a", 52], [1306, 506, "#3a5a6a", 56], [1322, 490, "#8c3b2a", 74]].forEach(([x, y, c, h]) => R(x, y, 9, h, c, { opacity: 0.75 }));
+
+    // ── side tables, lamps and what stands by them ──
+    // the left table, with a pale cloth, and the edge of a flowery vase
+    R(-10, 812, 150, 22, "#5e3220"); R(-10, 812, 150, 3, "#b27a4a", { opacity: 0.5 });
+    E(60, 813, 62, 7, "#e8d8bc", { opacity: 0.9 });
+    P("M-14 696 Q8 684 30 700 Q40 740 26 775 L26 800 L-14 800 Z", "#eadcc6");
+    P("M-14 770 H30 V800 H-14 Z", "#2c3a3e");
+    [[0, 720, 8], [16, 744, 7], [2, 756, 6]].forEach(([x, y, r]) => { C(x, y, r, "#d98aa0", { opacity: 0.8 }); C(x, y, r * 0.35, "#e8c060"); });
+    L("M-10 736 Q8 730 22 724 M-6 764 Q10 758 22 752", "#6a8a5a", 2, { opacity: 0.7 });
+    // the left lamp: a carved base with oval cut-outs and a pleated cream shade
+    R(70, 628, 24, 44, "#3a2412");
+    R(52, 800, 72, 14, "#6a3a1c", { rx: 4 });
+    R(58, 668, 62, 134, "url(#ly-lampbase)", { rx: 8 });
+    for (let row = 0; row < 5; row++) for (let col = 0; col < 3; col++) {
+      const x = 66 + col * 19, y = 680 + row * 24;
+      E(x + 4, y + 9, 5.2, 9, "#3a1e10", { opacity: 0.85 }); E(x + 4, y + 9, 5.2, 9, "none", { stroke: "#d9955a", "stroke-width": 1, opacity: 0.6 });
+    }
+    R(54, 664, 70, 8, "#d09858", { rx: 3 });
+    const shadeL = G();
+    PG("30,513 124,513 180,634 -8,634", "url(#ly-shadeL)", {}, shadeL);
+    for (let i = 0; i <= 14; i++) L(`M${(30 + (94 * i) / 14).toFixed(1)} 514 L${(-8 + (188 * i) / 14).toFixed(1)} 633`, "#9a7a52", 1.2, { opacity: i % 2 ? 0.28 : 0.12 }, shadeL);
+    E(77, 513, 47, 5.5, "#f6e6c4", {}, shadeL);
+    E(77, 513, 47, 5.5, "none", { stroke: "#b89a6c", "stroke-width": 1.4 }, shadeL);
+    R(-8, 630, 188, 7, "#b0905e", {}, shadeL);
+    R(-8, 630, 188, 2, "#f0dcb4", { opacity: 0.6 }, shadeL);
+    // the right table, a little pale figure on it, and the right lamp: a patterned bottle with a glowing yellow shade
+    R(1208, 820, 140, 22, "#4a2818"); R(1208, 820, 140, 3, "#b27a4a", { opacity: 0.45 });
+    R(1228, 796, 18, 26, "#e6d8c2", { rx: 7 }); C(1237, 794, 8, "#efe2ce"); PG("1230,788 1233,780 1237,789", "#e6d8c2"); PG("1242,788 1241,780 1237,789", "#e6d8c2");
+    R(1172, 636, 22, 38, "#6b5230");
+    P("M1176 664 Q1146 684 1146 722 L1148 802 Q1148 814 1160 814 L1198 814 Q1210 814 1212 802 L1212 722 Q1212 684 1190 664 Z", "url(#ly-bottle)");
+    for (let row = 0; row < 6; row++) for (let col = 0; col < 3; col++) {
+      const cx = 1155 + col * 22 + (row % 2) * 11, cy = 690 + row * 20;
+      PG(`${cx},${cy - 9} ${cx + 8},${cy} ${cx},${cy + 9} ${cx - 8},${cy}`, row % 2 ? "#4f8f86" : "#2f6a66", { opacity: 0.8 });
+    }
+    L("M1148 718 H1212 M1147 780 H1212", "#3a5a52", 3, { opacity: 0.7 });
+    const shadeR = G();
+    PG("1148,530 1218,530 1270,642 1096,642", "url(#ly-shadeR)", {}, shadeR);
+    PG("1166,540 1204,540 1236,636 1130,636", "#fff3b0", { opacity: 0.4 }, shadeR);
+    for (let i = 0; i <= 12; i++) L(`M${(1148 + (70 * i) / 12).toFixed(1)} 531 L${(1096 + (174 * i) / 12).toFixed(1)} 641`, "#b8700e", 1.2, { opacity: 0.18 }, shadeR);
+    E(1183, 530, 35, 4.5, "#fde99a", {}, shadeR);
+    E(1183, 530, 35, 4.5, "none", { stroke: "#c78a24", "stroke-width": 1.2 }, shadeR);
+    R(1096, 638, 174, 7, "#c9881c", {}, shadeR);
+    C(1183, 585, 130, "url(#ly-glowR)", { opacity: 0.6 });
+
+    // ── the alphabet: black painted letters (a stroke alphabet, jittered by hand) with drips ──
+    const GLYPH = {
+      A: ["M0 1 L.5 0 L1 1", "M.2 .66 L.8 .66"],
+      B: ["M0 0 L0 1", "M0 0 Q1.05 0 1 .27 Q.95 .5 0 .5", "M0 .5 Q1.2 .5 1.05 .76 Q1 1 0 1"],
+      C: ["M1 .18 Q.7 -.08 .3 .05 Q0 .2 0 .5 Q0 .85 .3 .97 Q.7 1.08 1 .84"],
+      D: ["M0 0 L0 1", "M0 0 Q1.15 .05 1.05 .5 Q1.1 .95 0 1"],
+      E: ["M1 0 L0 0 L0 1 L1 1", "M0 .5 L.75 .5"],
+      F: ["M1 0 L0 0 L0 1", "M0 .5 L.75 .5"],
+      G: ["M1 .2 Q.7 -.08 .3 .05 Q0 .2 0 .5 Q0 .9 .35 1 Q.8 1.06 1 .78 L1 .55 L.55 .55"],
+      H: ["M0 0 L0 1", "M1 0 L1 1", "M0 .5 L1 .5"],
+      I: ["M.05 0 L.95 0", "M.5 0 L.5 1", "M0 1 L1 1"],
+      J: ["M.1 0 L1 0", "M.66 0 L.66 .78 Q.62 1.05 .3 1 Q0 .96 0 .72"],
+      K: ["M0 0 L0 1", "M1 0 L.05 .62", "M.3 .42 L1 1"],
+      L: ["M0 0 L0 1 L1 1"],
+      M: ["M0 1 L0 0 L.5 .62 L1 0 L1 1"],
+      N: ["M0 1 L0 0 L1 1 L1 0"],
+      O: ["M.5 0 Q1.1 0 1.05 .5 Q1 1.02 .5 1 Q-.1 1 -.05 .5 Q0 -.02 .5 0"],
+      P: ["M0 0 L0 1", "M0 0 Q1.1 0 1.05 .3 Q1 .58 0 .56"],
+      Q: ["M.5 0 Q1.1 0 1.05 .5 Q1 1.02 .5 1 Q-.1 1 -.05 .5 Q0 -.02 .5 0", "M.6 .7 L1.08 1.2"],
+      R: ["M0 0 L0 1", "M0 0 Q1.1 0 1.05 .3 Q1 .58 0 .56", "M.4 .56 L1 1"],
+      S: ["M1 .16 Q.7 -.06 .3 .02 Q-.05 .15 .12 .34 Q.3 .5 .75 .56 Q1.1 .7 .92 .92 Q.6 1.1 0 .86"],
+      T: ["M0 0 L1 0", "M.5 0 L.5 1"],
+      U: ["M0 0 L0 .74 Q.05 1.08 .5 1.05 Q1 1.04 1 .74 L1 0"],
+      V: ["M0 0 L.5 1 L1 0"],
+      W: ["M0 0 L.25 1 L.5 .32 L.75 1 L1 0"],
+      X: ["M0 0 L1 1", "M1 0 L0 1"],
+      Y: ["M0 0 L.5 .5 L1 0", "M.5 .5 L.5 1"],
+      Z: ["M0 0 L1 0 L0 1 L1 1"],
+    };
+    const INK = "#13100f";
+    const glyph = (ch, x, y, w, h, key) => {
+      const g = G();
+      const jx = () => (rnd(key + "j" + Math.random()) - 0.5);                       // never used for layout, only for the brush
+      GLYPH[ch].forEach((d, si) => {
+        let k = 0, n = 0;
+        const out = d.match(/[MLQ]|-?\d*\.?\d+/g).map(t => {
+          if (/[MLQ]/.test(t)) { k = 0; return t; }
+          const v = +t; n++;
+          const j = (rnd(key + si + "p" + n) - 0.5) * 3.2;
+          return ((k++ % 2 === 0) ? x + v * w + j : y + v * h + j).toFixed(1);
+        }).join(" ");
+        L(out, INK, 12.5, {}, g);
+        L(out, "#3a2a24", 5, { opacity: 0.35, transform: "translate(1.2 -0.8)" }, g);
+      });
+      return g;
+    };
+    const drip = (x, y, len, w) => { const ww = w || 4.4; R(x - ww / 2, y, ww, len, INK, { rx: ww / 2 }); C(x, y + len, ww * 0.85, INK); };
+    const LETTERS = [
+      // row 1
+      ["A", 296, 240, 64, 72], ["B", 402, 232, 58, 78], ["C", 477, 234, 54, 74], ["D", 574, 238, 62, 74], ["E", 682, 240, 52, 70], ["F", 772, 242, 58, 68], ["G", 842, 236, 52, 68], ["H", 938, 234, 56, 72],
+      // row 2
+      ["I", 172, 380, 68, 88], ["J", 312, 398, 70, 88], ["K", 412, 388, 62, 98], ["L", 510, 388, 58, 104], ["M", 594, 376, 70, 100], ["N", 684, 374, 60, 102], ["O", 756, 374, 62, 100], ["P", 850, 374, 64, 94], ["Q", 1002, 398, 78, 86],
+      // row 3
+      ["R", 274, 556, 68, 90], ["S", 354, 564, 60, 86], ["T", 432, 592, 56, 58], ["U", 524, 566, 62, 76], ["V", 612, 566, 70, 82], ["W", 702, 572, 76, 86], ["X", 792, 566, 66, 78], ["Y", 870, 548, 70, 90], ["Z", 998, 552, 88, 88],
+    ];
+    LETTERS.forEach(([ch, x, y, w, h], i) => glyph(ch, x, y, w, h, "lt" + i));
+    [[190, 466, 40, 4.4], [228, 466, 20, 3.6], [352, 486, 14, 3.4], [540, 492, 26, 4], [640, 474, 16, 3.4], [1022, 486, 28, 4.2], [1062, 492, 14, 3.4], [304, 640, 38, 4.6], [376, 646, 40, 4.4], [404, 646, 24, 3.6], [446, 646, 20, 3.8], [744, 656, 24, 3.8], [920, 634, 36, 4.4], [940, 628, 16, 3.4], [434, 308, 10, 3.2], [226, 300, 0, 0]].forEach(([x, y, len, w]) => { if (len) drip(x, y, len, w); });
+
+    // ── the string of lights: three runs of black wire with bulbs ──
+    const smooth = pts => {
+      let d = "M" + pts[0][0] + " " + pts[0][1];
+      for (let i = 1; i < pts.length - 1; i++) { const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2; d += ` Q${pts[i][0]} ${pts[i][1]} ${mx.toFixed(1)} ${my.toFixed(1)}`; }
+      const l = pts[pts.length - 1]; return d + ` L${l[0]} ${l[1]}`;
+    };
+    const wire = pts => { L(smooth(pts), "#0c0a09", 3.2); L(smooth(pts), "#4a3a30", 1, { opacity: 0.35, transform: "translate(0 -1)" }); };
+    wire([[125, 504], [124, 300], [124, 210], [152, 192], [318, 200], [418, 194], [495, 196], [600, 206], [682, 208], [790, 216], [870, 206], [970, 206], [1062, 230], [1150, 262], [1186, 276], [1194, 304], [1178, 336], [1135, 342]]);
+    wire([[1135, 342], [1040, 352], [940, 346], [860, 338], [800, 337], [688, 345], [618, 380], [514, 386], [410, 378], [338, 356], [205, 340]]);
+    wire([[125, 504], [150, 510], [270, 512], [392, 520], [447, 548], [568, 535], [650, 540], [712, 522], [800, 525], [878, 512], [960, 512], [1048, 516]]);
+    const bulb = (x, y, c) => {
+      C(x, y + 2, 30, "url(#ly-b" + c + ")");
+      R(x - 2.6, y - 12, 5.2, 7, "#16120f", { rx: 1 });
+      A("path", { d: `M${x - 6.5} ${y - 6} Q${x - 7} ${y + 9} ${x} ${y + 10} Q${x + 7} ${y + 9} ${x + 6.5} ${y - 6} Z`, fill: BULBS[c] });
+      E(x - 2, y - 1, 1.8, 3.2, "#fff", { opacity: 0.7 });
+    };
+    [[318, 210, "w"], [418, 202, "b"], [495, 205, "o"], [600, 215, "g"], [682, 217, "w"], [790, 226, "o"], [870, 215, "w"], [970, 215, "g"], [1062, 240, "w"], [1168, 272, "w"],
+     [205, 346, "g"], [338, 364, "p"], [410, 385, "b"], [514, 394, "w"], [618, 387, "o"], [688, 352, "w"], [800, 344, "p"], [860, 345, "b"], [1040, 359, "w"], [1135, 347, "w"],
+     [270, 517, "g"], [392, 527, "o"], [447, 555, "w"], [568, 542, "b"], [650, 547, "p"], [712, 529, "w"], [800, 532, "o"], [878, 519, "p"], [1048, 522, "w"]].forEach(([x, y, c]) => bulb(x, y, c));
+
+    // ── the sofa: yellow and white stripes ──
+    const CREAM_B = "#c89a6e", YEL_B = "#cc8628", CREAM_S = "#c0916a", YEL_S = "#c07d28";
+    const striped = (id, shape, x0, x1, y0, y1, period, yw, off, fan, cream, yel) => {
+      const cp = clip(id, c => { A("path", { d: shape }, c); });
+      const g = G({ "clip-path": cp });
+      R(x0 - 20, y0 - 20, x1 - x0 + 40, y1 - y0 + 40, cream, {}, g);
+      for (let x = x0 - period * 2 + off; x < x1 + period; x += period) {
+        const xb = 655 + (x - 655) * fan;
+        PG(`${x},${y0} ${x + yw},${y0} ${xb + yw * fan},${y1} ${xb},${y1}`, yel, {}, g);
+      }
+      return g;
+    };
+    // the arms first (dark wood), then the back and seat over their inner edges
+    P("M-20 836 Q-20 818 6 818 L84 818 Q112 820 112 848 L112 1110 L-20 1110 Z", "url(#ly-arm)");
+    P("M1208 848 Q1208 820 1236 818 L1316 818 Q1352 820 1352 850 L1352 1110 L1208 1110 Z", "url(#ly-arm)");
+    L("M112 850 V1100", "#5a3a2a", 2, { opacity: 0.6 }); L("M1208 850 V1100", "#5a3a2a", 2, { opacity: 0.6 });
+    // the back
+    striped("ly-cl-back", "M206 764 Q206 738 238 736 L1060 736 Q1092 738 1092 766 L1092 930 L206 930 Z", 206, 1092, 736, 930, 62, 30, 6, 1.0, CREAM_B, YEL_B);
+    P("M206 764 Q206 738 238 736 L1060 736 Q1092 738 1092 766 L1092 930 L206 930 Z", "url(#ly-back)");
+    L("M206 764 Q206 738 238 736 L1060 736 Q1092 738 1092 766", "#fff0c8", 3, { opacity: 0.3 });
+    // the seat: the top of the cushions, then their striped fronts with a seam in the middle
+    striped("ly-cl-seatT", "M104 934 Q110 912 150 912 L1190 912 Q1236 914 1240 940 L1244 958 L100 958 Z", 100, 1244, 912, 958, 62, 32, 18, 1.0, "#c7996f", "#c8882a");
+    striped("ly-cl-seatL", "M98 958 L654 958 L654 1070 L90 1070 Z", 90, 654, 958, 1070, 58, 28, 12, 1.05, CREAM_S, YEL_S);
+    striped("ly-cl-seatR", "M658 958 L1246 958 L1252 1070 L658 1070 Z", 658, 1252, 958, 1070, 58, 28, 36, 1.05, CREAM_S, YEL_S);
+    R(98, 958, 1150, 112, "url(#ly-seat)");
+    R(649, 940, 12, 132, "#2a1410", { opacity: 0.6 }); R(651, 940, 4, 132, "#000", { opacity: 0.35 });
+    L("M98 958 H1246", "#2a1410", 2, { opacity: 0.4 });
+
+    // ── the afghans over the arms ──
+    const afghan = (id, d, bands, y0, y1, x0, x1, seed) => {
+      const cp = clip(id, c => { A("path", { d }, c); });
+      const g = G({ "clip-path": cp });
+      R(x0, y0, x1 - x0, y1 - y0, bands[0], {}, g);
+      let k = 0;
+      for (let y = y0 - 10; y < y1 + 20; y += 15, k++) {
+        let p = `M${x0 - 20} ${y}`;
+        for (let x = x0 - 20, up = 1; x < x1 + 30; x += 18, up = -up) p += ` L${x + 18} ${y + up * 8}`;
+        L(p, bands[(k % (bands.length - 1)) + 1], 9, { "stroke-linecap": "butt" }, g);
+      }
+      R(x0, y0, x1 - x0, y1 - y0, "url(#ly-back)", { opacity: 0.9 }, g);
+      return g;
+    };
+    afghan("ly-cl-afL", "M-10 838 Q50 822 112 812 L218 806 Q226 812 226 836 L222 886 Q214 934 170 962 Q130 972 92 954 Q50 936 -10 930 Z", ["#e2cdb8", "#8c424a", "#e2cdb8", "#c68a90", "#e2cdb8", "#7a3640"], 800, 975, -10, 230, 1);
+    L("M-6 838 Q50 822 112 812 L218 806", "#f6e6d0", 3, { opacity: 0.35 });
+    afghan("ly-cl-afR", "M1082 792 Q1096 784 1124 790 L1200 818 Q1260 836 1340 846 L1340 978 Q1296 990 1250 966 Q1210 950 1168 966 Q1150 960 1136 930 L1100 866 Q1084 830 1082 792 Z", ["#e6d6bc", "#7a2a2e", "#2a1a1a", "#e6d6bc", "#a8362e", "#2a1a1a"], 780, 995, 1080, 1340, 2);
+    L("M1086 792 Q1100 784 1124 790 L1200 818 Q1260 836 1340 846", "#f6e6d0", 3, { opacity: 0.3 });
+
+    // ── the three pillows ──
+    const pillowShadow = (cx, cy, rx, ry) => E(cx, cy, rx, ry, "#000", { opacity: 0.28 });
+    // embroidered fruit on cream
+    pillowShadow(318, 916, 96, 12);
+    const p1 = G({ transform: "rotate(-3 316 840)" });
+    R(226, 766, 180, 150, "#ecdcc3", { rx: 16 }, p1);
+    R(226, 766, 180, 150, "url(#ly-back)", { rx: 16 }, p1);
+    R(226, 766, 180, 150, "none", { rx: 16, stroke: "#b8946a", "stroke-width": 2, opacity: 0.6 }, p1);
+    [[262, 834, 15], [290, 852, 14], [250, 872, 14], [276, 890, 12]].forEach(([x, y, r]) => { C(x, y, r, "#c0352b", {}, p1); C(x - 4, y - 4, r * 0.3, "#f09080", { opacity: 0.7 }, p1); L(`M${x} ${y - r} q2 -6 7 -8`, "#4a6a30", 2, {}, p1); });
+    [[240, 808], [252, 824]].forEach(([x, y]) => E(x, y, 11, 5, "#4f8a3a", { transform: `rotate(-30 ${x} ${y})` }, p1));
+    for (let i = 0; i < 16; i++) C(310 + rnd("mi" + i) * 74, 804 + rnd("mj" + i) * 62, 4 + rnd("mk" + i) * 2.4, i % 3 ? "#e3b640" : "#c98a28", {}, p1);
+    L("M300 880 Q330 850 372 806 M312 884 Q344 858 388 830", "#5a8a3a", 2, { opacity: 0.8 }, p1);
+    [[372, 878, 9], [346, 892, 8]].forEach(([x, y, r]) => { C(x, y, r, "#cf4a3a", {}, p1); });
+    // granny squares: oatmeal ground, squares in rose, mustard and cream
+    pillowShadow(620, 920, 100, 12);
+    const p2 = G({ transform: "rotate(-1.5 620 840)" });
+    R(514, 762, 212, 158, "#8a5a4c", { rx: 14 }, p2);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const x = 522 + c * 66, y = 770 + r * 49.5, alt = (r + c) % 2;
+      R(x, y, 64, 48, alt ? "#c58a58" : "#a36a58", { rx: 4 }, p2);
+      R(x + 6, y + 5, 52, 38, alt ? "#e0b038" : "#c4872e", { rx: 6 }, p2);
+      R(x + 13, y + 11, 38, 26, alt ? "#ecd9b4" : "#e4cfae", { rx: 8 }, p2);
+      C(x + 32, y + 24, 8, alt ? "#a05a48" : "#c0922c", {}, p2);
+      for (let i = 0; i < 6; i++) C(x + 32 + Math.cos(i * 1.047) * 11, y + 24 + Math.sin(i * 1.047) * 9, 3.4, alt ? "#8a4a3a" : "#a8742a", { opacity: 0.8 }, p2);
+    }
+    R(514, 762, 212, 158, "url(#ly-back)", { rx: 14 }, p2);
+    // dark velvet with embroidered daisies
+    pillowShadow(978, 916, 112, 12);
+    const p3 = G({ transform: "rotate(-5 976 842)" });
+    R(858, 770, 238, 148, "#14181f", { rx: 18 }, p3);
+    R(858, 770, 238, 148, "url(#ly-back)", { rx: 18, opacity: 0.7 }, p3);
+    R(858, 770, 238, 148, "none", { rx: 18, stroke: "#32261e", "stroke-width": 2 }, p3);
+    const daisy = (cx, cy, r, g) => {
+      for (let i = 0; i < 12; i++) E(cx, cy - r * 0.62, r * 0.17, r * 0.46, "#f1e6c8", { transform: `rotate(${i * 30} ${cx} ${cy})` }, g);
+      C(cx, cy, r * 0.28, "#e8b838", {}, g); C(cx, cy, r * 0.14, "#b87a1c", {}, g);
+    };
+    L("M890 905 Q930 860 940 835 M1010 906 Q1016 860 1018 828 M1070 900 Q1060 872 1062 850 M960 906 Q990 880 1030 860", "#4f8a3a", 2.4, { opacity: 0.85 }, p3);
+    [[920, 876, -40], [988, 880, 20], [1046, 888, 160], [900, 830, -70], [1075, 812, 60]].forEach(([x, y, a]) => E(x, y, 15, 6, "#5a9a3a", { transform: `rotate(${a} ${x} ${y})`, opacity: 0.9 }, p3));
+    daisy(928, 822, 42, p3); daisy(1012, 808, 38, p3); daisy(1062, 856, 28, p3);
+    [[884, 884], [1086, 904]].forEach(([x, y]) => { C(x, y, 8, "#c94a38", {}, p3); C(x, y, 3, "#f0c060", {}, p3); });
+    L("M878 900 q10 -10 22 -8 M1030 888 q14 -6 24 4", "#c98a28", 3, { opacity: 0.8 }, p3);
+
+    // ── the coffee table: dark wood, carved front ──
+    P("M-12 1064 L1344 1058 L1344 1258 L-12 1264 Z", "url(#ly-tabletop)");
+    for (let i = 0; i < 40; i++) L(`M${r1("tg" + i, -10, 1200).toFixed(0)} ${r1("th" + i, 1072, 1250).toFixed(0)} h${(80 + rnd("ti" + i) * 260).toFixed(0)}`, "#7a3a2a", 1.2, { opacity: 0.18 });
+    E(300, 1120, 330, 22, "#a05a44", { opacity: 0.14 }); E(930, 1210, 360, 18, "#a05a44", { opacity: 0.12 });
+    R(-12, 1252, 1356, 16, "#6e3828"); R(-12, 1252, 1356, 3, "#b27a56", { opacity: 0.7 });
+    R(-12, 1266, 1356, 200, "url(#ly-apron)");
+    [[200, 510], [540, 660], [772, 898], [1000, 1110]].forEach(([a, b], i) => {
+      R(a, 1292, b - a, 150, "#2c1514", { rx: 4 }); R(a + 8, 1300, b - a - 16, 134, "#1a0b0c", { rx: 4 });
+      const cx = (a + b) / 2;
+      P(`M${a + 14} 1426 V1344 Q${cx} 1296 ${b - 14} 1344 V1426 Z`, "#3a1c18", { opacity: 0.85 });
+      C(cx, 1368, 12, "#5a2c22"); C(cx, 1368, 5, "#2a100e");
+    });
+    R(60, 1268, 96, 200, "#0e0607"); R(1176, 1268, 96, 200, "#0e0607");
+    R(1140, 1290, 130, 60, "#c9a040", { opacity: 0.25, rx: 20 });
+    R(-12, 1466, 1356, 70, "#150a0a");
+
+    // things on the table
+    // a shell-covered box
+    E(180, 1146, 76, 12, "#000", { opacity: 0.4 });
+    PG("128,1052 214,1042 246,1068 112,1084", "#e6dac4");
+    PG("112,1084 246,1068 246,1140 116,1150", "#cdbfa6");
+    PG("112,1084 128,1052 130,1066 114,1100", "#a89a82");
+    for (let i = 0; i < 70; i++) { const x = r1("sx" + i, 118, 242), y = r1("sy" + i, 1074, 1138); C(x.toFixed(1), y.toFixed(1), 2.6 + rnd("sz" + i) * 2, rnd("sw" + i) > 0.5 ? "#f2e8d6" : "#a8987e", { opacity: 0.8 }); }
+    for (let i = 0; i < 24; i++) { const x = r1("tx" + i, 130, 236), y = r1("ty" + i, 1046, 1070); C(x.toFixed(1), y.toFixed(1), 2.4 + rnd("tz" + i) * 1.6, rnd("tw" + i) > 0.5 ? "#f6eee0" : "#b2a288", { opacity: 0.85 }); }
+    // the little carved wooden owl
+    E(282, 1140, 36, 8, "#000", { opacity: 0.4 });
+    P("M254 1136 Q252 1066 262 1056 Q282 1046 302 1056 Q312 1066 310 1136 Q282 1146 254 1136 Z", "#9b5a30");
+    E(282, 1054, 30, 9, "#4a2414"); E(282, 1051, 24, 6, "#6a381c");
+    E(272, 1086, 6.5, 8.5, "#2a1208"); E(294, 1086, 6.5, 8.5, "#2a1208"); E(272, 1086, 2.6, 3.4, "#d9a860"); E(294, 1086, 2.6, 3.4, "#d9a860");
+    L("M280 1096 l4 8 l-8 0 z", "#e0b070", 2);
+    R(255, 1060, 8, 70, "#fff", { opacity: 0.1 });
+    // the stack of large books
+    E(460, 1186, 150, 14, "#000", { opacity: 0.45 });
+    PG("322,1042 600,1028 598,1102 318,1112", "#1c2428");
+    PG("326,1046 596,1033 595,1066 325,1078", "#3c5258", { opacity: 0.8 });
+    PG("340,1050 420,1046 410,1074 336,1080", "#b8c4bc", { opacity: 0.35 });
+    [[1112, "#d8cdb4", 12, 318, 598], [1124, "#241e1a", 12, 316, 598], [1136, "#e0d8c2", 16, 318, 596], [1152, "#2c2420", 12, 316, 596], [1164, "#d4ccb6", 14, 318, 594]].forEach(([y, c, h, x0, x1]) => R(x0, y, x1 - x0, h, c));
+    R(330, 1138, 130, 7, "#6a4a30", { opacity: 0.8 }); R(470, 1138, 60, 7, "#3a3a38", { opacity: 0.6 });
+    R(318, 1112, 280, 3, "#000", { opacity: 0.4 });
+    // the striped coaster, a short stack of coloured discs
+    E(692, 1118, 46, 9, "#000", { opacity: 0.4 });
+    R(650, 1086, 84, 32, "#d9620a");
+    R(650, 1096, 84, 8, "#a8281a"); R(650, 1104, 84, 7, "#e7b200"); R(650, 1111, 84, 7, "#8a3a1a");
+    E(692, 1118, 42, 8, "#8a3a1a"); R(650, 1086, 84, 4, "#f0a020");
+    E(692, 1086, 42, 12, "#f0b800"); E(692, 1086, 34, 8.5, "#d96a10"); E(692, 1086, 24, 5.6, "#f4c812");
+    // the stack of magazines, a colourful cover on top with a red LIFE box
+    E(926, 1186, 190, 14, "#000", { opacity: 0.45 });
+    PG("760,1062 1042,1056 1090,1132 760,1146", "#2a2428");
+    const mag = G({ "clip-path": clip("ly-cl-mag", c => { A("polygon", { points: "762,1064 1040,1058 1086,1130 762,1144" }, c); }) });
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 15; c++) R(762 + c * 22, 1058 + r * 14.5, 22.5, 15, ["#c8403a", "#e0a030", "#3a6a9a", "#6a3a5a", "#2a2a2a", "#d8d0c0", "#4a8a5a", "#a85a2a"][Math.floor(rnd("mg" + r + "_" + c) * 8)], { opacity: 0.88 }, mag);
+    R(860, 1066, 130, 22, "#f2eadc", { opacity: 0.92 }, mag);
+    const tp = A("text", { x: 925, y: 1083, "font-family": "Arial,sans-serif", "font-weight": 800, "font-size": 15, fill: "#1a1412", "text-anchor": "middle", "letter-spacing": 2 }, mag); tp.textContent = "PICTURES";
+    R(972, 1056, 80, 42, "#d6281e", {}, mag);
+    const tl = A("text", { x: 1012, y: 1090, "font-family": "Arial,sans-serif", "font-weight": 900, "font-size": 30, fill: "#fff", "text-anchor": "middle" }, mag); tl.textContent = "LIFE";
+    C(1030, 1114, 24, "#f0b800", {}, mag); C(1056, 1128, 20, "#e87a14", {}, mag);
+    const t20 = A("text", { x: 1030, y: 1124, "font-family": "Arial,sans-serif", "font-weight": 900, "font-size": 24, fill: "#d6281e", "text-anchor": "middle" }, mag); t20.textContent = "20";
+    [[1144, "#e0d8c4", 10], [1154, "#2a2420", 8], [1162, "#d8d0bc", 10], [1172, "#241e1c", 8]].forEach(([y, c, h]) => R(760, y, 328, h, c));
+    R(760, 1144, 328, 3, "#000", { opacity: 0.4 });
+    // the dark red glass dish
+    E(1176, 1130, 100, 20, "#000", { opacity: 0.45 });
+    E(1176, 1116, 98, 28, "#3a1612"); E(1176, 1110, 92, 24, "#6a2418"); E(1176, 1108, 76, 17, "#8a3420");
+    for (let i = 0; i < 18; i++) { const a = i * 0.349; E(1176 + Math.cos(a) * 62, 1108 + Math.sin(a) * 12, 12, 7, "#a84a2c", { opacity: 0.7 }); E(1176 + Math.cos(a) * 62 - 3, 1105 + Math.sin(a) * 12, 4, 2.4, "#e8a070", { opacity: 0.6 }); }
+    E(1176, 1106, 30, 7, "#5a1c14", { opacity: 0.85 });
+
+    // ── warm light and shadow over everything ──
+    C(60, 580, 380, "url(#ly-glowL)", { opacity: 0.7 });
+    C(1190, 590, 400, "url(#ly-glowR)", { opacity: 0.65 });
+    R(VX, VY, VW, VH, "url(#ly-vig)", { "pointer-events": "none" });
+    // the very top and bottom of the extended canvas fade to the room's dark
+    grad("ly-topfade", [["0%", "#0a0506", 0.55], ["100%", "#0a0506", 0]]);
+    R(VX, VY, VW, 170, "url(#ly-topfade)");
+
+    field.appendChild(svg);
+    pill("\u{1F3DA}️ outside", "Back out to the front of Will’s house", () => { close(); openWillsHouse(); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    document.body.appendChild(sh.back);
+  }
+
+  return { openByersLivingRoom };
 };
 
 // ════════ softlanding.js ════════
