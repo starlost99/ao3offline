@@ -12282,10 +12282,14 @@
     caption.textContent = "Will\u2019s house, out at the end of the road.";
     box.style.background = "#74add9";
 
-    const VX = 140, VY = -430, VW = 800, VH = 1310;
+    const VX = 160, VY = -90, VW = 760, VH = 1130;
     const svg = sv("svg", { viewBox: `${VX} ${VY} ${VW} ${VH}`, preserveAspectRatio: "xMidYMax meet" });
-    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;";
     const defs = sv("defs", {}, svg);
+    const rad = (id, stops) => {
+      const g = sv("radialGradient", { id, cx: 0.5, cy: 0.5, r: 0.5 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
     const grad = (id, stops, x2, y2) => {
       const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
       stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
@@ -12300,61 +12304,84 @@
     const E = (cx, cy, rx, ry, fill, o, parent) => A("ellipse", Object.assign({ cx, cy, rx, ry, fill }, o || {}), parent);
     const C = (cx, cy, r, fill, o, parent) => A("circle", Object.assign({ cx, cy, r, fill }, o || {}), parent);
     const L = (d, stroke, w, o, parent) => A("path", Object.assign({ d, stroke, "stroke-width": w, fill: "none", "stroke-linecap": "round" }, o || {}), parent);
+    const P = (d, fill, o, parent) => A("path", Object.assign({ d, fill }, o || {}), parent);
     const r1 = (k, a, b) => a + rnd(k) * (b - a);
 
-    // ── sky and clouds ──
-    R(VX, VY, VW, 1200, "url(#wh-sky)");
-    [[1000, 40, 150, 34], [900, 100, 120, 24], [1100, 120, 110, 22], [800, 20, 90, 18]].forEach(([cx, cy, rx, ry], i) => {
-      E(cx, cy, rx, ry, "#fff", { opacity: 0.8 });
-      E(cx - rx * 0.4, cy + ry * 0.3, rx * 0.6, ry * 0.7, "#fff", { opacity: 0.7 });
-      E(cx + rx * 0.4, cy - ry * 0.2, rx * 0.55, ry * 0.8, "#f1f6fa", { opacity: 0.8 });
+    // ── sky ──
+    rad("wh-sun", [["0%", "#fff6d0", 0.7], ["100%", "#fff6d0", 0]]);
+    R(VX - 400, VY - 600, VW + 800, 1360, "url(#wh-sky)");
+    C(900, 10, 240, "url(#wh-sun)");
+    [[760, 40, 120, 24], [600, 130, 86, 16], [880, 150, 76, 14], [420, 20, 90, 16]].forEach(([cx, cy, rx, ry]) => {
+      E(cx, cy, rx, ry, "#fff", { opacity: 0.85 });
+      E(cx - rx * 0.4, cy + ry * 0.25, rx * 0.6, ry * 0.7, "#fff", { opacity: 0.8 });
+      E(cx + rx * 0.35, cy - ry * 0.3, rx * 0.5, ry * 0.8, "#f1f6fa", { opacity: 0.85 });
     });
 
-    // ── the woods behind: clusters of round foliage, dark at the bottom and lighter on top ──
+    // ── the trees: round canopies built from three stacked balls (dark base, mid, sunlit top) ──
+    const ball = (cx, cy, r, pal) => { C(cx, cy, r, pal[0]); C(cx - r * 0.1, cy - r * 0.12, r * 0.86, pal[1]); C(cx - r * 0.24, cy - r * 0.3, r * 0.52, pal[2], { opacity: 0.9 }); };
     const blob = (cx, cy, r, cols, seed, n) => {
       for (let i = 0; i < (n || 9); i++) {
         const a = rnd(seed + "a" + i) * 6.283, d = rnd(seed + "d" + i) * r * 0.75, rr = r * (0.35 + rnd(seed + "r" + i) * 0.4);
         C((cx + Math.cos(a) * d).toFixed(1), (cy + Math.sin(a) * d * 0.8).toFixed(1), rr.toFixed(1), cols[Math.floor(rnd(seed + "c" + i) * cols.length)]);
       }
     };
-    const DARK = ["#1b3320", "#21402a", "#183024"], MID = ["#2c5a2c", "#336630", "#2a5228"], LIGHT = ["#4f8a33", "#5e9a36", "#477f31"], SUN = ["#86ad3c", "#9bbd45", "#76a03a"];
-    // tall dark pine on the right, with its top in the sky
+    const DARKP = ["#1c3d24", "#27522d", "#36703a"], MIDP = ["#2a5a2c", "#3a7632", "#56933a"], SUNP = ["#46822e", "#69a438", "#9bc84a"];
+    // clover-shaped leaves (a four-lobed leaf), scattered over a canopy so the tree has texture; lighter on the sunny top left
+    const leaf = (cx, cy, r, rot, col, parent) => {
+      let d = "";
+      for (let k = 0; k <= 36; k++) {
+        const t = (k / 36) * 6.2832, rr = r * (0.5 + 0.5 * Math.pow(Math.abs(Math.cos(2 * t)), 0.6));
+        d += (k ? "L" : "M") + (Math.cos(t) * rr).toFixed(1) + " " + (Math.sin(t) * rr).toFixed(1) + " ";
+      }
+      A("path", { d: d + "Z", fill: col, transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(0)})` }, parent);
+    };
+    const LEAF_D = ["#24502a", "#2c5a28", "#336630"], LEAF_M = ["#3f7a2f", "#4a8634", "#56933a"], LEAF_L = ["#6aa63c", "#7fb840", "#98c84a"];
+    const leafy = (cx, cy, r, seed, size) => {
+      const n = Math.round(r * 0.6);
+      for (let i = 0; i < n; i++) {
+        const a = rnd(seed + "a" + i) * 6.2832, d = Math.sqrt(rnd(seed + "d" + i)) * r * 0.92;
+        const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.95, lit = (-Math.cos(a) - Math.sin(a)) * 0.5 * (d / r) + rnd(seed + "l" + i) * 0.5;
+        const pal = lit > 0.45 ? LEAF_L : lit > 0.0 ? LEAF_M : LEAF_D;
+        leaf(x, y, (size || 14) * (0.8 + rnd(seed + "s" + i) * 0.5), rnd(seed + "o" + i) * 360, pal[Math.floor(rnd(seed + "c" + i) * 3)]);
+      }
+    };
+    // a tall pine behind the right end of the roof
     const pine = sv("g", {}, svg);
-    [[975, 64, 28], [975, 100, 42], [980, 150, 56], [985, 205, 70], [990, 265, 84]].forEach(([cx, cy, w], i) => PG(`${cx},${cy - 40} ${cx + w},${cy + 22} ${cx - w},${cy + 22}`, i % 2 ? "#1d3a2e" : "#24442f", {}, pine));
-    R(972, 80, 6, 300, "#2a2420", {}, pine);
-    // the big sunlit tree in the middle, behind the roof
-    for (let i = 0; i < 6; i++) blob(640 + i * 42, 190 + (i % 2) * 36, 74, i % 2 ? SUN : LIGHT, "tm" + i, 8);
-    for (let i = 0; i < 9; i++) blob(150 + i * 100, 330 + (i % 3) * 14, 90, MID, "tb" + i, 8);
-    for (let i = 0; i < 8; i++) blob(120 + i * 105, 400 + (i % 2) * 20, 80, DARK, "td" + i, 8);
-    // the dark mass on the left and the bright bushes on the right
-    for (let i = 0; i < 6; i++) blob(132 + (i % 2) * 28, 230 + i * 42, 62, DARK, "tl" + i, 8);
-    for (let i = 0; i < 6; i++) blob(1010 + (i % 2) * 20, 300 + i * 32, 70, i % 2 ? LIGHT : MID, "tr" + i, 8);
-    for (let i = 0; i < 5; i++) blob(860 + i * 28, 410 + (i % 2) * 14, 56, i % 2 ? LIGHT : MID, "bt" + i, 8);
-    // a wire with vines on it
-    L("M850 356 Q930 372 1010 362 T1100 352", "#2a2a22", 1.2, { opacity: 0.8 });
-    for (let i = 0; i < 14; i++) C(860 + i * 16, 362 + Math.sin(i / 2) * 4, 5 + rnd("vn" + i) * 4, "#6aa04a", { opacity: 0.8 });
+    R(857, 90, 7, 330, "#3a2c22", {}, pine);
+    [[860, 40, 24], [860, 82, 38], [862, 132, 52], [864, 190, 66], [866, 254, 80], [868, 322, 90]].forEach(([cx, cy, w], i) => PG(`${cx},${cy - 44} ${cx + w},${cy + 22} ${cx - w},${cy + 22}`, i % 2 ? "#1d3a2e" : "#26482f", {}, pine));
+    // the far tree line, behind the house
+    for (let i = 0; i < 9; i++) blob(150 + i * 92, 340 + (i % 2) * 14, 96, ["#2c5a2c", "#336630", "#2a5228", "#4f8a33", "#5e9a36", "#477f31"], "tl" + i, 10);
+    // a dark mass of trees at the far left, behind the end of the roof
+    [[150, 380, 70], [170, 450, 66], [140, 320, 64], [200, 410, 56]].forEach(([cx, cy, r]) => ball(cx, cy, r, DARKP));
+    // a sunlit round tree at the far right
+    const RT = [[900, 250, 78, SUNP], [868, 330, 66, MIDP], [920, 340, 70, SUNP]];
+    RT.forEach(([cx, cy, r, pal]) => ball(cx, cy, r, pal));
+    RT.forEach(([cx, cy, r], i) => leafy(cx, cy, r, "rt" + i, 13));
 
-    // ── the ground: dry yard, green on the left, tall grass on the right, a gravel drive ──
-    R(VX, 488, VW, 400, "#9a8b49");
-    PG(`${VX},500 440,534 220,880 ${VX},880`, "#6b7a3a");
-    PG(`${VX},500 300,520 330,548 ${VX},560`, "#5f7a38", { opacity: 0.9 });
-    PG("580,534 940,500 940,880 1210,880", "#a3924c", { opacity: 0.9 });
-    for (let i = 0; i < 230; i++) {                                                  // tufts of dry grass
-      const gx = r1("gx" + i, VX, 940), gy = r1("gy" + i, 520, 870);
-      L(`M${gx.toFixed(0)} ${gy.toFixed(0)} l-3 -9 M${gx.toFixed(0)} ${gy.toFixed(0)} l1 -11 M${gx.toFixed(0)} ${gy.toFixed(0)} l4 -8`, rnd("gc" + i) > 0.5 ? "#c0ad5c" : "#7d8a3f", 1.3, { opacity: 0.8 });
+    // ── the ground: a green lawn on the left, a drier one on the right, and a gravel drive ──
+    R(VX, 486, VW, 760, "#8e9a48");
+    PG(`${VX},500 440,534 250,1160 ${VX},1160`, "#6e8c3e");
+    PG(`580,534 ${VX + VW},500 ${VX + VW},1160 780,1160`, "#a89e50", { opacity: 0.9 });
+    for (let i = 0; i < 150; i++) {
+      const gx = r1("gx" + i, VX, VX + VW), gy = r1("gy" + i, 540, 1150);
+      L(`M${gx.toFixed(0)} ${gy.toFixed(0)} l-3 -9 M${gx.toFixed(0)} ${gy.toFixed(0)} l1 -11 M${gx.toFixed(0)} ${gy.toFixed(0)} l4 -8`, rnd("gc" + i) > 0.5 ? "#c0ad5c" : "#6f8a3a", 1.3, { opacity: 0.7 });
     }
-    // the gravel drive: from the porch steps down to the bottom of the picture, widening
-    PG("436,532 584,534 1250,880 190,880", "#a39a86");
-    PG("436,532 450,532 300,880 190,880", "#8d8671", { opacity: 0.7 });
-    PG("500,536 560,536 790,880 570,880", "#b8b19c", { opacity: 0.5 });
-    for (let i = 0; i < 460; i++) {                                                   // stones
-      const t = rnd("gs" + i), y = 534 + Math.pow(t, 0.8) * 346, left = 436 - (436 - 190) * ((y - 532) / 348), right = 584 + (1250 - 584) * ((y - 534) / 346);
-      const x = left + rnd("gt" + i) * (right - left);
-      E(x.toFixed(1), y.toFixed(1), (1 + rnd("gu" + i) * 2.4).toFixed(1), (0.7 + rnd("gv" + i) * 1.2).toFixed(1), ["#d6d1c0", "#8a8470", "#c4bda9", "#6f6a5a"][Math.floor(rnd("gw" + i) * 4)], { opacity: 0.8 });
+    PG("432,538 584,538 930,1160 240,1160", "#aaa18c");
+    PG("432,538 446,538 290,1160 240,1160", "#938c76", { opacity: 0.6 });
+    PG("500,540 560,540 800,1160 580,1160", "#bdb6a2", { opacity: 0.4 });
+    for (let i = 0; i < 380; i++) {
+      const t = rnd("gs" + i), y = 540 + Math.pow(t, 0.8) * 618, k = (y - 538) / 622, left = 432 - 192 * k, right = 584 + 346 * k;
+      E((left + rnd("gt" + i) * (right - left)).toFixed(1), y.toFixed(1), (1 + rnd("gu" + i) * 2.6).toFixed(1), (0.7 + rnd("gv" + i) * 1.2).toFixed(1), ["#d6d1c0", "#8a8470", "#c4bda9", "#6f6a5a"][Math.floor(rnd("gw" + i) * 4)], { opacity: 0.8 });
     }
-    // worn ruts toward the car
-    L("M470 545 Q520 660 540 880", "#7e7864", 6, { opacity: 0.35 });
-    L("M560 545 Q700 680 960 880", "#7e7864", 7, { opacity: 0.3 });
+    // a mailbox by the drive
+    R(262, 604, 5, 56, "#6a5a42"); R(248, 586, 34, 18, "#3a4a5c", { rx: 4 }); R(248, 586, 34, 5, "#5a6c80", { rx: 3 }); R(280, 580, 3, 14, "#c8402a"); R(280, 578, 9, 5, "#c8402a");
+    E(264, 662, 12, 3, "#000", { opacity: 0.25 });
+
+    // a young tree and a bush on the lawn, and a patch of flowers by the mailbox
+    E(190, 770, 40, 7, "#000", { opacity: 0.14 }); R(186, 714, 7, 58, "#5a4030"); ball(190, 690, 40, SUNP); ball(166, 716, 26, MIDP); ball(214, 718, 26, MIDP); leafy(190, 696, 46, "sap", 9);
+    [[230, 690, "#f2d04a"], [242, 702, "#fff"], [222, 706, "#e8707a"], [252, 692, "#f2d04a"], [236, 714, "#fff"], [214, 690, "#e8707a"], [260, 708, "#f2d04a"], [300, 560, "#fff"], [312, 566, "#f2d04a"]].forEach(([x, y, c]) => { L(`M${x} ${y + 9} V${y}`, "#4a7a30", 1.4); C(x, y - 1, 3.2, c); C(x, y - 1, 1.1, "#c8883a"); });
+    // a garden hose coiled by the porch steps
+    E(395, 570, 20, 6, "none", { stroke: "#2f6a4a", "stroke-width": 3 }); E(395, 570, 13, 3.6, "none", { stroke: "#2f6a4a", "stroke-width": 3 });
 
     // ── the house ──
     const WALL = "#8c8878";
@@ -12409,7 +12436,7 @@
     // ── the roof: a low hip roof of grey shingles, white fascia, two chimneys and a vent pipe ──
     PG("176,384 262,308 792,310 894,388", "#68707a");
     let shingles = "";
-    for (let y = 316; y < 384; y += 6) shingles += `M${176 + (384 - y) * 0 + (y - 308) * 0.0} ${y} H894 `;
+    for (let y = 316; y < 384; y += 6) shingles += `M${(262 - (y - 308) * 1.13 + 2).toFixed(1)} ${y} H${(792 + (y - 310) * 1.31 - 2).toFixed(1)} `;
     L(shingles, "#4a5159", 1, { opacity: 0.45 });
     PG("176,384 262,308 300,308 232,384", "#5a626b", { opacity: 0.55 });                // the left hip
     PG("894,388 792,310 756,310 850,388", "#5a626b", { opacity: 0.55 });                 // the right hip
@@ -12485,38 +12512,58 @@
     E(758, 570, 15, 8, "#141414"); E(886, 560, 15, 7, "#141414");
     R(724, 548, 14, 18, "#26332a", { opacity: 0.7 });
 
-    // ── dappled shade: the maple throws patches on the roof, the wall, the car and the drive ──
-    const shade = sv("g", { opacity: 0.17, fill: "#10230f" }, svg);
-    [[330, 350, 80, 22], [470, 346, 70, 18], [600, 352, 60, 16], [300, 440, 55, 38], [420, 470, 46, 30], [560, 480, 44, 28], [470, 640, 80, 34], [660, 760, 110, 40]].forEach(([cx, cy, rx, ry]) => E(cx, cy, rx, ry, "#10230f", {}, shade));
-
-    // ── the maple branch hanging in from the top left ──
-    const branch = sv("g", {}, svg);
-    L("M140 100 Q200 90 290 30 T540 -430", "#3a2c22", 9, {}, branch);
-    L("M110 124 Q170 118 230 90", "#2f241c", 6, {}, branch);
-    const leaf = (cx, cy, r, rot, col, seed) => {
+    // ── the maple branch: big five-lobed leaves on stems, every stem joined to a twig, every twig to a limb ──
+    const branch = sv("g", {}, svg), leaves = sv("g", {}, svg);
+    const BARK = "#3a2c22";
+    const bigLeaf = (cx, cy, r, rot, col) => {
       let d = "";
       for (let k = 0; k <= 40; k++) {
         const t = (k / 40) * 6.2832, rr = r * (0.5 + 0.5 * Math.pow(Math.abs(Math.cos(2.5 * t)), 0.55));
         d += (k ? "L" : "M") + (Math.cos(t) * rr).toFixed(1) + " " + (Math.sin(t) * rr).toFixed(1) + " ";
       }
-      const g = sv("g", { transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(0)})` }, branch);
+      const g = sv("g", { transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(0)})` }, leaves);
       A("path", { d: d + "Z", fill: col }, g);
-      A("path", { d: `M${-r * 0.8} 0 H${r * 0.8} M0 0 L${r * 0.5} ${-r * 0.5} M0 0 L${r * 0.5} ${r * 0.5}`, stroke: "#9bc65a", "stroke-width": 1, opacity: 0.45, fill: "none" }, g);
+      A("path", { d: `M${-r * 0.8} 0 H${r * 0.8} M0 0 L${r * 0.5} ${-r * 0.5} M0 0 L${r * 0.5} ${r * 0.5}`, stroke: "#b6dc82", "stroke-width": 1, opacity: 0.4, fill: "none" }, g);
     };
-    const LEAFC = ["#33652a", "#3f7a2f", "#4d8a35", "#2c5a25", "#62a03e"];
-    for (let i = 0; i < 460; i++) {
-      const x = r1("lx" + i, 130, 820), y = r1("ly" + i, -430, 400);
-      const dens = Math.max(0, 1 - (x - 130) / 700) * Math.max(0, 1 - (y + 430) / 830);
-      if (rnd("lk" + i) > dens * 1.5) continue;
-      leaf(x, y, r1("lr" + i, 26, 50), r1("lo" + i, 0, 360), LEAFC[Math.floor(rnd("lc" + i) * LEAFC.length)], i);
-    }
-    for (let i = 0; i < 70; i++) {                                                  // the canopy runs right up to the top edge
-      const x = r1("tx" + i, 130, 780), y = r1("ty" + i, -440, -250);
-      if (rnd("tk" + i) > Math.max(0.12, 1 - (x - 130) / 560)) continue;
-      leaf(x, y, r1("tr" + i, 30, 54), r1("to" + i, 0, 360), LEAFC[Math.floor(rnd("tc" + i) * LEAFC.length)], "t" + i);
-    }
-    [[470, 340, 38], [505, 356, 42], [540, 340, 36], [575, 358, 38], [452, 364, 32], [520, 378, 30], [560, 380, 28], [590, 336, 30]].forEach(([x, y, r], i) => leaf(x, y, r, i * 47, LEAFC[i % LEAFC.length], "h" + i));
-    L("M505 300 Q512 330 505 356 M560 300 Q566 330 560 358", "#3a2c22", 2.4, { opacity: 0.8 }, branch);
+    const MAPLE = ["#2f5f2a", "#3a7030", "#4a8636", "#5a9a42", "#6aa94e", "#2a5626"];
+    // a leaf hung on a short stem from a point on a twig; the stem is drawn into the branch group so it is visibly attached
+    const hang = (x, y, ang, seed, size) => {
+      const len = 14 + rnd(seed + "L") * 12, lx = x + Math.cos(ang) * len, ly = y + Math.sin(ang) * len, r = size * (0.8 + rnd(seed + "r") * 0.4);
+      const cx = lx + Math.cos(ang) * r * 0.7, cy = ly + Math.sin(ang) * r * 0.7;
+      if (cy > 330) return;
+      L(`M${x.toFixed(1)} ${y.toFixed(1)} L${lx.toFixed(1)} ${ly.toFixed(1)}`, BARK, 1.8, {}, branch);
+      bigLeaf(cx, cy, r, ang * 57.3 + 180 + (rnd(seed + "o") - 0.5) * 50, MAPLE[Math.floor(rnd(seed + "c") * MAPLE.length)]);
+    };
+    // a limb walks along a path of short segments; it sprouts twigs and hangs leaves as it goes
+    const limb = (pts, w, depth, seed) => {
+      let d = "M" + pts[0][0] + " " + pts[0][1];
+      for (let i = 1; i < pts.length; i++) d += ` L${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)}`;
+      L(d, BARK, w, {}, branch);
+      pts.forEach(([x, y], i) => {
+        if (i === 0) return;
+        const prev = pts[i - 1], a = Math.atan2(y - prev[1], x - prev[0]);
+        // a leaf on alternating sides along the limb
+        if (depth >= 1 && i % 2) hang(x, y, a + (i % 4 === 1 ? 1 : -1) * (1.0 + rnd(seed + "a" + i) * 0.5), seed + "h" + i, 48 - depth * 4);
+        if (depth < 3 && rnd(seed + "t" + i) < 0.6) {
+          const side = rnd(seed + "s" + i) < 0.5 ? -1 : 1, ca = a + side * (0.55 + rnd(seed + "u" + i) * 0.55), cl = (depth === 0 ? 150 : 90) * (0.6 + rnd(seed + "v" + i) * 0.6), seg = 3 + depth;
+          const cp = [[x, y]]; let cx = x, cy = y, cur = ca;
+          for (let k = 1; k <= seg; k++) { cur += (rnd(seed + "w" + i + k) - 0.5) * 0.4 + 0.05; cx += Math.cos(cur) * cl / seg; cy += Math.sin(cur) * cl / seg; cp.push([cx, cy]); }
+          if (cy < 300) limb(cp, Math.max(2, w * 0.6), depth + 1, seed + "_" + i);
+        }
+      });
+      // a leaf at the tip too
+      const e = pts[pts.length - 1], pe = pts[pts.length - 2];
+      if (depth >= 1) hang(e[0], e[1], Math.atan2(e[1] - pe[1], e[0] - pe[0]), seed + "tip", 50 - depth * 4);
+    };
+    // the main limb comes in from the left edge and climbs to the top of the picture
+    const MAIN = [[140, 340], [200, 322], [250, 290], [292, 240], [326, 180], [366, 120], [414, 62], [462, 6], [504, -50], [540, -100]];
+    limb(MAIN, 11, 0, "mp");
+    // a lower limb droops to the right and hangs a cluster over the roof
+    limb([[250, 296], [310, 292], [370, 296], [420, 284], [466, 274]], 6, 1, "dr");
+    limb([[462, 274], [488, 286], [506, 304]], 3, 2, "dr2");
+
+    // a soft shade under the porch roof
+    R(206, 534, 496, 14, "#000", { opacity: 0.12 });
 
     field.appendChild(svg);
     pill("\u{1F6CB}\uFE0F living room", "Step inside to the living room", () => { close(); openByersLivingRoom(); });
@@ -12537,6 +12584,7 @@
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
+  const openByersKitchen = (...args) => world.openByersKitchen(...args);
 
   // ── THE BYERS' LIVING ROOM: THE ROOM ONLY ──
   // Drawn after the reference photo (a square picture, 1332 x 1332): floral wallpaper under a dark wooden beam, the alphabet painted
@@ -12935,6 +12983,300 @@
   }
 
   return { openByersLivingRoom };
+};
+
+// ════════ byers-kitchen.js ════════
+// byers-kitchen.js — 🍳 the Byers' kitchen, with the round table under the stained-glass lamp (openByersKitchen).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["byers-kitchen"] = function (ctx) {
+  'use strict';
+  const { hkShell } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
+  const world = ctx.world;
+  const openHawkins = (...args) => world.openHawkins(...args);
+  const openWillsHouse = (...args) => world.openWillsHouse(...args);
+  const openByersLivingRoom = (...args) => world.openByersLivingRoom(...args);
+
+  // ── THE BYERS' KITCHEN: THE ROOM ONLY ──
+  // Drawn after the reference photo (399 x 501): a flat ceiling with a dark beam and a cream crown, olive-green walls, a brick
+  // chimney on the left, dark upper cupboards, two windows with gathered curtains, oak lower cupboards, a white stove and hood on
+  // the right, a round wooden table on a chrome pedestal under a stained-glass pendant lamp, four chrome chairs with dark flowery
+  // seats, and a braided oval rug. On the table: a jar of jam, plates and cutlery, a flowery cup, a pie, a bowl and a jug of orange juice.
+  // Nothing is tappable and nothing moves yet: it is a still picture, lamp on (no time of day, weather or sound).
+  // Every number below is in the photo's own pixels, so to move something, measure it on the photo. The picture is drawn on a
+  // slightly taller canvas (extra ceiling above and rug below) so it fills a phone screen.
+  function openByersKitchen() {
+    const sh = hkShell("ao3-byers-kitchen", "\u{1F373} The Byers’ kitchen");
+    const { sv, rnd } = sh.kit;
+    const { box, sub, field, caption, pill, close } = sh;
+    sub.textContent = "the byers’ · lamp on";
+    caption.textContent = "The Byers’ kitchen. The lamp over the table is on.";
+    box.style.background = "#120d06";
+
+    const VX = 0, VY = -40, VW = 399, VH = 591;
+    const svg = sv("svg", { viewBox: `${VX} ${VY} ${VW} ${VH}`, preserveAspectRatio: "xMidYMid slice" });
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const rad = (id, stops) => {
+      const g = sv("radialGradient", { id, cx: 0.5, cy: 0.5, r: 0.5 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
+    const R = (x, y, w, h, fill, o, parent) => A("rect", Object.assign({ x, y, width: w, height: h, fill }, o || {}), parent);
+    const PG = (pts, fill, o, parent) => A("polygon", Object.assign({ points: pts, fill }, o || {}), parent);
+    const E = (cx, cy, rx, ry, fill, o, parent) => A("ellipse", Object.assign({ cx, cy, rx, ry, fill }, o || {}), parent);
+    const C = (cx, cy, r, fill, o, parent) => A("circle", Object.assign({ cx, cy, r, fill }, o || {}), parent);
+    const L = (d, stroke, w, o, parent) => A("path", Object.assign({ d, stroke, "stroke-width": w, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, o || {}), parent);
+    const P = (d, fill, o, parent) => A("path", Object.assign({ d, fill }, o || {}), parent);
+    const G = (o, parent) => sv("g", o || {}, parent || svg);
+    const T = (x, y, s, fill, txt, o, parent) => { const t = A("text", Object.assign({ x, y, "font-family": "Arial,sans-serif", "font-weight": 700, "font-size": s, fill, "text-anchor": "middle" }, o || {}), parent); t.textContent = txt; return t; };
+    const r1 = (k, a, b) => a + rnd(k) * (b - a);
+    const clip = (id, shapeFn) => { const c = sv("clipPath", { id }, defs); shapeFn(c); return "url(#" + id + ")"; };
+
+    // ── gradients and patterns ──
+    grad("ky-ceil", [["0%", "#5e5640"], ["100%", "#8a8264"]]);
+    grad("ky-ceilR", [["0%", "#6a4636", 0], ["100%", "#6a4636", 0.55]], 1, 0);
+    grad("ky-wall", [["0%", "#2c2d0e"], ["50%", "#4a4a1e"], ["100%", "#3a3814"]]);
+    grad("ky-wood", [["0%", "#8a5c36"], ["100%", "#6a4326"]]);
+    grad("ky-dark", [["0%", "#2a200e"], ["100%", "#120d05"]]);
+    grad("ky-top", [["0%", "#8a5a34"], ["100%", "#6a4228"]]);
+    grad("ky-chrome", [["0%", "#8a8678"], ["45%", "#e0dccc"], ["100%", "#6c685c"]], 1, 0);
+    grad("ky-floor", [["0%", "#3a2e10"], ["100%", "#221a08"]]);
+    grad("ky-win", [["0%", "#e6d8a8"], ["40%", "#fff6d6"], ["100%", "#f4e0a8"]]);
+    rad("ky-glow", [["0%", "#ffd890", 0.7], ["50%", "#f0a850", 0.25], ["100%", "#f0a040", 0]]);
+    rad("ky-vig", [["0%", "#000", 0], ["62%", "#000", 0.08], ["100%", "#000", 0.6]]);
+    rad("ky-lampwarm", [["0%", "#fff8d0", 1], ["45%", "#ffe08a", 0.75], ["100%", "#ffc050", 0]]);
+    rad("ky-lamp", [["0%", "#fff", 1], ["50%", "#fff2c0", 0.8], ["100%", "#ffd070", 0]]);
+    const vin = sv("pattern", { id: "ky-vinyl", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);
+    R(0, 0, 16, 16, "#181a0a", {}, vin);
+    [[4, 4, "#5a6a2c"], [12, 11, "#9a6a2a"], [10, 3, "#4a5a26"], [3, 12, "#7a5028"]].forEach(([x, y, c]) => { C(x, y, 2.2, c, { opacity: 0.85 }, vin); });
+    L("M2 8 q4 -4 8 0 M8 14 q4 -3 8 -1", "#3a4a22", 1, { opacity: 0.8 }, vin);
+    const leo = sv("pattern", { id: "ky-leo", width: 18, height: 18, patternUnits: "userSpaceOnUse" }, defs);
+    R(0, 0, 18, 18, "#6a4a22", {}, leo);
+    [[4, 4, "#c88a38"], [13, 10, "#2a2410"], [9, 15, "#d8a048"], [15, 2, "#8a6a30"], [2, 12, "#2a2410"]].forEach(([x, y, c]) => E(x, y, 3.4, 2.6, c, { opacity: 0.85 }, leo));
+    const carpet = sv("pattern", { id: "ky-carpet", width: 20, height: 12, patternUnits: "userSpaceOnUse" }, defs);
+    R(0, 0, 20, 12, "#5a4424", {}, carpet);
+    [[4, 3, "#9a7a40"], [14, 8, "#7a5a2c"], [10, 1, "#b08a50"], [2, 10, "#3a2c14"]].forEach(([x, y, c]) => E(x, y, 3.6, 2.4, c, { opacity: 0.8 }, carpet));
+    const tile = sv("pattern", { id: "ky-tile", width: 22, height: 14, patternUnits: "userSpaceOnUse" }, defs);
+    R(0, 0, 22, 14, "#2c220c", {}, tile);
+    A("path", { d: "M11 0 L22 7 L11 14 L0 7 Z", fill: "#3a2e12" }, tile);
+
+    // ── ceiling, beam and crown ──
+    R(VX, VY, VW, 126, "url(#ky-ceil)");
+    R(VX, VY, VW, 126, "url(#ky-ceilR)");
+    L("M0 30 H399", "#3a2c16", 1, { opacity: 0.25 });
+    R(0, 84, VW, 270, "url(#ky-wall)");
+    R(0, 74, VW, 10, "#4a2e16"); R(0, 74, VW, 2, "#9a6a3a", { opacity: 0.6 });
+    R(0, 84, VW, 12, "#8e8868"); R(0, 84, VW, 2, "#fff", { opacity: 0.15 }); R(0, 94, VW, 3, "#000", { opacity: 0.25 });
+
+    // ── left: the brick chimney with a stone mantel and a crock ──
+    R(0, 130, 40, 216, "#56401e");
+    for (let y = 132, row = 0; y < 344; y += 9, row++) { L(`M0 ${y} H40`, "#241a08", 1, { opacity: 0.8 }); for (let x = (row % 2) * 8; x < 40; x += 16) L(`M${x} ${y} V${y + 9}`, "#1c1406", 1, { opacity: 0.7 }); }
+    for (let i = 0; i < 26; i++) R(r1("bk" + i, 0, 30), 134 + Math.floor(rnd("bl" + i) * 22) * 9, 12, 8, rnd("bm" + i) > 0.5 ? "#6a5028" : "#2a1e0a", { opacity: 0.5 });
+    R(0, 166, 46, 6, "#7a6a50"); R(0, 166, 46, 1.5, "#c8b890", { opacity: 0.6 }); R(0, 172, 46, 3, "#000", { opacity: 0.35 });
+    P("M8 166 Q4 150 12 146 H22 Q30 150 26 166 Z", "#8a6a38"); E(17, 146, 6, 2, "#3a2812"); P("M8 166 Q4 150 12 146 H14 Q10 156 12 166 Z", "#fff", { opacity: 0.12 });
+    L("M17 146 q-3 -8 -7 -10 M17 146 q2 -10 8 -12", "#4a6a30", 1.8);
+
+    // ── the windows: a pale frame, bright glass, a sill ──
+    const windowAt = (x, y, w, h) => {
+      R(x - 4, y - 4, w + 8, h + 8, "#6a5a3a");
+      R(x, y, w, h, "url(#ky-win)");
+      L(`M${x + w / 2} ${y} V${y + h} M${x} ${y + h * 0.5} H${x + w}`, "#cfc6a4", 2.2);
+      R(x - 4, y - 4, w + 8, 3, "#fff", { opacity: 0.2 });
+      R(x - 7, y + h + 4, w + 14, 5, "#d4ccae"); R(x - 7, y + h + 9, w + 14, 2, "#000", { opacity: 0.3 });
+    };
+    windowAt(108, 130, 56, 96);
+    windowAt(264, 140, 56, 86);
+    // curtains gathered in at the waist with a tie
+    const curtain = (x0, x1, top, bot, tie, fl, fr) => {
+      const cx = (x0 + x1) / 2, g = G();
+      PG(`${x0},${top} ${x1},${top} ${x1},${tie - 12} ${cx + 3},${tie} ${x1 + fr},${bot} ${x0 - fl},${bot} ${cx - 3},${tie} ${x0},${tie - 12}`, "#a49880", {}, g);
+      for (let i = 1; i < 5; i++) {
+        const t = i / 5, xt = x0 + (x1 - x0) * t;
+        L(`M${xt.toFixed(1)} ${top} L${xt.toFixed(1)} ${tie - 12} L${(cx + (t - 0.5) * 6).toFixed(1)} ${tie} L${(x0 - fl + (x1 + fr - x0 + fl) * t).toFixed(1)} ${bot}`, i % 2 ? "#cbbfa2" : "#6e6450", 1.2, { opacity: 0.7 }, g);
+      }
+      R(cx - 5, tie - 2, 10, 4, "#6a5a40", { rx: 2 }, g);
+    };
+    curtain(98, 114, 132, 228, 196, 3, 4);
+    curtain(158, 174, 132, 228, 196, 4, 3);
+    curtain(254, 270, 142, 228, 198, 3, 4);
+    curtain(314, 330, 142, 228, 198, 4, 3);
+    L("M92 130 H182 M248 140 H336", "#3a2c16", 2.6); C(92, 130, 2.4, "#6a5030"); C(182, 130, 2.4, "#6a5030"); C(248, 140, 2.4, "#6a5030"); C(336, 140, 2.4, "#6a5030");
+    // a small wall air conditioner above the right window
+    R(266, 106, 52, 16, "#cfc9b0"); R(266, 106, 52, 3, "#f4f0dc", { opacity: 0.7 }); for (let x = 272; x < 314; x += 5) L(`M${x} 114 v6`, "#7a745e", 1.2); R(266, 121, 52, 2, "#6a6450", { opacity: 0.6 });
+
+    // ── upper cupboards: dark wood doors, each with a recessed slatted panel ──
+    const door = (x, y, w, h, knobX) => {
+      R(x, y, w, h, "#150f05", { stroke: "#33260f", "stroke-width": 1.2 });
+      R(x + 3, y + 4, w - 6, h - 8, "#241a0b");
+      for (let xx = x + 6; xx < x + w - 4; xx += 4) L(`M${xx} ${y + 7} V${y + h - 7}`, "#3c2e16", 1.4, { opacity: 0.85 });
+      R(x + 3, y + 4, w - 6, 1.6, "#7a5a30", { opacity: 0.55 });
+      R(x + 3, y + h - 6, w - 6, 1.4, "#000", { opacity: 0.5 });
+      R(knobX, y + h - 22, 2.2, 9, "#9a8a58", { opacity: 0.85, rx: 1 });
+      R(x, y + h, w, 3, "#080602");
+    };
+    door(46, 100, 50, 88, 90);
+    door(176, 112, 38, 84, 208); door(215, 112, 39, 84, 218);
+    door(332, 100, 33, 48, 359); door(366, 100, 33, 48, 370);
+    // the range hood below the right cupboards, over the stove
+    PG("332,148 399,148 399,170 332,174", "#d6d2c2"); PG("332,170 399,170 399,176 332,180", "#8a8672"); R(338, 166, 54, 2, "#4a4638", { opacity: 0.6 });
+    R(332, 180, 67, 58, "#3a3814");
+    for (let y = 182; y < 238; y += 11) for (let x = 334; x < 399; x += 11) R(x, y, 10, 10, "#4a4a1a", { opacity: 0.85 });
+
+    // ── base cupboards and counters ──
+    const unit = (x, w) => {
+      R(x, 249, w, 92, "#b3a380", { stroke: "#7a6a4a", "stroke-width": 1.2 });
+      R(x + 4, 253, w - 8, 18, "#bcac8a", { stroke: "#8a7a58", "stroke-width": 1 });              // the drawer
+      R(x + w / 2 - 7, 259, 14, 3, "#d8c890");
+      R(x + 4, 275, w - 8, 62, "#bcac8a", { stroke: "#8a7a58", "stroke-width": 1 });             // the door
+      R(x + w - 12, 284, 3, 10, "#d8c890");
+    };
+    unit(40, 66); unit(106, 66); unit(172, 66);
+    // the sink cupboard: two doors under the sink
+    R(238, 249, 84, 92, "#b3a380", { stroke: "#7a6a4a", "stroke-width": 1.2 });
+    R(242, 253, 36, 84, "#bcac8a", { stroke: "#8a7a58", "stroke-width": 1 }); R(282, 253, 36, 84, "#bcac8a", { stroke: "#8a7a58", "stroke-width": 1 });
+    R(274, 284, 3, 10, "#d8c890"); R(283, 284, 3, 10, "#d8c890");
+    R(322, 249, 10, 92, "#9a8a6a");
+    R(40, 340, 292, 6, "#3a2c18");
+    // the worktop
+    R(40, 238, 292, 8, "#cdbf9a"); R(40, 238, 292, 2, "#fff", { opacity: 0.4 }); R(40, 246, 292, 3, "#5a4a2a", { opacity: 0.8 });
+    // the sink: a steel basin with a high tap
+    E(280, 240, 24, 3.4, "#5a5a52"); E(280, 239, 22, 2.6, "#8a8a80");
+    L("M282 238 V224 Q282 216 292 216 V222", "#c8c8c0", 2.6); R(276, 232, 4, 6, "#c8c8c0", { rx: 1 });
+    // the stove: white, a black cooktop with two rings, knobs, an oven door with a window
+    R(332, 246, 67, 98, "#d8d4c4"); R(332, 238, 67, 8, "#1a1a1a"); R(332, 246, 67, 2, "#fff", { opacity: 0.5 });
+    [[348, 241], [380, 241]].forEach(([x, y]) => { E(x, y, 11, 2.6, "#3a3a3a"); E(x, y, 6, 1.4, "#0c0c0c"); });
+    R(332, 250, 67, 12, "#c4c0ac"); for (let i = 0; i < 4; i++) C(344 + i * 15, 256, 2.6, "#6a6656");
+    R(338, 268, 56, 60, "#c4c0ac", { stroke: "#8a8670", "stroke-width": 1.2 }); R(346, 278, 40, 28, "#2a2a28"); R(346, 278, 40, 5, "#fff", { opacity: 0.12 }); R(344, 270, 44, 3, "#8a8670");
+    R(338, 332, 56, 9, "#c4c0ac", { stroke: "#8a8670", "stroke-width": 1 });
+    // things on the worktop: a basket, canisters, a fruit bowl, a stack of plates, a kettle
+    R(50, 222, 26, 17, "#8a6a34", { rx: 3 }); L("M52 229 H74 M52 234 H74", "#4a3818", 1); L("M52 222 Q63 212 74 222", "#6a4a20", 2);
+    R(118, 220, 12, 18, "#d8d0b8", { rx: 2 }); R(132, 224, 12, 14, "#cfc7a8", { rx: 2 }); R(146, 228, 12, 10, "#d8d0b8", { rx: 2 });
+    R(118, 220, 12, 3, "#8a7a58"); R(132, 224, 12, 3, "#8a7a58"); R(146, 228, 12, 3, "#8a7a58");
+    P("M186 232 Q200 246 218 232 Z", "#d8d0b8"); C(196, 230, 4.4, "#a8d050"); C(204, 228, 4.4, "#d84a3a"); C(211, 231, 4, "#e0a030");
+    E(232, 236, 11, 2.4, "#d8d4c4"); E(232, 233.5, 11, 2.4, "#e8e4d0"); E(232, 231, 11, 2.4, "#d8d4c4");
+    R(341, 222, 18, 16, "#8a8a80", { rx: 3 }); L("M359 226 q8 -4 6 6", "#8a8a80", 2); R(345, 217, 10, 5, "#5a5a52", { rx: 2 });
+
+    // ── the floor: a patterned orange-brown carpet and a braided olive oval rug ──
+    R(0, 344, VW, 207, "url(#ky-carpet)");
+    R(0, 344, VW, 207, "#000", { opacity: 0.25 });
+    R(0, 344, VW, 6, "#000", { opacity: 0.4 });
+    const rug = G();
+    E(200, 486, 220, 74, "#34401c", {}, rug);
+    for (let i = 0; i < 9; i++) E(200, 486, 212 - i * 22, 68 - i * 6.8, "none", { stroke: i % 2 ? "#232a12" : "#556430", "stroke-width": 4.4, opacity: 0.8 }, rug);
+    E(200, 486, 220, 74, "none", { stroke: "#1a200c", "stroke-width": 2.4 }, rug);
+
+    // ── the chairs: padded backs and seats on tubular steel ──
+    const tube = (d, w, c) => { L(d, "#07070a", (w || 4) + 1.6); L(d, c || "#26261e", w || 4); L(d, "#8a8a78", 0.8, { opacity: 0.6, transform: "translate(-0.7 -0.7)" }); };
+    const chrome = (d, w) => { L(d, "#2c2a22", (w || 5) + 1.8); L(d, "#a09c8a", w || 5); L(d, "#f2eedc", 1.2, { opacity: 0.8, transform: "translate(-1 -0.8)" }); };
+    // the two chairs behind the table, seen from the front: an orange flowery back above the table's far edge, a black seat below it
+    const rearChair = cx => {
+      tube(`M${cx - 30} 300 V340 M${cx + 30} 300 V340`, 3);
+      R(cx - 42, 262, 84, 40, "url(#ky-leo)", { rx: 7, stroke: "#14140c", "stroke-width": 1.6 });
+      R(cx - 42, 262, 84, 5, "#fff", { rx: 3, opacity: 0.12 });
+      P(`M${cx - 38} 340 H${cx + 38} L${cx + 44} 354 H${cx - 44} Z`, "#14140c", { stroke: "#8a8a7a", "stroke-width": 1 });
+      tube(`M${cx - 36} 354 V398 M${cx + 36} 354 V398`, 3.4);
+      tube(`M${cx - 36} 398 L${cx - 28} 388 M${cx + 36} 398 L${cx + 28} 388`, 3);
+    };
+    rearChair(128); rearChair(292);
+    // the table: a chrome pedestal with three curved feet
+    chrome("M207 430 Q176 436 146 464", 4.6); chrome("M207 430 Q238 436 268 464", 4.6); chrome("M207 430 V470", 4.6);
+    R(199, 316, 16, 114, "url(#ky-chrome)"); E(207, 430, 13, 4, "#8a867a"); R(199, 316, 16, 3, "#000", { opacity: 0.3 });
+    // the table top: dark laminate with a silver rim
+    E(207, 309, 138, 20, "#3a382e");
+    P("M69 300 A138 20 0 0 0 345 300 L345 309 A138 20 0 0 1 69 309 Z", "#6a685a");
+    P("M69 300 A138 20 0 0 0 345 300 L345 303 A138 20 0 0 1 69 303 Z", "#a8a490", { opacity: 0.7 });
+    E(207, 298, 138, 19, "#2e1e12");
+    E(190, 296, 104, 12, "#5a3a22", { opacity: 0.55 });
+    L("M80 292 Q207 282 335 292", "#c8a070", 1, { opacity: 0.25 });
+    E(207, 298, 138, 19, "none", { stroke: "#a8a490", "stroke-width": 1.2 });
+
+    // on the table: a jar of jam, a plate with cutlery, a flowery cup, a pie, a bowl and a jug of orange juice
+    R(128, 262, 16, 24, "#7a1c14", { rx: 3 }); R(128, 262, 16, 5, "#c8c0a8"); R(131, 270, 4, 12, "#e0705a", { opacity: 0.6 });
+    E(128, 296, 26, 6, "#d8d0b8"); E(128, 294, 22, 4.6, "#e8e0c8"); E(128, 292, 16, 3, "#c8b88a");
+    L("M104 298 L118 290 M150 297 L164 289", "#c8c8c0", 1.4);
+    R(194, 262, 20, 22, "#e6c860", { rx: 5 }); R(194, 262, 20, 5, "#f4e0a0"); C(204, 274, 4, "#d84a3a"); C(198, 278, 2.6, "#4a8a3a"); C(210, 279, 2.6, "#4a8a3a");
+    A("path", { d: "M214 268 Q224 270 214 280", stroke: "#e6c860", "stroke-width": 3, fill: "none" });
+    E(240, 276, 24, 6, "#d8d0b8"); E(240, 272, 20, 7, "#d8a040"); E(240, 270, 15, 5, "#e8b858"); L("M230 270 H250 M240 265 V275", "#a8702a", 1, { opacity: 0.7 });
+    E(266, 284, 12, 4, "#d8d0b8"); P("M256 280 Q266 296 278 280 Z", "#e6dcc0");
+    P("M284 250 L310 250 L313 292 Q298 298 281 292 Z", "#f0961c");
+    P("M284 250 L310 250 L313 292 Q298 298 281 292 Z", "none", { stroke: "#fadf9a", "stroke-width": 1.2 });
+    R(287, 256, 4, 32, "#fff3c0", { opacity: 0.5, rx: 2 }); R(283, 247, 28, 4, "#f4e8c8", { rx: 2 });
+    L("M311 258 Q326 262 312 280", "#f0961c", 3.4);
+
+    // ── the two chairs in front, seen from behind: a padded back, a seat slab, tube legs with skids ──
+    const frontChair = (x, y, w, h, rot, floorY) => {
+      const g = G({ transform: `rotate(${rot} ${x + w / 2} ${y + h})` });
+      [x + 12, x + w - 12].forEach(px => {
+        tube(`M${px} ${y + h + 14} V${floorY}`, 5.4, null);
+        tube(`M${px} ${floorY} L${px + 14} ${floorY - 20}`, 4.4, null);
+      });
+      tube(`M${x + 12} ${floorY - 6} H${x + w - 12}`, 3.4, null);
+      P(`M${x - 8} ${y + h - 2} H${x + w + 8} L${x + w + 4} ${y + h + 18} H${x - 4} Z`, "url(#ky-vinyl)", { stroke: "#0a0a06", "stroke-width": 1.6 });
+      R(x - 8, y + h - 2, w + 16, 3, "#fff", { opacity: 0.12 });
+      R(x, y, w, h, "url(#ky-vinyl)", { rx: 12, stroke: "#0a0a06", "stroke-width": 2.2 });
+      R(x + 5, y + 5, w - 10, h - 10, "none", { rx: 8, stroke: "#0a0a06", "stroke-width": 1, opacity: 0.6 });
+      R(x + 6, y + 3, w - 12, 5, "#fff", { rx: 2.5, opacity: 0.12 });
+    };
+    frontChair(24, 292, 118, 84, -3, 488);
+    frontChair(266, 302, 120, 82, 3, 496);
+
+    // ── the lamp: a bell of stained glass, lit from inside by the bulb ──
+    C(212, 62, 170, "url(#ky-glow)");
+    R(210, VY, 4, 62, "#2a1408");
+    P("M200 22 Q212 14 224 22 Z", "#592a10"); R(206, 18, 12, 6, "#3a1c0a", { rx: 2 });
+    let hem = "";
+    for (let i = 0; i < 6; i++) { const xr = 264 - i * 17.33, xl = xr - 17.33; hem += ` Q${((xr + xl) / 2).toFixed(1)} 92 ${xl.toFixed(1)} 58`; }
+    const silh = "M192 22 L232 22 Q252 34 264 58" + hem + " Q172 34 192 22 Z";
+    const lampClip = clip("ky-cl-lamp", c => { A("path", { d: silh }, c); });
+    const lamp = G();
+    // the inside of the shade first: dark amber glass, then the socket and the bulb hanging in it
+    P(silh, "#8a5a1c", {}, lamp);
+    const inside = G({ "clip-path": lampClip }, lamp);
+    C(212, 56, 60, "url(#ky-lampwarm)", { opacity: 0.9 }, inside);
+    R(208, 22, 8, 14, "#2a1808", {}, inside);
+    R(206, 34, 12, 5, "#5a3a14", { rx: 1.5 }, inside);
+    P("M206 39 Q200 52 206 62 Q212 72 218 62 Q224 52 218 39 Z", "#fffbe0", {}, inside);
+    L("M209 42 Q212 52 209 58 M215 42 Q212 52 215 58", "#e8a830", 0.9, { opacity: 0.9 }, inside);
+    C(212, 54, 22, "url(#ky-lampwarm)", { opacity: 1 }, inside);
+    // the glass in front of it: amber and cream panels, see-through enough for the bulb to glow through
+    const front = G({ opacity: 0.8 }, lamp);
+    for (let i = 0; i < 8; i++) {
+      const xt0 = 192 + (40 * i) / 8, xt1 = 192 + (40 * (i + 1)) / 8, xb0 = 160 + (104 * i) / 8, xb1 = 160 + (104 * (i + 1)) / 8;
+      PG(`${xt0},22 ${xt1},22 ${xb1},58 ${xb0},58`, i % 2 ? "#eeb458" : "#f8e2a8", {}, front);
+    }
+    for (let i = 0; i < 6; i++) {
+      const xr = 264 - i * 17.33, xl = xr - 17.33, mx = (xr + xl) / 2;
+      P(`M${xr.toFixed(1)} 58 Q${mx.toFixed(1)} 92 ${xl.toFixed(1)} 58 Z`, i % 2 ? "#f2c870" : "#f8e2a8", {}, front);
+    }
+    // the lead lines and the rim stay solid
+    for (let i = 0; i <= 8; i++) L(`M${192 + (40 * i) / 8} 22 L${160 + (104 * i) / 8} 58`, "#5a3010", 1, { opacity: 0.85 }, lamp);
+    for (let i = 0; i < 6; i++) {
+      const xr = 264 - i * 17.33, xl = xr - 17.33, mx = (xr + xl) / 2;
+      P(`M${xr.toFixed(1)} 58 Q${mx.toFixed(1)} 92 ${xl.toFixed(1)} 58`, "none", { stroke: "#c8601e", "stroke-width": 1.4 }, lamp);
+      PG(`${mx.toFixed(1)},62 ${(mx + 4).toFixed(1)},68 ${mx.toFixed(1)},76 ${(mx - 4).toFixed(1)},68`, "#e8943a", { opacity: 0.85 }, lamp);
+    }
+    L("M160 58 H264", "#c8601e", 2, {}, lamp);
+    P(silh, "none", { stroke: "#7a3c14", "stroke-width": 1.2 }, lamp);
+    // a soft hot spot where the bulb is, laid over the glass so it reads as light, not as an object
+    C(212, 52, 26, "url(#ky-lampwarm)", { opacity: 0.55 }, lamp);
+
+    // ── light, shade ──
+    E(205, 300, 190, 120, "url(#ky-glow)", { opacity: 0.45 });
+    R(VX, VY, VW, VH, "url(#ky-vig)", { "pointer-events": "none" });
+
+    field.appendChild(svg);
+    pill("\u{1F6CB}️ living room", "Through to the living room", () => { close(); openByersLivingRoom(); });
+    pill("\u{1F3DA}️ outside", "Out to the front of Will’s house", () => { close(); openWillsHouse(); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    document.body.appendChild(sh.back);
+  }
+
+  return { openByersKitchen };
 };
 
 // ════════ softlanding.js ════════
