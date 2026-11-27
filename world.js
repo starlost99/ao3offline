@@ -12707,6 +12707,7 @@
   const openHawkins = (...args) => world.openHawkins(...args);
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
   const openByersKitchen = (...args) => world.openByersKitchen(...args);
+  const openWillsRoom = (...args) => world.openWillsRoom(...args);
 
   // ── THE BYERS' LIVING ROOM: THE ROOM ONLY ──
   // Drawn after the reference photo (a square picture, 1332 x 1332): floral wallpaper under a dark wooden beam, the alphabet painted
@@ -13099,6 +13100,8 @@
     R(VX, VY, VW, 170, "url(#ly-topfade)");
 
     field.appendChild(svg);
+    pill("\u{1F373} kitchen", "Through to the kitchen", () => { close(); openByersKitchen(); });
+    pill("\u{1F6CF}️ Will’s room", "Down the hall to Will’s room", () => { close(); openWillsRoom(); });
     pill("\u{1F3DA}️ outside", "Back out to the front of Will’s house", () => { close(); openWillsHouse(); });
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
     document.body.appendChild(sh.back);
@@ -13399,6 +13402,380 @@
   }
 
   return { openByersKitchen };
+};
+
+// ════════ wills-room.js ════════
+// wills-room.js — 🛏️ Will's bedroom in the Byers' house (openWillsRoom).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["wills-room"] = function (ctx) {
+  'use strict';
+  const { hkShell } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
+  const world = ctx.world;
+  const openHawkins = (...args) => world.openHawkins(...args);
+  const openWillsHouse = (...args) => world.openWillsHouse(...args);
+  const openByersLivingRoom = (...args) => world.openByersLivingRoom(...args);
+  const openByersKitchen = (...args) => world.openByersKitchen(...args);
+
+  // ── WILL'S ROOM: THE ROOM ONLY ──
+  // The same view of the bed as Mike's room (a 360 x 540 picture, the back wall with the bed centred in front of it, its foot
+  // towards you, the floor in front), dressed after the reference photo: knotty-pine panelling the colour of honey, a cream
+  // ceiling under an olive-gold trim, a shark poster (no lettering) over a pine chest of drawers with a lamp on it, a tall
+  // bookshelf with a globe and a bowling pin, a window with white curtains, a framed tiger painting with notes pinned beside it,
+  // a dark bookcase headboard with a lamp at each end, gingham pillows, a navy comforter printed with fish, a chunky mustard-and-
+  // brown crocheted afghan over the foot, parquet floor and a blue-grey rag rug.
+  // Nothing is tappable and nobody is in it yet: a still picture with the lamps on (no time of day, weather or sound).
+  // Every number is in the picture's own units (360 x 540); the bed is at the same place as in Mike's room (x 98 to 282).
+  function openWillsRoom() {
+    const sh = hkShell("ao3-wills-room", "\u{1F6CF}️ Will’s room");
+    const { sv, rnd } = sh.kit;
+    const { box, sub, field, caption, pill, close } = sh;
+    sub.textContent = "the byers’ · lamps on";
+    caption.textContent = "Will’s room: pine walls, a shark on the wall, and every lamp left on.";
+    box.style.background = "#1a0f08";
+
+    const W = 360, H = 540;
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const rad = (id, stops) => {
+      const g = sv("radialGradient", { id, cx: 0.5, cy: 0.5, r: 0.5 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
+    const R = (x, y, w, h, fill, o, parent) => A("rect", Object.assign({ x, y, width: w, height: h, fill }, o || {}), parent);
+    const PG = (pts, fill, o, parent) => A("polygon", Object.assign({ points: pts, fill }, o || {}), parent);
+    const E = (cx, cy, rx, ry, fill, o, parent) => A("ellipse", Object.assign({ cx, cy, rx, ry, fill }, o || {}), parent);
+    const C = (cx, cy, r, fill, o, parent) => A("circle", Object.assign({ cx, cy, r, fill }, o || {}), parent);
+    const L = (d, stroke, w, o, parent) => A("path", Object.assign({ d, stroke, "stroke-width": w, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, o || {}), parent);
+    const P = (d, fill, o, parent) => A("path", Object.assign({ d, fill }, o || {}), parent);
+    const G = (o, parent) => sv("g", o || {}, parent || svg);
+    const r1 = (k, a, b) => a + rnd(k) * (b - a);
+    const clip = (id, shapeFn) => { const c = sv("clipPath", { id }, defs); shapeFn(c); return "url(#" + id + ")"; };
+
+    // ── gradients and patterns ──
+    grad("wr-ceil", [["0%", "#a89c80"], ["100%", "#d6caa8"]]);
+    grad("wr-trim", [["0%", "#c4aa48"], ["100%", "#8c7628"]]);
+    grad("wr-wall", [["0%", "#7a4c22"], ["40%", "#a06a34"], ["100%", "#b27a3c"]]);
+    grad("wr-shade", [["0%", "#fbe9bd"], ["100%", "#e6c98a"]]);
+    grad("wr-pine", [["0%", "#c68a46"], ["100%", "#a8702f"]], 1, 0);
+    grad("wr-walnut", [["0%", "#4a2c18"], ["100%", "#2e1a0d"]]);
+    grad("wr-floor", [["0%", "#000", 0.28], ["35%", "#000", 0.02], ["100%", "#000", 0.42]]);
+    grad("wr-sea", [["0%", "#a9c8d2"], ["45%", "#4f86a0"], ["100%", "#16384f"]]);
+    grad("wr-pane", [["0%", "#fffdf2"], ["100%", "#e9e6cf"]]);
+    grad("wr-curt", [["0%", "#f6f1e2"], ["50%", "#e4dcc6"], ["100%", "#f1ebda"]], 1, 0);
+    grad("wr-tiger", [["0%", "#3a4a28"], ["55%", "#6a6a30"], ["100%", "#4a3a1c"]]);
+    rad("wr-glow", [["0%", "#ffd38a", 0.7], ["50%", "#ffb85c", 0.24], ["100%", "#ffb050", 0]]);
+    rad("wr-vig", [["0%", "#000", 0], ["62%", "#1a0c04", 0.08], ["100%", "#1a0c04", 0.62]]);
+
+    const pat = (id, w, h, fn) => { const p = sv("pattern", { id, width: w, height: h, patternUnits: "userSpaceOnUse" }, defs); fn(p); return "url(#" + id + ")"; };
+    // the navy comforter printed with fish, pointing every which way
+    const fish = (p, x, y, s, flip, c) => {
+      const f = G({ transform: `translate(${x} ${y}) scale(${flip ? -s : s} ${s})` }, p);
+      E(0, 0, 6.6, 2.9, c, {}, f);
+      PG("5,0 10.6,-3.4 10.6,3.4", c, {}, f);
+      PG("-1,-2.4 1.6,-5 2.4,-2", c, { opacity: 0.8 }, f);
+      C(-3.6, -0.7, 0.55, "#142040", {}, f);
+    };
+    const FISHPAT = pat("wr-fish", 56, 46, p => {
+      R(0, 0, 56, 46, "#1b2c56", {}, p);
+      fish(p, 14, 11, 1.5, false, "#b4c4dc"); fish(p, 42, 34, 1.5, true, "#e2e9f3");
+      fish(p, 42, 10, 1.2, true, "#5f80b6"); fish(p, 14, 35, 1.2, false, "#7390c0");
+      fish(p, 0, 23, 1, false, "#4f6fa8"); fish(p, 56, 23, 1, false, "#4f6fa8");
+    });
+    // the pillows: green gingham
+    const GINGHAM = pat("wr-gingham", 12, 12, p => {
+      R(0, 0, 12, 12, "#ece8d2", {}, p);
+      R(0, 0, 12, 6, "#7da36e", { opacity: 0.55 }, p);
+      R(0, 0, 6, 12, "#7da36e", { opacity: 0.55 }, p);
+    });
+    // parquet: four blocks of two slats, turned a quarter between neighbours
+    const PARQUET = pat("wr-parquet", 32, 32, p => {
+      const tones = ["#9a6234", "#a56c3a", "#8e5a2e", "#a06636"];
+      R(0, 0, 32, 32, "#6a3e1c", {}, p);
+      [[0, 0, 0], [16, 0, 1], [0, 16, 1], [16, 16, 0]].forEach(([bx, by, v], bi) => {
+        for (let s = 0; s < 2; s++) {
+          const x = v ? bx + s * 8 : bx, y = v ? by : by + s * 8, w = v ? 8 : 16, h = v ? 16 : 8;
+          R(x + 0.4, y + 0.4, w - 0.8, h - 0.8, tones[(bi + s) % 4], {}, p);
+          L(v ? `M${x + 2.5} ${y + 2} V${y + h - 2}` : `M${x + 2} ${y + 2.5} H${x + w - 2}`, "#6a3e1c", 0.5, { opacity: 0.4 }, p);
+        }
+      });
+    });
+    const CROCHET = pat("wr-croch", 7, 5, p => {
+      L("M0.5 1 L2.5 3.6 L4.5 1 M3.5 1 L5.5 3.6 L7 1.6", "#1a0c04", 0.7, { opacity: 0.3 }, p);
+    });
+
+    // ── the ceiling (cream boards), the olive-gold trim, and the knotty-pine walls ──
+    R(0, 0, W, 34, "url(#wr-ceil)");
+    for (let x = 22; x < W; x += 38) L(`M${x} 0 V34`, "#7a6a48", 0.7, { opacity: 0.4 });
+    R(0, 30, W, 20, "url(#wr-trim)");
+    R(0, 30, W, 2, "#e0cc78", { opacity: 0.55 });
+    R(0, 48, W, 3, "#4a3a12", { opacity: 0.55 });
+    R(0, 50, W, 290, "url(#wr-wall)");
+    for (let i = 0, x = 0; x < W + 20; i++) {                                    // vertical boards of uneven width, each its own tone
+      const bw = r1("wb" + i, 15, 21);
+      R(x, 50, bw, 290, rnd("wt" + i) > 0.5 ? "#c88a44" : "#8e5a2a", { opacity: 0.1 + rnd("wo" + i) * 0.1 });
+      R(x, 50, 1.6, 290, "#3a200c", { opacity: 0.62 });
+      R(x + 1.6, 50, 1, 290, "#e8b068", { opacity: 0.16 });
+      for (let g = 0; g < 4; g++) {
+        const gx = x + 3 + rnd("wg" + i + g) * (bw - 6), gy = 52 + rnd("wh" + i + g) * 200;
+        L(`M${gx.toFixed(1)} ${gy.toFixed(1)} q${(rnd("wq" + i + g) * 4 - 2).toFixed(1)} 30 ${(rnd("wr" + i + g) * 3 - 1.5).toFixed(1)} ${(38 + rnd("ws" + i + g) * 40).toFixed(1)}`, "#4a2a10", 0.7, { opacity: 0.28 });
+      }
+      if (rnd("wk" + i) > 0.55) {                                                // a knot
+        const kx = x + bw / 2, ky = 70 + rnd("wy" + i) * 240;
+        E(kx, ky, 2.6, 4, "#5a3214", { opacity: 0.62 }); E(kx, ky, 1.1, 2, "#2e1708", { opacity: 0.7 });
+        L(`M${kx - 4} ${ky} Q${kx} ${ky - 7} ${kx + 4} ${ky}`, "#5a3214", 0.6, { opacity: 0.4 });
+      }
+      x += bw;
+    }
+    R(0, 50, W, 290, "url(#wr-wall)", { opacity: 0.32 });                         // the warm falloff over the boards
+    R(0, 328, W, 12, "#4a2a14");                                                 // dark skirting
+    R(0, 328, W, 1.6, "#8a5a30", { opacity: 0.7 });
+
+    // ── the window, in the middle, with its white curtains (between the tall bookshelf and the tiger) ──
+    R(122, 62, 58, 130, "#4a2e18");                                              // frame
+    R(126, 66, 50, 112, "url(#wr-pane)");
+    R(150, 66, 2.4, 112, "#d8d2b8"); R(126, 118, 50, 2.4, "#d8d2b8");             // the cross of the sash
+    PG("126,66 176,66 176,90 126,122", "#fff", { opacity: 0.4 });                  // a slant of light on the glass
+    R(126, 66, 50, 4, "#000", { opacity: 0.12 });
+    R(119, 178, 64, 7, "#9a6a38"); R(119, 178, 64, 1.6, "#d8a468", { opacity: 0.7 }); R(121, 185, 60, 3, "#3a200c", { opacity: 0.55 });   // the sill
+    L("M112 58 H190", "#2e1a0c", 3.4); C(111, 58, 3, "#c9a24a"); C(191, 58, 3, "#c9a24a");   // the rod, with its finials
+    [0, 1].forEach(k => {                                                         // curtain panels, straight, pinched at a tie-back and flaring below
+      const m = x => k ? 302 - x : x;
+      const sd = k ? 1 : 0;
+      P(`M${m(113)} 60 H${m(129)} L${m(128)} 150 Q${m(131)} 157 ${m(128)} 164 L${m(131)} 198 H${m(113)} Z`, "url(#wr-curt)", { stroke: "#b8ac90", "stroke-width": 0.6 });
+      for (let f = 1; f < 4; f++) L(`M${m(113 + f * 4)} 62 L${m(113 + f * 4 + (f > 2 ? 0.6 : 0))} 196`, "#a89c80", 0.8, { opacity: 0.5 });
+      R(Math.min(m(113), m(131)) - 0, 150, 18, 5, "#c9a24a", { opacity: 0.9 });                        // the tie-back band
+      L(`M${m(113)} 152 v8 M${m(131)} 152 v8`, "#8a6a2a", 0.8, { opacity: 0.6 });
+    });
+
+    // ── a shark poster over the chest of drawers (no lettering) ──
+    PG("9,60 59,58 60,136 10,138", "#efe8d6", { stroke: "#4a2a10", "stroke-width": 0.8 });
+    const pc = clip("wr-poster", c => PG("12,63 56,61 57,133 13,135", "#000", {}, c));
+    const po = G({ "clip-path": pc });
+    R(10, 58, 52, 82, "url(#wr-sea)", {}, po);
+    for (let k = 0; k < 5; k++) L(`M${14 + k * 9} ${64 + k * 2} q5 -3 9 0`, "#e8f4f4", 0.9, { opacity: 0.5 }, po);   // light on the surface
+    P("M20 124 Q33 78 37 70 Q41 78 52 120 Q36 112 20 124 Z", "#6a7f8a", {}, po);  // the shark, rising from below, belly pale
+    P("M25 132 Q36 96 36 92 Q40 100 49 130 Z", "#e6eef0", {}, po);
+    P("M26 126 Q36 118 48 125 L47 133 Q36 126 27 133 Z", "#7a1c1c", {}, po);     // the mouth
+    for (let k = 0; k < 7; k++) PG(`${27 + k * 3},126 ${28.5 + k * 3},131 ${30 + k * 3},126`, "#fff", {}, po);
+    P("M36 72 L30 62 L40 68 Z", "#5a6f7a", {}, po);                              // the fin
+    L("M26 80 q3 -3 6 0 M40 84 q3 -3 6 0", "#e8f4f4", 1, { opacity: 0.5 }, po);
+    E(36, 68, 5, 1.6, "#0e2a3c", {}, po); C(30, 66.4, 1.5, "#0e2a3c", {}, po);   // a small swimmer on the surface
+    R(12, 61, 44, 5, "#a82a22", { opacity: 0.9 }, po);                           // a red band across the top
+
+    // ── the pine chest of drawers, with a lamp on it ──
+    R(-2, 198, 66, 7, "#6a4020"); R(-2, 198, 66, 2, "#c28a48", { opacity: 0.6 });
+    R(0, 205, 62, 135, "url(#wr-pine)");
+    R(58, 205, 4, 135, "#4a2a10", { opacity: 0.4 });
+    for (let d = 0; d < 4; d++) {
+      const y = 210 + d * 31;
+      R(5, y, 52, 27, "#c88a46", { stroke: "#5a3414", "stroke-width": 1.2 });
+      R(8, y + 3, 46, 21, "#b4783a", { opacity: 0.7 });
+      L(`M10 ${y + 9} q14 -3 30 0 M12 ${y + 17} q14 3 28 0`, "#5a3414", 0.6, { opacity: 0.4 });
+      C(31, y + 13.5, 2.2, "#2a1608"); C(30.4, y + 12.9, 0.8, "#8a6a40");
+    }
+    R(4, 338, 8, 4, "#3a200c"); R(50, 338, 8, 4, "#3a200c");
+    // the lamp on top: a different one from the two on the headboard: a green ceramic gourd under a wide drum shade
+    C(32, 168, 52, "url(#wr-glow)", { opacity: 0.8 });
+    E(32, 199, 11, 2.6, "#2a1608", { opacity: 0.6 });
+    E(32, 186, 11, 13, "#3f7a68", { stroke: "#2a5a4a", "stroke-width": 0.8 });
+    E(28, 182, 3.2, 7, "#8ac0a8", { opacity: 0.45 });
+    R(29.4, 170, 5.2, 8, "#2a5a4a");
+    R(15, 148, 34, 26, "url(#wr-shade)", { rx: 3, stroke: "#b08a48", "stroke-width": 0.8 });
+    R(15, 148, 34, 3, "#c9a050", { rx: 1.5 }); R(15, 171, 34, 3, "#c9a050", { rx: 1.5 });
+    L("M18 161 H46", "#fff3cc", 10, { opacity: 0.35 });
+    L("M24 151 V171 M32 151 V171 M40 151 V171", "#c9a050", 0.5, { opacity: 0.45 });
+
+    // ── the tall bookshelf: a globe and a bowling pin on top, books and bits on every shelf ──
+    R(62, 98, 34, 244, "url(#wr-walnut)"); R(65, 101, 28, 238, "#1e1007");
+    R(62, 338, 34, 4, "#1a0d05");
+    [102, 150, 198, 246, 294].forEach((y, s) => {
+      R(65, y + 38, 28, 3.6, "#5a3a20");
+      let x = 66;
+      for (let b = 0; b < 8 && x < 88; b++) {
+        const bw = r1("bsw" + s + b, 3.4, 6), bh = r1("bsh" + s + b, 24, 34);
+        if (s === 1 && b === 1) { C(x + 6, y + 29, 6, "#c9a24a"); C(x + 6, y + 29, 4.6, "#e8d8a8"); L(`M${x + 6} ${y + 29} V${y + 26} M${x + 6} ${y + 29} h2.6`, "#5a3a1a", 0.8); x += 13; continue; }   // a clock
+        R(x, y + 38 - bh, bw, bh, ["#8a2c2c", "#2c4a7a", "#c8902a", "#3a6a4a", "#e6dcc4", "#5a3a6a", "#a85a2a"][Math.floor(rnd("bsc" + s + b) * 7)], { opacity: 0.9 });
+        L(`M${x + 0.6} ${y + 38 - bh + 3} h${bw - 1.2}`, "#f0e0b0", 0.6, { opacity: 0.5 });
+        x += bw + 0.4;
+      }
+    });
+    const gl = G({ transform: "translate(4.96 12.14) scale(0.87)" });         // a globe: round foot, short stem, brass half-ring, sitting on the top
+    E(92, 97, 8, 2, "#5a3a1a", {}, gl); R(90.6, 90, 2.8, 7, "#c9a24a", {}, gl);
+    C(92, 78, 11, "#3f7aa0", {}, gl);
+    P("M83 74 q4 -6 9 -3 q2 4 -3 7 q-4 2 -6 -4 Z M94 80 q5 -2 8 2 q-1 6 -6 6 q-3 -2 -2 -8 Z M88 88 q3 -2 4 1 q-2 2 -4 -1 Z", "#6aa05a", {}, gl);
+    L("M81 78 Q92 82 103 78", "#d8e8f0", 0.6, { opacity: 0.5 }, gl);
+    E(88, 72, 3, 5, "#fff", { opacity: 0.25 }, gl);
+    P("M92 66 A11 12 0 0 1 92 90", "none", { stroke: "#c9a24a", "stroke-width": 1.4 }, gl);
+    const PIN = "M-3 0 Q-4.6 -4 -4.2 -9 Q-3.4 -14 -1.9 -18 Q-1.3 -20 -2.3 -22 Q-3.1 -25 -1.5 -27.5 Q0 -28.5 1.5 -27.5 Q3.1 -25 2.3 -22 Q1.3 -20 1.9 -18 Q3.4 -14 4.2 -9 Q4.6 -4 3 0 Z";
+    const bp = G({ transform: "translate(70 98)" });                             // a bowling pin standing on the shelf top: white, two red stripes on the neck
+    E(0, 0.4, 4.6, 1.2, "#000", { opacity: 0.35 }, bp);
+    P(PIN, "#f6f2e6", { stroke: "#b8a888", "stroke-width": 0.6 }, bp);
+    const pinc = clip("wr-pin", c => P(PIN, "#000", {}, c));
+    const pg = G({ "clip-path": pinc }, bp);
+    R(-6, -22.4, 12, 1.8, "#b8322a", {}, pg); R(-6, -19.2, 12, 1.4, "#b8322a", {}, pg);
+    R(1.6, -28, 4, 29, "#8a7a5a", { opacity: 0.18 }, pg);
+    L("M-2.6 -11 Q-3 -6 -2.2 -2.4", "#fff", 1.1, { opacity: 0.8 }, bp);
+
+    // ── the tiger painting, and notes pinned beside it ──
+    R(196, 70, 92, 80, "#4a2a16", { stroke: "#2a1608", "stroke-width": 1.4 });
+    R(200, 74, 84, 72, "#b08a40");
+    R(203, 77, 78, 66, "url(#wr-tiger)");
+    const tp = clip("wr-tigerclip", c => R(203, 77, 78, 66, "#000", {}, c));
+    const tg = G({ "clip-path": tp });
+    for (let k = 0; k < 16; k++) {                                               // leaves and grass behind them
+      const lx = 205 + rnd("tl" + k) * 74, ly = 80 + rnd("tm" + k) * 58;
+      P(`M${lx.toFixed(1)} ${ly.toFixed(1)} q5 -9 10 -2 q-5 8 -10 2 Z`, rnd("tn" + k) > 0.5 ? "#2e3a1c" : "#8a8a3c", { opacity: 0.6 }, tg);
+    }
+    P("M203 138 Q225 126 245 134 Q262 128 281 138 V143 H203 Z", "#2a2410", { opacity: 0.8 }, tg);
+    const TG = "#d68a2c", TD = "#1a1008";                                        // the tiger: long low body, big head, ringed tail
+    R(219, 124, 6, 15, "#c27a22", {}, tg); R(228, 126, 5, 13, "#b8721e", {}, tg); R(246, 124, 6, 15, "#c27a22", {}, tg); R(238, 126, 5, 13, "#b8721e", {}, tg);
+    E(236, 121, 23, 10, TG, {}, tg); E(236, 127, 20, 5, "#f0d6a0", { opacity: 0.55 }, tg);
+    L("M214 118 Q203 112 205 100", TG, 4.4, {}, tg); L("M207 104 Q205 101 205 99", TD, 4.4, {}, tg);
+    [223, 230, 237, 244, 251].forEach((sx, i) => L(`M${sx} ${112 + (i % 2)} q2.4 6 -0.6 12`, TD, 1.8, {}, tg));
+    L("M220 134 h5 M247 134 h5 M229 135 h4", TD, 1.2, {}, tg);
+    C(260, 113, 8.6, TG, {}, tg);     E(260, 118.6, 4.4, 3.2, "#f6ead0", {}, tg); E(260, 116.6, 1.5, 1, "#c0603a", {}, tg);
+    C(255.6, 111.6, 1.1, TD, {}, tg); C(264.4, 111.6, 1.1, TD, {}, tg);
+    P("M254 106 L252 100 Q257 100 259 105 Z M266 106 L268 100 Q263 100 261 105 Z", TG, {}, tg); P("M253.4 104 L252.8 101.4 Q255 101.4 256 104 Z M266.6 104 L267.2 101.4 Q265 101.4 264 104 Z", TD, {}, tg);
+    L("M258 105 v4 M260 104 v5 M262 105 v4 M252 112 h3 M268 112 h-3", TD, 1, {}, tg);
+    PG("203,77 281,77 281,98 203,118", "#fff2c4", { opacity: 0.07 }, tg);
+    [[292, 78, 20, 19, "#e8b8b8", -4], [316, 98, 20, 22, "#efe6c8", 5], [293, 106, 17, 17, "#c9dcb0", 3]].forEach(([nx, ny, nw, nh, nc, rot], k) => {
+      const g = G({ transform: `rotate(${rot} ${nx + nw / 2} ${ny + nh / 2})` });
+      R(nx, ny, nw, nh, nc, { stroke: "#7a5a30", "stroke-width": 0.5 }, g);
+      L(`M${nx + 3} ${ny + 6} h${nw - 6} M${nx + 3} ${ny + 10} h${nw - 9} M${nx + 3} ${ny + 14} h${nw - 7}`, "#6a4a2a", 0.7, { opacity: 0.55 }, g);
+      C(nx + nw / 2, ny + 1.8, 1.5, "#c0392b", {}, g);
+    });
+    // a small framed oval portrait, and a little figure perched on a nail
+    E(320, 164, 10, 13, "#5a3418"); E(320, 164, 7.6, 10.6, "#e6d4b0");
+    E(320, 163, 3.6, 4.6, "#d8b490"); P("M315.6 163 q4.4 -9 8.8 0 q-1 -3 -4.4 -3.6 q-3.4 0.6 -4.4 3.6 Z", "#3a2410");
+    E(345, 152, 5, 6.4, "#a89a80"); C(345, 145, 3.6, "#b8aa90"); PG("341.6,143 342.4,138 344.6,142", "#a89a80"); PG("348.4,143 347.6,138 345.4,142", "#a89a80");
+    L("M340 152 q-4 3 -3 9 M350 152 q4 3 3 9", "#a89a80", 2.2);
+
+    // ── the floor: parquet, shaded towards the corners ──
+    const YH = 150, FC = 190, FF = 300, TS = 0.06;                                // horizon, camera height x focal, focal, tile size (world units)
+    const fy = z => YH + FC / z, fx = (X, z) => 180 + FF * X / z;
+    const flClip = clip("wr-floorclip", c => R(0, 340, W, 200, "#000", {}, c));
+    const flG = G({ "clip-path": flClip });
+    R(0, 340, W, 200, "#6a3e1c", {}, flG);
+    const TONES = ["#9a6234", "#a56c3a", "#8e5a2e", "#a06636", "#96602f"];
+    for (let j = 0; fy(1 - j * TS) < 560 && 1 - (j + 1) * TS > 0.2; j++) {
+      const z1 = 1 - j * TS, z2 = 1 - (j + 1) * TS;                              // the back and front edge of this row
+      for (let i = -12; i < 12; i++) {
+        const X1 = i * TS, X2 = (i + 1) * TS, hor = (i + j) % 2 === 0;
+        const col = TONES[Math.floor(rnd("pq" + i + "_" + j) * 5)];
+        for (let q = 0; q < 3; q++) {                                           // three slats in each tile, turned a quarter between neighbours
+          let pts;
+          if (hor) { const za = z1 + (z2 - z1) * q / 3, zb = z1 + (z2 - z1) * (q + 1) / 3; pts = `${fx(X1, za)},${fy(za)} ${fx(X2, za)},${fy(za)} ${fx(X2, zb)},${fy(zb)} ${fx(X1, zb)},${fy(zb)}`; }
+          else { const Xa = X1 + (X2 - X1) * q / 3, Xb = X1 + (X2 - X1) * (q + 1) / 3; pts = `${fx(Xa, z1)},${fy(z1)} ${fx(Xb, z1)},${fy(z1)} ${fx(Xb, z2)},${fy(z2)} ${fx(Xa, z2)},${fy(z2)}`; }
+          PG(pts, col, { stroke: "#5a3216", "stroke-width": 0.5, "stroke-opacity": 0.55, opacity: 0.9 + 0.1 * rnd("pr" + i + j + q) }, flG);
+        }
+      }
+    }
+    R(0, 340, W, 200, "url(#wr-floor)");
+    R(0, 340, W, 3, "#2a1608", { opacity: 0.6 });
+    E(190, 470, 170, 76, "url(#wr-glow)", { opacity: 0.38 });
+
+    // ── the blue-grey rag rug in front of the bed ──
+    const rugShape = clip("wr-rug", c => PG("58,430 302,430 346,530 14,530", "#000", {}, c));
+    PG("54,428 306,428 352,534 8,534", "#1c2536", { opacity: 0.55 });             // its shadow
+    const rug = G({ "clip-path": rugShape });
+    R(0, 428, W, 110, "#4d607c", {}, rug);
+    for (let y = 428, i = 0; y < 534; i++) {
+      const h = r1("rs" + i, 4, 9);
+      R(0, y, W, h, ["#2f3d58", "#6d819f", "#4d607c", "#8998b0", "#3b4a66", "#a9b4c6"][Math.floor(rnd("rc" + i) * 6)], { opacity: 0.85 }, rug);
+      y += h;
+    }
+    for (let k = 0; k < 90; k++) L(`M${(rnd("rf" + k) * W).toFixed(1)} ${(430 + rnd("rg" + k) * 100).toFixed(1)} h${(3 + rnd("rh" + k) * 5).toFixed(1)}`, "#e6ecf4", 0.8, { opacity: 0.22 }, rug);
+    L("M58 430 L14 530 M302 430 L346 530", "#232e44", 3, { opacity: 0.55 });
+
+    // ── the bed, same place and size as in Mike's room: a dark bookcase for a headboard, a white metal frame ──
+    E(190, 436, 116, 10, "#000", { opacity: 0.42 });
+    // the headboard bookcase: top ledge, two rows of shelves, a few books and bits
+    R(96, 216, 192, 8, "#6a4222"); R(96, 216, 192, 2, "#b07a40", { opacity: 0.6 });
+    R(96, 224, 192, 116, "url(#wr-walnut)");                                    // it stands on the floor
+    R(100, 228, 180, 74, "#1a0d05");
+    [100, 145, 190, 235, 280].forEach(x => R(x - 1.5, 228, 3, 74, "#3a2212"));
+    R(100, 262, 180, 3, "#3a2212"); R(96, 302, 192, 4, "#3a2212");
+    R(100, 308, 180, 28, "#2a170b"); R(103, 311, 174, 22, "#1e1007");             // the cupboard below
+    R(96, 336, 194, 5, "#1a0d05");                                              // plinth
+    [[102, 6], [147, 6], [192, 5], [237, 5]].forEach(([x0], c) => {
+      let x = x0 + 2;
+      for (let b = 0; b < 8 && x < x0 + 38; b++) {
+        const bw = r1("hbw" + c + b, 3, 5.4), bh = r1("hbh" + c + b, 18, 29);
+        R(x, 262 - bh, bw, bh, ["#8a2c2c", "#2c4a7a", "#c8902a", "#3a6a4a", "#e6dcc4", "#5a3a6a", "#7a5a2a"][Math.floor(rnd("hbc" + c + b) * 7)], { opacity: 0.88 });
+        x += bw + 0.3;
+      }
+    });
+    R(104, 282, 36, 16, "#d8cca8", { opacity: 0.8 }); L("M104 290 h34", "#7a6a48", 0.8);          // a stack of paper on the lower shelf
+    R(196, 276, 34, 22, "#8a8a7a"); R(199, 279, 14, 14, "#2a2a28"); C(222, 286, 3.6, "#c9a24a");   // a small radio
+    // things along the top: a framed snapshot, a mug, a little plant (all below the window sill)
+    R(166, 198, 20, 18, "#3a2412"); R(168, 200, 16, 14, "#cfd8cf"); P("M168 212 l4 -5 l4 3 l3 -3 l5 5 V214 H168 Z", "#6a8a5a");
+    R(196, 204, 9, 12, "#c9482e"); R(196, 204, 9, 2, "#7a2a1a"); L("M205 207 q4 0 4 3 q0 3 -4 3", "#c9482e", 1.2);
+    P("M222 216 l-2 -9 q3 -3 4 0 q2 -6 4 0 q3 -3 3 4 l-2 5 Z", "#4a7a3a"); R(219, 211, 16, 5, "#a86a3a");
+    // lamps on both ends of the headboard: the left one in front of the bookshelf, the right one under the tiger
+    [[106, 0.92], [268, 0.92]].forEach(([lx, s]) => {
+      C(lx, 196, 62 * s, "url(#wr-glow)", { opacity: 0.85 });
+      R(lx - 2.4, 198, 4.8, 18, "#c9b890"); E(lx, 216, 8 * s, 2.6, "#8a7a58");
+      PG(`${lx - 16 * s},202 ${lx + 16 * s},202 ${lx + 11 * s},${202 - 28 * s} ${lx - 11 * s},${202 - 28 * s}`, "url(#wr-shade)", { stroke: "#b08a48", "stroke-width": 0.8 });
+      L(`M${lx - 11 * s} ${202 - 28 * s} H${lx + 11 * s}`, "#c9a050", 1.2);
+      L(`M${lx - 12 * s} ${202 - 14 * s} H${lx + 12 * s}`, "#fff3cc", 9, { opacity: 0.35 });
+    });
+    // the mattress top: a pale blue sheet
+    PG("118,296 262,296 282,376 98,376", "#c4d0e0");
+    PG("118,296 262,296 266,316 114,316", "#000", { opacity: 0.1 });
+    // pillows: two gingham, one blue-grey tucked in at the right
+    const pil = (x, y, w, h, fill, o) => { R(x, y, w, h, fill, Object.assign({ rx: 9, stroke: "#6a7a6a", "stroke-width": 0.8 }, o || {})); R(x + 3, y + 2, w - 6, 3, "#fff", { rx: 1.5, opacity: 0.22 }); };
+    pil(248, 296, 34, 20, "#7f8ea8", { transform: "rotate(5 265 306)" }); L("M254 303 q10 -2 22 2", "#a9b6cc", 1, { opacity: 0.6 });
+    pil(128, 286, 62, 26, GINGHAM); pil(194, 286, 62, 26, GINGHAM);
+    L("M134 304 q26 4 50 0 M200 304 q26 4 50 0", "#4a6a42", 0.8, { opacity: 0.4 });
+    // the fish comforter, folded down over a white sheet
+    PG("111.5,322 268.5,322 282,376 98,376", FISHPAT);
+    PG("111.5,322 268.5,322 282,376 98,376", "#0a1226", { opacity: 0.2 });
+    PG("111.5,322 268.5,322 270.4,334 109.6,334", "#eef1f6");
+    PG("109.6,334 270.4,334 270.7,337 109.3,337", "#000", { opacity: 0.2 });
+    L("M130 352 Q190 346 250 354 M116 366 Q190 360 270 368", "#0a1226", 1, { opacity: 0.35 });
+    // the foot of the bed, the comforter drooping, and the white metal frame
+    PG("98,376 282,376 280,414 100,416", FISHPAT);
+    PG("98,376 282,376 280,414 100,416", "#080e20", { opacity: 0.34 });
+    L("M98 376 H282", "#0a1226", 1.4, { opacity: 0.6 });
+    R(98, 414, 184, 5, "#e8e4d6"); R(98, 414, 184, 1.4, "#fff", { opacity: 0.6 });
+    R(98, 414, 6, 24, "#e8e4d6"); R(276, 414, 6, 24, "#e8e4d6"); R(100, 436, 4, 2, "#8a867a"); R(277, 436, 4, 2, "#8a867a");
+    // the crocheted afghan over the foot: chunky stripes of mustard, brown and cream, with a fringe
+    const AF = ["#c8921f", "#3b2012", "#d9c08a", "#c8921f", "#7a3e18", "#3b2012", "#c8921f"];
+    const afTop = clip("wr-aftop", c => PG("106,346 200,340 218,376 98,376", "#000", {}, c));
+    const afHang = clip("wr-afhang", c => PG("98,376 204,376 198,430 100,432", "#000", {}, c));
+    const aT = G({ "clip-path": afTop }); let y = 330, k = 0;
+    while (y < 380) { const h = k % 3 === 1 ? 5 : 8; R(96, y, 140, h, AF[k % AF.length], {}, aT); y += h; k++; }
+    R(96, 330, 140, 52, "url(#wr-croch)", {}, aT);
+    PG("106,346 200,340 203,344 106,350", "#fff", { opacity: 0.14 });
+    const aH = G({ "clip-path": afHang }); y = 374; k = 2;
+    while (y < 446) { const h = k % 3 === 1 ? 6 : 10; R(94, y, 120, h, AF[k % AF.length], {}, aH); y += h; k++; }
+    R(94, 374, 120, 70, "url(#wr-croch)", {}, aH);
+    PG("98,376 204,376 203,390 99,390", "#000", { opacity: 0.2 });                  // shadow under the bed's edge
+    PG("98,376 204,376 202,408 99,410", "#fff", { opacity: 0.05 });
+    L("M100 432 L198 430", "#d9c08a", 3);
+    for (let f = 0; f < 17; f++) L(`M${(101 + f * 6).toFixed(1)} ${(432 - f * 0.12).toFixed(1)} v${(5 + rnd("af" + f) * 3).toFixed(1)}`, f % 3 === 1 ? "#3b2012" : "#d9c08a", 1.4);
+
+    // ── light and shade: warm glow from the three lamps and a vignette ──
+    R(0, 50, W, 490, "#ff9a3c", { opacity: 0.06, "pointer-events": "none" });
+    C(34, 180, 110, "url(#wr-glow)", { opacity: 0.4 });
+    C(190, 200, 170, "url(#wr-glow)", { opacity: 0.32 });
+    R(0, 0, W, H, "url(#wr-vig)", { "pointer-events": "none" });
+
+    field.appendChild(svg);
+    pill("\u{1F6CB}️ living room", "Back to the living room", () => { close(); openByersLivingRoom(); });
+    pill("\u{1F373} kitchen", "Through to the kitchen", () => { close(); openByersKitchen(); });
+    pill("\u{1F3DA}️ outside", "Out to the front of Will’s house", () => { close(); openWillsHouse(); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    document.body.appendChild(sh.back);
+  }
+
+  return { openWillsRoom };
 };
 
 // ════════ softlanding.js ════════
