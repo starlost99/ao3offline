@@ -549,23 +549,23 @@
       if ((kind === "rain" || kind === "storm") && muffled) {
         // indoors: a soft, even patter on the roof, a low hush of wind in a storm, a rare gentle drip, and a far-off roll of thunder
         const heavy = kind === "storm";
-        bed("lowpass", 420, 0.5, heavy ? 0.07 : 0.05, 0.08, 0.008);                             // the patter, softened by the walls
+        bed("lowpass", 420, 0.5, heavy ? 0.05 : 0.035, 0.08, 0.006);                             // the patter, softened by the walls
         bed("bandpass", 1500, 0.4, heavy ? 0.035 : 0.022, 0.1, 0.006);                          // a little shimmer of rain on the window
-        if (heavy) bed("lowpass", 240, 0.6, 0.035, 0.06, 0.02);                                 // wind, slow and low
+        if (heavy) bed("lowpass", 300, 0.6, 0.02, 0.17, 0.005);                                 // wind, soft and shallow
         every(() => blip(rand(500, 800), 380, 0.09, 0.012), 3500, 9000);                        // a drip, now and then
         if (heavy) every(rumble, 18000, 42000);
       } else if (kind === "rain" || kind === "storm") {
         const heavy = kind === "storm";
-        bed("bandpass", 2400, 0.4, heavy ? 0.16 : 0.09, 0.2, heavy ? 0.03 : 0.015);          // the rain itself
-        bed("lowpass", 500, 0.7, heavy ? 0.12 : 0.05);                                        // the low patter on the roof
-        if (heavy) bed("bandpass", 350, 0.8, 0.05, 0.11, 0.04);                               // wind in the gusts
+        bed("bandpass", 2400, 0.4, heavy ? 0.08 : 0.045, 0.2, heavy ? 0.015 : 0.008);        // the rain itself (turned down)
+        bed("lowpass", 500, 0.7, heavy ? 0.04 : 0.016);                                       // the low patter on the roof (turned down)
+        if (heavy) bed("bandpass", 600, 0.5, 0.028, 0.27, 0.008);                             // wind in the gusts: higher, shallow and quicker, so it blows rather than rolls like surf
         every(() => blip(rand(900, 1600), 600, 0.05, 0.04), 700, 2600);                       // a drip somewhere
       } else if (kind === "fog") {
         bed("lowpass", muffled ? 200 : 260, 0.7, muffled ? 0.025 : 0.04, 0.07, muffled ? 0.008 : 0.015);
       } else if (kind === "snow") {
         bed("lowpass", muffled ? 180 : 220, 0.6, muffled ? 0.016 : 0.025, 0.05, muffled ? 0.006 : 0.01);   // snow muffles everything
       } else {
-        if (kind === "leaves") { bed("bandpass", muffled ? 320 : 450, 0.7, muffled ? 0.03 : 0.05, muffled ? 0.07 : 0.13, muffled ? 0.02 : 0.045); if (!muffled) bed("highpass", 3500, 0.5, 0.012, 0.13, 0.011); }   // gusts, and the rustle in them
+        if (kind === "leaves") { bed("bandpass", muffled ? 360 : 650, 0.5, muffled ? 0.02 : 0.02, muffled ? 0.2 : 0.31, muffled ? 0.005 : 0.007); if (!muffled) bed("highpass", 3500, 0.5, 0.008, 0.19, 0.004); }   // gusts, and the rustle in them
         else bed("lowpass", muffled ? 300 : 380, 0.6, muffled ? 0.008 : 0.012, 0.06, muffled ? 0.004 : 0.006);                                    // a faint breeze
         if (muffled) { /* birds and crickets do not carry through the walls */ }
         else if (tm === "day" || tm === "dawn") every(() => bird(tm === "dawn"), tm === "dawn" ? 900 : 1800, tm === "dawn" ? 3200 : 6000);
