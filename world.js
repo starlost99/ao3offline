@@ -12261,7 +12261,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["willshouse"] = function (ctx) {
   'use strict';
-  const { hkShell } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkThunder, hkAmbience, hkSoundPill, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
@@ -12272,13 +12272,14 @@
   // white posts, a brown front door with a lantern each side, three white-framed windows, porch furniture (white metal chairs and
   // a little table on the left, a dark chair, a red box, two kids' bikes, two white plastic chairs), a dark green hatchback parked
   // on the grass, a gravel drive, dry yard, dense woods behind and a maple branch hanging in from the top left.
-  // Nothing is tappable and nothing moves: it is a still picture of a summer afternoon (no time of day, weather or sound yet).
+  // Nothing is tappable. Time of day, weather, season and sound are the live Hawkins environment, like the Wheelers' lawn (hawkins-kit): the sky, sun, moon and stars follow the clock,
+  // the windows and porch lanterns light up at dusk and night, and rain, storm, fog, snow and leaves come with the real weather; the time and weather pills set the shared override for an hour.
   // Every number below is in the photo's own pixels (1280 x 720), so to move something, measure it on the photo.
   function openWillsHouse() {
     const sh = hkShell("ao3-willshouse", "\u{1F3DA}\uFE0F The Byers\u2019");
-    const { sv, rnd } = sh.kit;
-    const { box, sub, field, caption, pill, close } = sh;
-    sub.textContent = "will\u2019s house \u00B7 a summer afternoon";
+    const { sv, rnd, anim } = sh.kit;
+    const { box, sub, field, caption, pill, close, later } = sh;
+    sub.textContent = "will\u2019s house";
     caption.textContent = "Will\u2019s house, out at the end of the road.";
     box.style.background = "#74add9";
 
@@ -12309,13 +12310,22 @@
 
     // ── sky ──
     rad("wh-sun", [["0%", "#fff6d0", 0.7], ["100%", "#fff6d0", 0]]);
+    rad("wh-sunw", [["0%", "#ffb067", 0.8], ["100%", "#ffb067", 0]]);
+    rad("wh-lit", [["0%", "#ffd98a", 0.75], ["100%", "#ffd98a", 0]]);
+    rad("wh-moonglow", [["0%", "#efe6bd", 0.5], ["100%", "#efe6bd", 0]]);
     R(VX - 400, VY - 600, VW + 800, 1360, "url(#wh-sky)");
-    C(900, 10, 240, "url(#wh-sun)");
+    const starG = A("g", {});                                                                       // stars, shown at night
+    for (let i = 0; i < 110; i++) C(r1("sx" + i, VX - 380, VX + VW + 380).toFixed(0), r1("sy" + i, VY - 540, 260).toFixed(0), r1("sr" + i, 1.2, 3).toFixed(1), "#fff", { opacity: (0.5 + rnd("so" + i) * 0.5).toFixed(2) }, starG);
+    const sunG = A("g", {});                                                                        // the sun glow: it slides down toward the trees at dawn and dusk
+    C(900, 10, 240, "url(#wh-sun)", {}, sunG);
+    const warm = C(900, 10, 200, "url(#wh-sunw)", {}, sunG);
+    const cloudsG = A("g", {});
     [[760, 40, 120, 24], [600, 130, 86, 16], [880, 150, 76, 14], [420, 20, 90, 16]].forEach(([cx, cy, rx, ry]) => {
-      E(cx, cy, rx, ry, "#fff", { opacity: 0.85 });
-      E(cx - rx * 0.4, cy + ry * 0.25, rx * 0.6, ry * 0.7, "#fff", { opacity: 0.8 });
-      E(cx + rx * 0.35, cy - ry * 0.3, rx * 0.5, ry * 0.8, "#f1f6fa", { opacity: 0.85 });
+      E(cx, cy, rx, ry, "#fff", { opacity: 0.85 }, cloudsG);
+      E(cx - rx * 0.4, cy + ry * 0.25, rx * 0.6, ry * 0.7, "#fff", { opacity: 0.8 }, cloudsG);
+      E(cx + rx * 0.35, cy - ry * 0.3, rx * 0.5, ry * 0.8, "#f1f6fa", { opacity: 0.85 }, cloudsG);
     });
+    const ovc = R(VX - 400, VY - 600, VW + 800, 1100, "#7d8a99", { opacity: 0 });                  // overcast: rain, storm, fog and snow grey the whole sky
 
     // ── the trees: round canopies built from three stacked balls (dark base, mid, sunlit top) ──
     const ball = (cx, cy, r, pal) => { C(cx, cy, r, pal[0]); C(cx - r * 0.1, cy - r * 0.12, r * 0.86, pal[1]); C(cx - r * 0.24, cy - r * 0.3, r * 0.52, pal[2], { opacity: 0.9 }); };
@@ -12350,20 +12360,23 @@
     R(857, 90, 7, 330, "#3a2c22", {}, pine);
     [[860, 40, 24], [860, 82, 38], [862, 132, 52], [864, 190, 66], [866, 254, 80], [868, 322, 90]].forEach(([cx, cy, w], i) => PG(`${cx},${cy - 44} ${cx + w},${cy + 22} ${cx - w},${cy + 22}`, i % 2 ? "#1d3a2e" : "#26482f", {}, pine));
     // the far tree line, behind the house
-    for (let i = 0; i < 9; i++) blob(150 + i * 92, 340 + (i % 2) * 14, 96, ["#2c5a2c", "#336630", "#2a5228", "#4f8a33", "#5e9a36", "#477f31"], "tl" + i, 10);
+    for (let i = -2; i < 11; i++) blob(150 + i * 92, 340 + (i % 2) * 14, 96, ["#2c5a2c", "#336630", "#2a5228", "#4f8a33", "#5e9a36", "#477f31"], "tl" + i, 10);
+    // a second, lower row so the tree line reaches down to the lawn and no sky shows under it
+    for (let i = -2; i < 11; i++) blob(196 + i * 92, 436 + (i % 2) * 10, 84, ["#2a5228", "#2c5a2c", "#336630", "#3f7530"], "tb" + i, 8);
     // a dark mass of trees at the far left, behind the end of the roof
     [[150, 380, 70], [170, 450, 66], [140, 320, 64], [200, 410, 56]].forEach(([cx, cy, r]) => ball(cx, cy, r, DARKP));
     // a sunlit round tree at the far right
     const RT = [[900, 250, 78, SUNP], [868, 330, 66, MIDP], [920, 340, 70, SUNP]];
     RT.forEach(([cx, cy, r, pal]) => ball(cx, cy, r, pal));
     RT.forEach(([cx, cy, r], i) => leafy(cx, cy, r, "rt" + i, 13));
+    const haze = R(VX - 400, 180, VW + 800, 330, "#cdd5db", { opacity: 0 });                        // fog and wet air over the far trees
 
     // ── the ground: a green lawn on the left, a drier one on the right, and a gravel drive ──
-    R(VX, 486, VW, 760, "#8e9a48");
-    PG(`${VX},500 440,534 250,1160 ${VX},1160`, "#6e8c3e");
-    PG(`580,534 ${VX + VW},500 ${VX + VW},1160 780,1160`, "#a89e50", { opacity: 0.9 });
-    for (let i = 0; i < 150; i++) {
-      const gx = r1("gx" + i, VX, VX + VW), gy = r1("gy" + i, 540, 1150);
+    R(VX - 500, 486, VW + 1000, 760, "#8e9a48");
+    PG(`${VX - 500},500 440,534 250,1160 ${VX - 500},1160`, "#6e8c3e");
+    PG(`580,534 ${VX + VW + 500},500 ${VX + VW + 500},1160 780,1160`, "#a89e50", { opacity: 0.9 });
+    for (let i = 0; i < 190; i++) {
+      const gx = r1("gx" + i, VX - 200, VX + VW + 200), gy = r1("gy" + i, 540, 1150);
       L(`M${gx.toFixed(0)} ${gy.toFixed(0)} l-3 -9 M${gx.toFixed(0)} ${gy.toFixed(0)} l1 -11 M${gx.toFixed(0)} ${gy.toFixed(0)} l4 -8`, rnd("gc" + i) > 0.5 ? "#c0ad5c" : "#6f8a3a", 1.3, { opacity: 0.7 });
     }
     PG("432,538 584,538 930,1160 240,1160", "#aaa18c");
@@ -12379,7 +12392,7 @@
 
     // a young tree and a bush on the lawn, and a patch of flowers by the mailbox
     E(190, 770, 40, 7, "#000", { opacity: 0.14 }); R(186, 714, 7, 58, "#5a4030"); ball(190, 690, 40, SUNP); ball(166, 716, 26, MIDP); ball(214, 718, 26, MIDP); leafy(190, 696, 46, "sap", 9);
-    [[230, 690, "#f2d04a"], [242, 702, "#fff"], [222, 706, "#e8707a"], [252, 692, "#f2d04a"], [236, 714, "#fff"], [214, 690, "#e8707a"], [260, 708, "#f2d04a"], [300, 560, "#fff"], [312, 566, "#f2d04a"]].forEach(([x, y, c]) => { L(`M${x} ${y + 9} V${y}`, "#4a7a30", 1.4); C(x, y - 1, 3.2, c); C(x, y - 1, 1.1, "#c8883a"); });
+    [[296, 676, "#f2d04a"], [308, 688, "#fff"], [286, 692, "#e8707a"], [318, 674, "#f2d04a"], [300, 702, "#fff"], [278, 676, "#e8707a"], [326, 692, "#f2d04a"], [300, 560, "#fff"], [312, 566, "#f2d04a"]].forEach(([x, y, c]) => { L(`M${x} ${y + 9} V${y}`, "#4a7a30", 1.4); C(x, y - 1, 3.2, c); C(x, y - 1, 1.1, "#c8883a"); });
     // a garden hose coiled by the porch steps
     E(395, 570, 20, 6, "none", { stroke: "#2f6a4a", "stroke-width": 3 }); E(395, 570, 13, 3.6, "none", { stroke: "#2f6a4a", "stroke-width": 3 });
 
@@ -12512,6 +12525,9 @@
     E(758, 570, 15, 8, "#141414"); E(886, 560, 15, 7, "#141414");
     R(724, 548, 14, 18, "#26332a", { opacity: 0.7 });
 
+    const dynG = A("g", {});                                                                        // snow cover, lawn leaves, fireflies: rebuilt when the weather or time changes
+    dynG.style.pointerEvents = "none";
+
     // ── the maple branch: big five-lobed leaves on stems, every stem joined to a twig, every twig to a limb ──
     const branch = sv("g", {}, svg), leaves = sv("g", {}, svg);
     const BARK = "#3a2c22";
@@ -12565,9 +12581,115 @@
     // a soft shade under the porch roof
     R(206, 534, 496, 14, "#000", { opacity: 0.12 });
 
+    // ── time of day and weather: the live Hawkins clock and weather, same as the Wheelers' lawn ──
+    const season = hkSeason();
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const say = t => { caption.textContent = t; };
+    let tI = hkTimeGet(), wxI = hkWxGet(), gone = false;
+    const amb = hkAmbience({ owner: sh.back });                                                    // the sound of the weather, birds by day, crickets at night
+    sh.onClose = () => { gone = true; amb.stop(); };
+    sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
+    const BIG = [VX - 600, VY - 800, VW + 1200, 2400];
+    const tint = R(...BIG, "#000", { opacity: 0, "pointer-events": "none" });                      // the colour of the hour over everything
+    const dim = R(...BIG, "#0a1230", { opacity: 0, "pointer-events": "none" });                    // rain and storm darken it further
+    // lit windows and lanterns, above the tint so they glow
+    const glowG = A("g", { "pointer-events": "none" });
+    [[302, 412, 42, 62, 2, 2], [530, 404, 74, 62, 2, 2], [718, 412, 34, 62, 1, 2]].forEach(([x, y, w, h, cols, rows]) => {
+      E(x + w / 2, y + h / 2, w * 1.1, h * 0.95, "url(#wh-lit)", {}, glowG);
+      R(x, y, w, h, "#ffd27a", { opacity: 0.93 }, glowG);
+      R(x, y, w, h * 0.35, "#fff1b8", { opacity: 0.5 }, glowG);
+      let d = "";
+      for (let i = 1; i < cols; i++) d += `M${x + (w * i) / cols} ${y} V${y + h} `;
+      for (let i = 1; i < rows; i++) d += `M${x} ${y + (h * i) / rows} H${x + w} `;
+      L(d, "#efe6c8", 2.4, {}, glowG);
+    });
+    [416, 493].forEach(x => { C(x + 4.5, 411, 26, "url(#wh-lit)", {}, glowG); R(x + 2, 407, 5, 9, "#fff0b0", {}, glowG); });
+    E(456, 522, 130, 16, "#ffd98a", { opacity: 0.2 }, glowG);                                       // the lantern light on the porch floor
+    // the moon, in the open sky at the right
+    const moonG = A("g", { "pointer-events": "none" });
+    C(0, 0, 76, "url(#wh-moonglow)", {}, moonG);
+    const moonDisc = C(0, 0, 32, "#efe6bd", {}, moonG);
+    [[-10, -8, 6], [9, 6, 8], [-4, 14, 4]].forEach(([mx, my, mr]) => C(mx, my, mr, "#d9cfa0", { opacity: 0.55 }, moonG));
+    moonG.setAttribute("transform", "translate(690 -150)");
+    const flash = R(...BIG, "#eaf0ff", { opacity: 0, "pointer-events": "none" });                  // lightning
+
+    const SKY = { night: ["#2a3768", "#222c5a", "#1c2348"], dusk: ["#3b2a6a", "#b05a70", "#f08a4e"], dawn: ["#3d4a86", "#b58aa6", "#f0b48a"], day: ["#74add9", "#a9cde8", "#d2e5f1"] };
+    const TINT = { night: ["#0a1030", 0.52], dusk: ["#5a2a55", 0.2], dawn: ["#6a6aa8", 0.14], day: ["#000000", 0] };
+    const OVC = { rain: ["#6c7886", 0.55], storm: ["#46505f", 0.75], fog: ["#c3cad3", 0.65], snow: ["#c9d2de", 0.55] };
+    const skyStops = Array.from(defs.querySelectorAll("#wh-sky stop"));
+
+    const BY_SAY = { night: "Night. The porch lanterns burn and every window is lit.", dusk: "Dusk. Lamplight in the windows, the lanterns just coming on.", dawn: "Dawn. Somebody is already up; the kitchen window glows.", day: "Will’s house, out at the end of the road." };
+    const COZY = { day: "Snow in daylight. The porch roof is white and the lanterns are still on.", night: "Snow at night. Every lit window feels like a promise kept.", dusk: "A snowy dusk. The whole house is glowing.", dawn: "Snow at dawn. One window is still lit from last night." };
+    const WX_SAY = { clear: "The sky clears. The lanterns hum.", rain: "Rain on the porch roof. Every window looks warmer for it.", fog: "Fog swallows the road. The lanterns become small moons.", snow: "Snow. The windows are as cosy as they will ever be.", leaves: "A gust of leaves skitters across the yard.", storm: "Thunder rolls over the woods. The lit windows look braver for it.", sunny: "Sunshine on the yard. The bikes are warm to the touch." };
+    const wxLine = () => { const k = HK_WX[wxI][0]; return k === "clear" && HK_TIMES[tI].name === "day" ? WX_SAY.sunny : WX_SAY[k]; };
+    const wxLabel = () => HK_WX[wxI][0] === "clear" ? (HK_TIMES[tI].name === "day" ? "☀️ sunny" : "✨ clear") : HK_WX[wxI][1];
+
+    // what the weather and the season leave on the yard: snow on the roof and lawn, leaves in autumn, fireflies on summer evenings
+    const paintDyn = () => {
+      dynG.textContent = "";
+      const kind = HK_WX[wxI][0], n = HK_TIMES[tI].name, cover = season === "winter" || kind === "snow";
+      if (cover) {
+        PG("186,380 268,314 786,316 884,383", "#eef2ff", { opacity: 0.88 }, dynG);                                       // the roof
+        R(206, 499, 496, 4, "#f2f5ff", { opacity: 0.9 }, dynG);                                                         // the porch floor edge
+        PG(`${VX - 500},500 440,534 250,1160 ${VX - 500},1160`, "#f1f4fc", { opacity: 0.5 }, dynG);                       // the lawns
+        PG(`580,534 ${VX + VW + 500},500 ${VX + VW + 500},1160 780,1160`, "#f1f4fc", { opacity: 0.5 }, dynG);
+        for (let i = 0; i < 26; i++) E(r1("sa" + i, VX - 200, VX + VW + 200).toFixed(0), r1("sb" + i, 560, 1140).toFixed(0), r1("sc" + i, 22, 56).toFixed(0), r1("sd" + i, 5, 10).toFixed(0), "#fbfcff", { opacity: 0.7 }, dynG);
+        E(814, 460, 62, 7, "#f4f7ff", { opacity: 0.85 }, dynG);                                                          // the car roof
+      }
+      if ((season === "autumn" || season === "halloween") && !cover) for (let i = 0; i < 18; i++) { const lx = r1("lf" + i, VX - 100, VX + VW + 100).toFixed(0), ly = r1("lg" + i, 570, 1100).toFixed(0); E(lx, ly, 5, 2.4, ["#d9731f", "#b5541a", "#e0a032"][i % 3], { opacity: 0.75, transform: `rotate(${Math.round(rnd("lr" + i) * 180)} ${lx} ${ly})` }, dynG); }
+      if (season === "summer" && (n === "dusk" || n === "night")) for (let i = 0; i < 14; i++) {
+        const f = C(r1("ff" + i, VX, VX + VW).toFixed(0), r1("fg" + i, 560, 900).toFixed(0), 2.6, "#e8ff8a", {}, dynG);
+        if (!reduce) anim(f, `animation:hkFirefly ${(4 + rnd("fd" + i) * 4).toFixed(1)}s ease-in-out -${(rnd("fz" + i) * 5).toFixed(1)}s infinite;`);
+      }
+    };
+    const paintWeather = () => {
+      const kind = HK_WX[wxI][0];
+      dim.setAttribute("opacity", kind === "storm" ? 0.26 : kind === "rain" ? 0.14 : 0);
+      haze.setAttribute("opacity", kind === "fog" ? 0.55 : kind === "rain" || kind === "storm" ? 0.18 : 0);
+      flashEl = kind === "storm" ? flash : null;
+      hkWxOverlay(box, kind, reduce);
+      paintDyn();
+    };
+    let flashEl = null;
+    const applyTime = announce => {
+      const t = HK_TIMES[tI], kind = HK_WX[wxI][0], n = t.name, cozy = kind === "snow", dull = kind !== "clear" && kind !== "leaves";
+      const over = kind === "clear" || kind === "leaves" ? 1 : kind === "fog" ? 0.4 : 0.2;                           // cloud hides the stars and dims the moon
+      skyStops.forEach((st, i) => st.setAttribute("stop-color", SKY[n][i]));
+      box.style.background = SKY[n][1];
+      sunG.setAttribute("transform", `translate(0 ${(t.dy - 10) * 6})`);
+      sunG.setAttribute("opacity", n === "night" ? 0 : n === "day" ? over : over * 0.9);
+      warm.setAttribute("opacity", n === "dusk" || n === "dawn" ? 1 : 0);
+      starG.setAttribute("opacity", t.stars * over);
+      moonG.setAttribute("opacity", n === "night" ? (over < 1 ? 0.3 + over * 0.5 : 1) : 0);
+      cloudsG.setAttribute("opacity", dull ? 0.75 : n === "night" ? 0.45 : 1);
+      const ov = OVC[kind];
+      ovc.setAttribute("fill", ov ? ov[0] : "#7d8a99"); ovc.setAttribute("opacity", ov ? ov[1] : 0);
+      tint.setAttribute("fill", TINT[n][0]); tint.setAttribute("opacity", TINT[n][1]);
+      glowG.setAttribute("opacity", n === "day" ? (dull ? 0.55 : 0) : Math.min(1, t.lit + (cozy ? 0.12 : 0)));
+      timeBtn.textContent = t.label; wxBtn.textContent = wxLabel();
+      amb.set(kind, n);
+      sub.textContent = "will’s house · " + n + " · " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
+      paintDyn();
+      if (announce) say(cozy ? COZY[n] : kind === "clear" || kind === "leaves" ? BY_SAY[n] : wxLine());
+    };
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
+    hkSoundPill(pill, amb);
+    // lightning, and thunder a moment later, when it storms
+    const sched = (fn, lo, hi) => later(() => { if (gone) return; fn(); sched(fn, lo, hi); }, lo + Math.random() * (hi - lo));
+    sched(() => {
+      if (!flashEl) return;
+      if (!reduce) { try { flashEl.animate([{ opacity: 0 }, { opacity: 0.55 }, { opacity: 0 }, { opacity: 0.35 }, { opacity: 0 }], { duration: 650 }); } catch {} }
+      later(() => { if (!gone && flashEl) hkThunder(); }, 700 + Math.random() * 900);
+    }, 5000, 14000);
+    // the live values roll over by themselves if you stay (a new hour, or an override running out)
+    hkEnvWatch(box, (t, w) => { if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); } });
+
     field.appendChild(svg);
     pill("\u{1F6CB}\uFE0F living room", "Step inside to the living room", () => { close(); openByersLivingRoom(); });
     pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    applyTime(true);
+    paintWeather();
     document.body.appendChild(sh.back);
   }
 
