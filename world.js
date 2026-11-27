@@ -793,7 +793,7 @@
   // scene is empty until you find them or call them over (the "call them here" pills). They move on by themselves every 12 to 40 minutes, never to the place
   // they just left (saved under "ao3-hk-where"). Asleep, they are always in Mike's room. A scene asks once, when it opens: hkWhere.here("basement").
   const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort", "kitchen", "mom", "byers"];
-  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket.", kitchen: "Somewhere in the house, a cupboard bangs and the fridge door sighs open.", mom: "Somewhere in the house, Mrs. Wheeler is asking a question in her Very Calm Voice, and a boy is answering far too quickly.", byers: "Somewhere in the house, an afghan rustles and someone says, very seriously, that the owl is watching." };
+  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket.", kitchen: "Somewhere in the house, a cupboard bangs and the fridge door sighs open.", mom: "Somewhere in the house, Mrs. Wheeler is asking a question in her Very Calm Voice, and a boy is answering far too quickly.", byers: "Somewhere in the house, an afghan rustles and somebody says, “Stop pulling.”" };
   const hkWhere = {
     set(p, lo, hi) { try { const a = lo || 12, b = hi || 40; localStorage.setItem(WHERE_KEY, JSON.stringify({ p, until: Date.now() + (a + Math.random() * (b - a)) * 60000 })); } catch {} },
     get() {
@@ -807,6 +807,22 @@
     call(place) { hkWhere.set(place, 20, 45); },                                                                      // you called them over: they stay a good while
     hint() { return Math.random() < 0.6 ? " " + HK_HINTS[hkWhere.get()] : ""; }                                      // a faint clue, now and then, for an empty room
   };
+
+  // "Find them": the pill every room where the boys can be carries while they are somewhere else. Takes you to wherever they are right now
+  // (asleep: Mike's room; "mom": the kitchen, where Mike is). A scene calls hkFindThem(sh, say) from its pill; ctx.world is looked up at tap time.
+  const HK_FIND = {
+    room: ["openMikesRoom", "A floorboard creaks upstairs. You follow the laughing\u2026"],
+    basement: ["openBasement", "A die rattles somewhere below. You follow the sound down the stairs\u2026"],
+    fort: ["openFortInside", "Giggling, from under a blanket. You follow it\u2026", true],
+    kitchen: ["openKitchen", "A cupboard bangs. You follow the noise\u2026"],
+    mom: ["openKitchen", "Mrs. Wheeler\u2019s Very Calm Voice, and a boy answering far too quickly. You follow it\u2026"],
+    byers: ["openByersLivingRoom", "An afghan rustles. You follow the sound\u2026"]
+  };
+  function hkFindThem(sh, say) {
+    const p = hkWhere.get(), t = HK_FIND[p] || HK_FIND.room;
+    say(hkSleep.get() ? "Everyone is asleep. You tiptoe up to Mike\u2019s room\u2026" : t[1]);
+    bfFade(sh, () => (t[2] ? ctx.world[t[0]](true) : ctx.world[t[0]]()));
+  }
 
   // ── weather over a whole scene (the village and the town map; the lawn, house and grounds paint their own) ──
   // Draws rain, storm, fog, snow or falling leaves in a see-through layer over `host` (a positioned box). Replaces any earlier layer; never takes taps.
@@ -852,7 +868,7 @@
   }
   hkLiveRefresh();                                                                  // warm the cache as soon as the world loads
 
-  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkWxNext, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere };
+  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkWxNext, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere, hkFindThem };
 };
 
 // ════════ lib/figures.js ════════
@@ -9403,7 +9419,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["basement"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkWhere } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkCrackle, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkWhere, hkFindThem } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -9755,6 +9771,7 @@
     field.appendChild(svg);
     sub.textContent = "hawkins · the basement";
     say(empty ? (asleep ? "Warm, low-ceilinged, smelling of stale popcorn, and completely empty. Everyone is asleep upstairs." : "Warm, low-ceilinged, smelling of stale popcorn, and empty. The chairs are pushed back." + hkWhere.hint()) : "Warm, low-ceilinged, smelling of popcorn. " + BS_POSES[pi].say);
+    if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike down to the table", () => { if (leaving) return; leaving = true; hkWhere.call("basement"); say("You call down the stairs. A muffled “coming!”, and feet on the steps…"); bfFade(sh, () => ctx.world.openBasement()); });
     pill("\u{1F9CD} shift", "Make the two of them sit differently", shift);
     pill("\u{1F3B2} roll", "Roll the die", roll);
@@ -9774,7 +9791,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["fort"] = function (ctx) {
   'use strict';
-  const { hkShell, bfFade, hkSleep, hkWhere } = ctx.lib["hawkins-kit"];
+  const { hkShell, bfFade, hkSleep, hkWhere, hkFindThem } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -10072,6 +10089,7 @@
     field.appendChild(svg);
     sub.textContent = "hawkins · the basement · the fort";
     say(empty ? (asleep ? "Off to the left of the table: a blanket fort. Every couch cushion is in it, and nobody else is." : "Off to the left of the table: a blanket fort. Every couch cushion is in it, and nobody else is." + hkWhere.hint()) : "Off to the left of the table: a blanket fort. Every couch cushion is in it. So are two shadows.");
+    if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike into the fort", () => { if (leaving) return; leaving = true; hkWhere.call("fort"); say("You whisper at the blanket. Two shapes shuffle in, giggling…"); bfFade(sh, () => ctx.world.openBasementFort(true)); });
     pill("\u{1F3B2} table", "Back to the table", back);
     if (typeof openFortInside === "function") pill("\u{1F3D5}️ peek inside", "Lift the edge of the blanket", peek);
@@ -10093,7 +10111,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["fort-inside"] = function (ctx) {
   'use strict';
-  const { hkShell, hkCrackle, bfFade, hkSleep, hkWhere } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkCrackle, bfFade, hkSleep, hkWhere, hkFindThem } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -10616,6 +10634,7 @@
     hits.forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     sub.textContent = "hawkins · the basement · inside the fort";
     const out = () => { if (leaving) return; leaving = true; say("You back out on your hands and knees."); bfFade(sh, () => openBasementFort(true)); };
+    if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike into the fort", () => { if (leaving) return; leaving = true; hkWhere.call("fort"); say("You whisper through the blanket. Two shapes crawl in, giggling…"); bfFade(sh, () => ctx.world.openFortInside(true)); });
     pill("\u{1F4AC} next", "Hear the next line sooner", next);
     pill("\u{1F501} another", "A different moment", another);
@@ -10641,7 +10660,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["mikes-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkSeason, hkVoice, hkWhere } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, bfFade, hkWindowSky, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkSeason, hkVoice, hkWhere, hkFindThem } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const { bsKit } = ctx.lib["figures"];
   const { gyHash } = ctx.shared;
@@ -11688,6 +11707,7 @@
       if (v === "A") say(asleep ? "Back to the bed. The lamp is off and the covers rise and fall." : "Back to the bed, the lamp and the closet.");
       else say(asleep ? "The window wall in the dark. The fairy lights are the only thing awake." : "The window wall. Fairy lights, the desk, and a chair pushed out in a hurry.");
     };
+    if (away) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike up to the room", () => { if (leaving) return; leaving = true; hkWhere.call("room"); say("You shout down the stairs. Two sets of feet come thumping up…"); bfFade(sh, () => openMikesRoom()); });
     if (!asleep && !solo) pill("\u{1F469} Mike & Karen", "Send Mike down to the kitchen with his mother (Will stays up here)", () => { if (leaving) return; leaving = true; hkWhere.call("mom"); say("Downstairs, a voice calls: “Michael! A word, please.”"); bfFade(sh, () => openKitchen()); });
     if (solo) pill("✦ call Mike up", "Bring Mike back up to the room", () => { if (leaving) return; leaving = true; hkWhere.call("room"); say("You shout down the stairs. Mike comes thumping up…"); bfFade(sh, () => openMikesRoom()); });
@@ -11707,7 +11727,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["kitchen"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkWindowSky, hkSleep, hkWhere, bfFade, hkAmbience, hkSoundPill } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_TIMES, hkTimeGet, HK_WX, hkWxGet, hkWindowSky, hkSleep, hkWhere, bfFade, hkAmbience, hkSoundPill, hkFindThem } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
@@ -12283,6 +12303,7 @@
     pill("▲ upstairs", "Back up the stairs to Mike’s room", () => { if (leaving) return; leaving = true; close(); openMikesRoom(); });
     pill("\u{1FA9C} basement", "Down the basement stairs", () => { if (leaving) return; leaving = true; close(); openBasement(); });
     pill("\u{1F3E1} outside", "Out through the garage to the front lawn", () => { if (leaving) return; leaving = true; close(); openWheelers(); });
+    if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike into the kitchen", () => { if (leaving) return; leaving = true; hkWhere.call("kitchen"); say("You shout down the hall. Two sets of footsteps come thundering in…"); bfFade(sh, () => ctx.world.openKitchen()); });
     if (!asleep && !mom) pill("\u{1F469} Mike & Karen", "Send Mike to the kitchen with his mother (Will waits upstairs)", () => { if (leaving) return; leaving = true; hkWhere.call("mom"); say("Downstairs, a voice calls: “Michael! A word, please.”"); bfFade(sh, () => ctx.world.openKitchen()); });
     if (mom) pill("✦ call Will down", "Bring Will down to the kitchen so the two of them are together again", () => { if (leaving) return; leaving = true; hkWhere.call("kitchen"); say("Mike shouts up the stairs. Will comes down, fast…"); bfFade(sh, () => ctx.world.openKitchen()); });
@@ -12817,7 +12838,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["byers-living-room"] = function (ctx) {
   'use strict';
-  const { hkShell, hkSleep, hkWhere } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSleep, hkWhere, hkFindThem } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
@@ -12840,96 +12861,96 @@
   const LV_MOMENTS = [
     { name: "the letters", beats: [
       ["n", "Mike has his head tipped back against the sofa, reading the wall upside down. Will is watching him do it.", { a: { mood: "smirk", look: -1 }, b: { mood: "calm", look: 0, lookY: -1 } }],
-      ["m", "Okay. Serious question. Favourite letter. Go.", { b: { mood: "grin" } }],
-      ["w", "That’s a weird question.", { a: { mood: "o" } }],
-      ["m", "It’s a completely normal question! Mine’s M. Obviously.", { b: { mood: "o", blush: true }, jig: true }],
-      ["w", "Obviously.", { a: { mood: "grin", eyes: "happy" } }],
-      ["w", "Mine’s W. It looks like a smile with extra steps.", { a: { mood: "smile", look: 1, lookY: -1 } }],
-      ["m", "A smile with extra steps. Okay, that’s perfect, I’m stealing it.", { b: { mood: "smile", blush: true } }],
-      ["w", "You can’t steal it. It’s already up on the wall.", { a: { mood: "smirk", blush: true } }],
-      ["n", "Neither of them says what the W and the M have in common. Over their heads a green bulb twinkles, just once, like it heard.", { hearts: 2, a: { eyes: "happy" }, b: { mood: "calm", eyes: "happy" } }]] },
+      ["m", "Okay. Favourite letter. Go.", { b: { mood: "grin" } }],
+      ["w", "Why?", { a: { mood: "o" } }],
+      ["m", "It’s a normal question! Mine’s M.", { b: { mood: "o", blush: true }, jig: true }],
+      ["w", "Shocking.", { a: { mood: "grin", eyes: "happy" } }],
+      ["w", "W. It looks like it’s smiling.", { a: { mood: "smile", look: 1, lookY: -1 } }],
+      ["m", "Now I can’t unsee it.", { b: { mood: "smile", blush: true } }],
+      ["w", "Welcome to my whole childhood.", { a: { mood: "smirk", blush: true } }],
+      ["n", "Mike goes back to the wall, upside down. Neither of them mentions what an M looks like from there.", { hearts: 2, a: { eyes: "happy" }, b: { mood: "calm", eyes: "happy" } }]] },
     { name: "the afghan", beats: [
-      ["n", "The afghan is only just big enough for one person. Two people are using it anyway.", { a: { mood: "o", look: -1 }, b: { mood: "calm", look: 1 } }],
-      ["w", "You’re hogging the pink stripes.", { a: { mood: "smirk" } }],
-      ["m", "There are no pink stripes. There’s a rose stripe, a cream stripe and a brown stripe. And I’m not hogging anything.", { b: { mood: "smirk" } }],
-      ["w", "Mom made it for the winter you were so cold at the lake.", { a: { mood: "smile", look: 0, lookY: 1 } }],
-      ["m", "That was one time and the lake was freezing. It was objectively freezing.", { b: { mood: "o", blush: true }, jig: true }],
-      ["w", "It’s a good afghan. It smells like her cooking.", { a: { mood: "calm", eyes: "happy" } }],
-      ["m", "It smells like pancakes. And a tiny bit like dog.", { b: { mood: "grin" } }],
+      ["n", "The afghan is meant for one person. Two people are using it anyway.", { a: { mood: "o", look: -1 }, b: { mood: "calm", look: 1 } }],
+      ["w", "You’re hogging the pink stripe.", { a: { mood: "smirk" } }],
+      ["m", "That’s not pink. That’s, like, salmon.", { b: { mood: "smirk" } }],
+      ["w", "Mom made it the winter Jonathan kept stealing my blankets.", { a: { mood: "smile", look: 0, lookY: 1 } }],
+      ["m", "That is so Jonathan.", { b: { mood: "o", blush: true }, jig: true }],
+      ["w", "It still smells like pancakes.", { a: { mood: "calm", eyes: "happy" } }],
+      ["m", "And a little bit like dog.", { b: { mood: "grin" } }],
       ["w", "We don’t have a dog.", { a: { mood: "o" } }],
-      ["m", "Then I’ve discovered something.", { b: { mood: "smirk", blush: true }, hearts: 1 }],
-      ["n", "Will pulls the afghan up over both their knees and tucks one corner under Mike’s hand, as if that settled it.", Object.assign({ hearts: 2 }, LV_HOLD)]] },
+      ["m", "Then something’s wrong with the afghan.", { b: { mood: "smirk", blush: true }, hearts: 1 }],
+      ["n", "Will pulls it up over both their knees and tucks one corner under Mike’s hand, like that settles it.", Object.assign({ hearts: 2 }, LV_HOLD)]] },
     { name: "the owl", beats: [
-      ["n", "On the coffee table, the little wooden owl is staring at them. It has been staring at them for some time.", { a: { mood: "o", look: 0 }, b: { mood: "o", look: 0 } }],
-      ["m", "Okay, I don’t like that it’s looking at me.", { b: { mood: "smirk" } }],
-      ["w", "It’s not looking at you. It’s looking at both of us. It’s very fair.", { a: { mood: "grin", eyes: "happy" } }],
-      ["m", "Mom— your mom bought it at a flea market, right?", { b: { mood: "calm", blush: true } }],
-      ["w", "It cost two dollars. It’s the best thing in the house.", { a: { mood: "smile" } }],
+      ["n", "On the coffee table, the little wooden owl is staring at them. It’s been staring for a while.", { a: { mood: "o", look: 0 }, b: { mood: "o", look: 0 } }],
+      ["m", "I don’t like that it’s looking at me.", { b: { mood: "smirk" } }],
+      ["w", "It’s looking at both of us. It’s fair about it.", { a: { mood: "grin", eyes: "happy" } }],
+      ["m", "Where did your mom even get it?", { b: { mood: "calm", blush: true } }],
+      ["w", "Flea market. Two dollars. Best thing in the house.", { a: { mood: "smile" } }],
       ["m", "Not the best thing.", { b: { mood: "smirk", look: 1, blush: true } }],
       ["w", "…Mike.", { a: { mood: "calm", blush: true, look: -1 }, hearts: 2 }],
-      ["m", "I meant the lamp! The lamp is better!", { b: { mood: "cheer", blush: true }, jig: true }],
+      ["m", "The lamp! I meant the lamp!", { b: { mood: "cheer", blush: true }, jig: true }],
       ["w", "The lamp is on the other side of the room.", { a: { mood: "grin", eyes: "happy" } }],
-      ["n", "The owl continues to look at both of them, wise and entirely unbothered.", { hearts: 1 }]] },
+      ["n", "The owl goes on staring.", { hearts: 1 }]] },
     { name: "a loose bulb", beats: [
-      ["n", "One of the little coloured bulbs on the wall flickers, steadies, and flickers again. Will glances up at it every time.", { a: { mood: "calm", look: 0, lookY: -1 }, b: { mood: "calm", look: 0, lookY: -1 } }],
+      ["n", "One of the coloured bulbs on the wall flickers, holds, then flickers again. Will glances up at it every time.", { a: { mood: "calm", look: 0, lookY: -1 }, b: { mood: "calm", look: 0, lookY: -1 } }],
       ["m", "That one’s been doing that all week.", { b: { mood: "calm", look: 1, lookY: -1 } }],
       ["w", "It’s just a loose bulb. Mom keeps saying she’ll fix it.", { a: { mood: "smile", look: 1 } }],
-      ["m", "Do you want me to get up and fix it?", { b: { mood: "smile" } }],
-      ["w", "No. It’s fine. I kind of like knowing it’s still there.", { a: { mood: "calm", eyes: "happy" } }],
+      ["m", "Want me to fix it?", { b: { mood: "smile" } }],
+      ["w", "Nah. I’d miss it.", { a: { mood: "calm", eyes: "happy" } }],
       ["m", "…Yeah. Me too.", { b: { mood: "calm", blush: true, look: 1 } }],
       ["w", "You’re being quiet.", { a: { mood: "smirk", look: -1 } }],
-      ["m", "I’m being supportive. Silently. It’s a skill.", { b: { mood: "smirk" }, jig: true }],
-      ["n", "The bulb steadies. Will leans a little, then a little more, until his shoulder is against Mike’s.", Object.assign({ hearts: 2, a: { sx: 18, lean: 5, head: [2, 2, 5], mood: "smile" } }, {}) ]] },
+      ["m", "I’m being supportive. It’s a skill.", { b: { mood: "smirk" }, jig: true }],
+      ["n", "The bulb holds. Will leans over a little, then a little more, until his shoulder is against Mike’s.", Object.assign({ hearts: 2, a: { sx: 18, lean: 5, head: [2, 2, 5], mood: "smile" } }, {}) ]] },
     { name: "the magazine", beats: [
       ["n", "The old LIFE magazine is open on the coffee table. Mike is reading the captions out loud in a very serious voice.", { a: { mood: "grin", look: 1, lookY: 1 }, b: { mood: "o", look: -1, lookY: 1 } }],
-      ["m", "“Twenty years of pictures that changed the way we look at the world.”", { b: { mood: "o", look: 1, lookY: 1 } }],
-      ["w", "You’re doing the narrator voice.", { a: { mood: "smirk" } }],
-      ["m", "I’m not doing a voice. This is just how I read.", { b: { mood: "smirk" } }],
-      ["w", "Do the one about the astronauts again.", { a: { mood: "grin", eyes: "happy" } }],
-      ["m", "“And so, in the vast silence of space, a boy named Will… did not do his homework.”", { b: { mood: "cheer", blush: true }, jig: true }],
-      ["w", "That is not in the magazine!", { a: { mood: "cheer", blush: true }, jig: true }],
+      ["m", "“And so the whole nation held its breath.”", { b: { mood: "o", look: 1, lookY: 1 } }],
+      ["w", "You’re doing the voice.", { a: { mood: "smirk" } }],
+      ["m", "I’m not doing a voice. This is how I read.", { b: { mood: "smirk" } }],
+      ["w", "Do the astronaut one again.", { a: { mood: "grin", eyes: "happy" } }],
+      ["m", "“And in the silence of space, a boy named Will did not do his homework.”", { b: { mood: "cheer", blush: true }, jig: true }],
+      ["w", "That is not in there!", { a: { mood: "cheer", blush: true }, jig: true }],
       ["m", "It’s in my edition.", { b: { mood: "grin" } }],
-      ["n", "Will is laughing so hard he has to put his head down on Mike’s shoulder. Mike keeps reading, a little louder, very pleased.", Object.assign({ hearts: 2 }, { front: "a", a: LV_LEAN, b: { mood: "grin", blush: true, head: [-1, 3, -4] } })]] },
+      ["n", "Will is laughing too hard to sit up and ends up with his head on Mike’s shoulder. Mike keeps reading, a little louder.", Object.assign({ hearts: 2 }, { front: "a", a: LV_LEAN, b: { mood: "grin", blush: true, head: [-1, 3, -4] } })]] },
     { name: "waiting for Joyce", beats: [
-      ["n", "It is getting late. Mrs. Byers’ car isn’t in the drive yet, and the lamp on the right has been left on for her.", { a: { mood: "calm", look: -1 }, b: { mood: "calm", look: -1 } }],
-      ["m", "Do you want to call the store? Just to check?", { b: { mood: "calm", look: 1 } }],
-      ["w", "She’s fine. She’s probably stuck behind somebody with forty coupons.", { a: { mood: "smile", look: 0 } }],
+      ["n", "It’s getting late. Mrs. Byers’ car isn’t in the drive yet, and the lamp on the right has been left on for her.", { a: { mood: "calm", look: -1 }, b: { mood: "calm", look: -1 } }],
+      ["m", "Should we call the store? Just to check.", { b: { mood: "calm", look: 1 } }],
+      ["w", "She’s fine. She’s probably stuck behind someone with a million coupons.", { a: { mood: "smile", look: 0 } }],
       ["m", "Forty-one coupons.", { b: { mood: "smirk" } }],
-      ["w", "Thank you for staying.", { a: { mood: "calm", blush: true, look: 1, lookY: 1 } }],
-      ["m", "I wasn’t going anywhere. I told my mom. I said I’d be here until your mom’s car was in the drive.", { b: { mood: "smile", blush: true } }],
-      ["w", "That’s a very specific promise.", { a: { mood: "smile", eyes: "happy" } }],
-      ["m", "I’m a very specific person.", { b: { mood: "grin" }, jig: true }],
-      ["n", "Headlights sweep across the curtains. Neither of them gets up right away. Under the afghan, their hands are already together.", Object.assign({ hearts: 3 }, LV_HOLD)]] },
+      ["w", "Thanks for staying.", { a: { mood: "calm", blush: true, look: 1, lookY: 1 } }],
+      ["m", "Where else would I go? I told my mom I’d stay till your mom’s car was in the drive.", { b: { mood: "smile", blush: true } }],
+      ["w", "That’s pretty specific.", { a: { mood: "smile", eyes: "happy" } }],
+      ["m", "That’s the deal.", { b: { mood: "grin" }, jig: true }],
+      ["n", "Headlights cross the curtains. Neither of them moves right away. Under the afghan, their hands are already together.", Object.assign({ hearts: 3 }, LV_HOLD)]] },
     { name: "the shell box", beats: [
-      ["n", "Mike has picked up the little shell-covered box and is shaking it, very gently, next to his ear.", { a: { mood: "smirk", look: -1 }, b: { mood: "o", look: 0, R: [716, 880] } }],
+      ["n", "Mike has picked up the shell-covered box and is shaking it next to his ear.", { a: { mood: "smirk", look: -1 }, b: { mood: "o", look: 0, R: [716, 880] } }],
       ["m", "There’s something in here. It goes clink.", { b: { mood: "o" } }],
-      ["w", "It’s a button. And one earring. And a key to nothing.", { a: { mood: "grin" } }],
-      ["m", "A key to nothing. That’s the best thing I’ve ever heard.", { b: { mood: "cheer", blush: true } }],
-      ["w", "Mom says every house needs one. In case.", { a: { mood: "smile", eyes: "happy" } }],
+      ["w", "A button. One earring. A key to nothing.", { a: { mood: "grin" } }],
+      ["m", "A key to nothing. That’s amazing.", { b: { mood: "cheer", blush: true } }],
+      ["w", "Mom says every house needs one. Just in case.", { a: { mood: "smile", eyes: "happy" } }],
       ["m", "In case of what?", { b: { mood: "calm" } }],
-      ["w", "In case something turns up that needs unlocking.", { a: { mood: "calm", look: 1, blush: true } }],
-      ["m", "…Yeah. That’s— yeah.", { b: { mood: "o", blush: true, look: 1 } }],
+      ["w", "She never says. I think she just likes having it.", { a: { mood: "calm", look: 1, blush: true } }],
+      ["m", "…Yeah. I get that.", { b: { mood: "o", blush: true, look: 1 } }],
       ["n", "Mike puts the box back exactly where it was, squared up to the edge of the table, and doesn’t look at Will for a while.", Object.assign({ hearts: 2 }, { b: { R: "lap", mood: "smile" }, a: { eyes: "happy" } })]] },
     { name: "the sketch", beats: [
-      ["n", "Will has a sketchbook on his knee. Mike keeps leaning over to see. Will keeps tilting it away.", { a: { L: [520, 925, "pad"], mood: "smirk", look: -1 }, b: { mood: "grin", look: 1, head: [-4, 2, -10] } }],
+      ["n", "Will has a sketchbook on his knee. Mike keeps leaning over. Will keeps tilting it away.", { a: { L: [520, 925, "pad"], mood: "smirk", look: -1 }, b: { mood: "grin", look: 1, head: [-4, 2, -10] } }],
       ["m", "Let me see.", {}],
-      ["w", "It’s not finished.", { a: { blush: true } }],
-      ["m", "Let me see the unfinished one.", { b: { mood: "smile" } }],
+      ["w", "It’s not done.", { a: { blush: true } }],
+      ["m", "Let me see the not-done one.", { b: { mood: "smile" } }],
       ["w", "…Fine. Don’t laugh.", { a: { mood: "o" } }],
-      ["m", "It’s the sofa. It’s the lamp and the owl and the wall, and— that’s me. You gave me the better hair.", { b: { mood: "o", blush: true } }],
-      ["w", "I didn’t change anything. That’s just how you look when you’re reading the letters.", { a: { mood: "smile", eyes: "happy" }, hearts: 2 }],
-      ["m", "I’m going to ask you to sign it.", { b: { mood: "grin" }, jig: true }],
-      ["n", "Will writes a very small W in the corner. After a moment, Mike takes the pencil and adds an M beside it.", { hearts: 3 }]] },
+      ["m", "It’s the room. The lamp, the owl, the wall, and— that’s me. You gave me better hair.", { b: { mood: "o", blush: true } }],
+      ["w", "I didn’t change anything. That’s how you look when you’re reading the wall.", { a: { mood: "smile", eyes: "happy" }, hearts: 2 }],
+      ["m", "Okay, you have to sign it.", { b: { mood: "grin" }, jig: true }],
+      ["n", "Will writes a tiny W in the corner. After a second, Mike takes the pencil and adds an M next to it.", { hearts: 3 }]] },
     { name: "the snow", beats: [
-      ["n", "Outside, it has started to snow. The two of them are sitting very still, as if the room might notice.", { a: { mood: "calm", look: -1 }, b: { mood: "calm", look: -1 } }],
-      ["w", "It’s the first one this year.", { a: { mood: "smile", look: -1 } }],
-      ["m", "We should make a wish. That’s a rule. First snow, you wish.", { b: { mood: "smile", look: -1 } }],
+      ["n", "Outside, it’s started to snow. Neither of them moves.", { a: { mood: "calm", look: -1 }, b: { mood: "calm", look: -1 } }],
+      ["w", "First one this year.", { a: { mood: "smile", look: -1 } }],
+      ["m", "We have to make a wish. It’s a rule.", { b: { mood: "smile", look: -1 } }],
       ["w", "I thought that was for stars.", { a: { mood: "smirk" } }],
-      ["m", "It’s for anything that falls from the sky and is pretty. It’s the broad rule.", { b: { mood: "smirk", blush: true } }],
+      ["m", "It’s for anything that falls from the sky. It’s the broad version.", { b: { mood: "smirk", blush: true } }],
       ["w", "Okay. I’m wishing.", { a: { eyes: "closed", mood: "smile", blush: true } }],
       ["m", "Don’t tell me what it is.", { b: { mood: "calm", eyes: "closed", blush: true } }],
       ["w", "I wasn’t going to.", { a: { mood: "smile" } }],
-      ["n", "Both of them wish for something. It turns out to be the same thing, and neither of them will ever have to say so.", Object.assign({ hearts: 3 }, LV_HOLD)]] }
+      ["n", "Both of them wish. Neither of them says what for.", Object.assign({ hearts: 3 }, LV_HOLD)]] }
   ];
   const LV_KEY = "ao3-ly-moment";                       // the last moment played (the only thing saved here)
 
@@ -13415,9 +13436,9 @@
       if (who === "n") { hideBubble(); say(text); } else speak(who, text);
       tid = setTimeout(step, readTime(text));
     };
-    const NOBODY = asleep ? ["The sofa is empty, the afghan folded over its arm. Everyone is asleep.", "A lamp left on for nobody. The owl keeps watch."] : ["Nobody on the sofa. The afghan is still crumpled where two people were sitting.", "The living room, lamps on, and no one in it."];
+    const NOBODY = asleep ? ["The sofa is empty, the afghan folded over its arm. Everyone is asleep.", "A lamp left on and no one under it."] : ["Nobody on the sofa. The afghan is still crumpled where two people were sitting.", "The living room, lamps on, and no one in it."];
     let nEmpty = 0;
-    const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(LV_KEY, String(mi)); } catch {} say("The Byers’ living room: two boys on the sofa, under the alphabet."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(LV_KEY, String(mi)); } catch {} say("Will and Mike on the sofa, under the alphabet."); tid = setTimeout(step, reduce ? 300 : 1100); };
     const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } let n = Math.floor(Math.random() * (LV_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
     const next = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } if (playing) step(); else another(); };
     sh.onClose = () => { clearTimeout(tid); hideBubble(); };
@@ -13425,11 +13446,13 @@
     try { const last = parseInt(localStorage.getItem(LV_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < LV_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (LV_MOMENTS.length - 1))) % LV_MOMENTS.length; } catch {}
     if (!empty) {
       const hitG = A("g", {});
-      [[462, 610, 190, 330, "Will", next], [632, 610, 190, 330, "Mike", next], [590, 890, 100, 70, "Their hands", () => { say("Two hands under one afghan. Nobody is looking at them. Everybody is looking at them."); puff(3); }]].forEach(([x, y, w, h, label, fn]) => { const r = R(x, y, w, h, "transparent", {}, hitG); r.style.cursor = "pointer"; r.style.pointerEvents = "all"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
+      [[462, 610, 190, 330, "Will", next], [632, 610, 190, 330, "Mike", next], [590, 890, 100, 70, "Their hands", () => { say("Under the afghan, two hands. Neither of them looks down."); puff(3); }]].forEach(([x, y, w, h, label, fn]) => { const r = R(x, y, w, h, "transparent", {}, hitG); r.style.cursor = "pointer"; r.style.pointerEvents = "all"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     }
     sub.textContent = empty ? "the byers’ · lamps on" : "the byers’ · the sofa";
     if (empty) say(asleep ? "The Byers’ living room, lamps on and the sofa empty. Everyone is asleep." : "The Byers’ living room. Every letter is still up on the wall, and nobody is on the sofa." + hkWhere.hint());
-    else caption.textContent = "The Byers’ living room: two boys on the sofa, under the alphabet.";
+    else caption.textContent = "Will and Mike on the sofa, under the alphabet.";
+    let finding = false;
+    if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (finding) return; finding = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike to the sofa", () => { hkWhere.call("byers"); close(); openByersLivingRoom(); });
     else if (!empty) { pill("\u{1F4AC} next", "Hear the next line sooner", next); pill("\u{1F501} another", "A different moment", another); }
     pill("\u{1F373} kitchen", "Through to the kitchen", () => { close(); openByersKitchen(); });
