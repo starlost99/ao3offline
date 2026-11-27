@@ -549,23 +549,23 @@
       if ((kind === "rain" || kind === "storm") && muffled) {
         // indoors: a soft, even patter on the roof, a low hush of wind in a storm, a rare gentle drip, and a far-off roll of thunder
         const heavy = kind === "storm";
-        bed("lowpass", 420, 0.5, heavy ? 0.05 : 0.035, 0.08, 0.006);                             // the patter, softened by the walls
+        bed("lowpass", 420, 0.5, heavy ? 0.07 : 0.05, 0.08, 0.008);                             // the patter, softened by the walls
         bed("bandpass", 1500, 0.4, heavy ? 0.035 : 0.022, 0.1, 0.006);                          // a little shimmer of rain on the window
-        if (heavy) bed("lowpass", 300, 0.6, 0.02, 0.17, 0.005);                                 // wind, soft and shallow
+        if (heavy) bed("lowpass", 240, 0.6, 0.035, 0.06, 0.02);                                 // wind, slow and low
         every(() => blip(rand(500, 800), 380, 0.09, 0.012), 3500, 9000);                        // a drip, now and then
         if (heavy) every(rumble, 18000, 42000);
       } else if (kind === "rain" || kind === "storm") {
         const heavy = kind === "storm";
-        bed("bandpass", 2400, 0.4, heavy ? 0.08 : 0.045, 0.2, heavy ? 0.015 : 0.008);        // the rain itself (turned down)
-        bed("lowpass", 500, 0.7, heavy ? 0.04 : 0.016);                                       // the low patter on the roof (turned down)
-        if (heavy) bed("bandpass", 600, 0.5, 0.028, 0.27, 0.008);                             // wind in the gusts: higher, shallow and quicker, so it blows rather than rolls like surf
+        bed("bandpass", 2400, 0.4, heavy ? 0.16 : 0.09, 0.2, heavy ? 0.03 : 0.015);          // the rain itself
+        bed("lowpass", 500, 0.7, heavy ? 0.12 : 0.05);                                        // the low patter on the roof
+        if (heavy) bed("bandpass", 350, 0.8, 0.05, 0.11, 0.04);                               // wind in the gusts
         every(() => blip(rand(900, 1600), 600, 0.05, 0.04), 700, 2600);                       // a drip somewhere
       } else if (kind === "fog") {
         bed("lowpass", muffled ? 200 : 260, 0.7, muffled ? 0.025 : 0.04, 0.07, muffled ? 0.008 : 0.015);
       } else if (kind === "snow") {
         bed("lowpass", muffled ? 180 : 220, 0.6, muffled ? 0.016 : 0.025, 0.05, muffled ? 0.006 : 0.01);   // snow muffles everything
       } else {
-        if (kind === "leaves") { bed("bandpass", muffled ? 360 : 650, 0.5, muffled ? 0.02 : 0.02, muffled ? 0.2 : 0.31, muffled ? 0.005 : 0.007); if (!muffled) bed("highpass", 3500, 0.5, 0.008, 0.19, 0.004); }   // gusts, and the rustle in them
+        if (kind === "leaves") { bed("bandpass", muffled ? 320 : 450, 0.7, muffled ? 0.03 : 0.05, muffled ? 0.07 : 0.13, muffled ? 0.02 : 0.045); if (!muffled) bed("highpass", 3500, 0.5, 0.012, 0.13, 0.011); }   // gusts, and the rustle in them
         else bed("lowpass", muffled ? 300 : 380, 0.6, muffled ? 0.008 : 0.012, 0.06, muffled ? 0.004 : 0.006);                                    // a faint breeze
         if (muffled) { /* birds and crickets do not carry through the walls */ }
         else if (tm === "day" || tm === "dawn") every(() => bird(tm === "dawn"), tm === "dawn" ? 900 : 1800, tm === "dawn" ? 3200 : 6000);
@@ -8682,6 +8682,7 @@
   const openWheelers = (...args) => world.openWheelers(...args);
   const openHollowbrook = (...args) => world.openHollowbrook(...args);
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
+  const openCastleByers = (...args) => world.openCastleByers(...args);
 
   // ── 🚌 HAWKINS, INDIANA ──
   // The bus stop in Hollowbrook (tap the shelter at the end of the Hawkins road, answer "board") takes you here:
@@ -8761,6 +8762,28 @@
     byHit.style.cursor = "pointer"; byHit.setAttribute("role", "button"); byHit.setAttribute("aria-label", "Walk up to Will\u2019s house");
     byHit.addEventListener("click", () => { close(); openWillsHouse(); });
     building(298, 384, 46, 22, "#5a4030", "#2a2236", "Hopper\u2019s cabin", { pitch: 8 });
+    // Castle Byers: Will's stick fort in the woods behind the Byers' house; a soft ring, and a tap walks out to it
+    {
+      const cx = 219, by = 422;                                            // centre, ground line
+      solids.push([cx - 20, by - 26, 40, 42]);
+      const cb = sv("g", {}, svg);
+      sv("ellipse", { cx, cy: by + 1, rx: 17, ry: 3, fill: "#1d1830", opacity: 0.6 }, cb);          // shadow
+      sv("polygon", { points: `${cx - 13},${by} ${cx + 13},${by} ${cx + 11},${by - 11} ${cx - 11},${by - 11}`, fill: "#5a4230" }, cb);   // plank walls
+      for (let i = -9; i <= 9; i += 4.5) sv("line", { x1: cx + i, y1: by, x2: cx + i * 0.92, y2: by - 11, stroke: "#3e2c20", "stroke-width": 0.6 }, cb);
+      sv("polygon", { points: `${cx - 15},${by - 10} ${cx + 15},${by - 10} ${cx + 2},${by - 21}`, fill: "#7a4a5a" }, cb);          // blanket roof
+      sv("path", { d: `M${cx - 13} ${by - 10} q3 2 6 0 t6 0 t6 0 t6 0`, stroke: "#9a6a72", "stroke-width": 0.8, fill: "none" }, cb);
+      [[-12, -24], [6, -26], [13, -18]].forEach(([dx, dy]) => sv("line", { x1: cx + dx * 0.4, y1: by - 18, x2: cx + dx, y2: by + dy, stroke: "#4a3424", "stroke-width": 1.1, "stroke-linecap": "round" }, cb));   // poking sticks
+      sv("rect", { x: cx - 3, y: by - 7, width: 6, height: 7, fill: "#120d22" }, cb);                 // the doorway
+      litRect(cx - 1.5, by - 5, 3, 3, 0.7, 8);                                                          // a torch inside
+      sv("line", { x1: cx + 16, y1: by + 1, x2: cx + 16, y2: by - 7, stroke: "#4a3424", "stroke-width": 1 }, cb);   // the little sign
+      sv("rect", { x: cx + 12.5, y: by - 9, width: 7, height: 4, fill: "#8a6a48" }, cb);
+      label("Castle Byers", cx, by + 11);
+      const cbRing = anim(sv("ellipse", { cx, cy: by - 6, rx: 24, ry: 18, fill: "none", stroke: "#ffd98a", "stroke-width": 1.2, "stroke-dasharray": "3 4" }, svg), "animation:hkPulse 2.8s ease-in-out infinite;");
+      cbRing.setAttribute("pointer-events", "none");
+      const cbHit = sv("rect", { x: cx - 22, y: by - 26, width: 44, height: 42, fill: "transparent" }, svg);
+      cbHit.style.cursor = "pointer"; cbHit.setAttribute("role", "button"); cbHit.setAttribute("aria-label", "Walk out to Castle Byers");
+      cbHit.addEventListener("click", () => { close(); openCastleByers(); });
+    }
     building(20, 416, 54, 58, "#4a5570", "#2a2236", "Hawkins Lab");
     building(196, 68, 40, 34, "#2a4a5a", "#23203a", "The Creels\u2019", { pitch: 12 });
     building(310, 100, 40, 18, "#37507a", "#27406a", "The Sinclairs\u2019", { pitch: 7 });
@@ -8842,6 +8865,7 @@
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(false); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u{1F3E1} Wheelers\u2019", "Walk up to the Wheelers\u2019 house", () => { close(); openWheelers(); });
     pill("\u{1F3E0} Will\u2019s", "Walk up to Will\u2019s house", () => { close(); openWillsHouse(); });
+    pill("\u{1F3F0} Castle Byers", "Walk out to Castle Byers", () => { close(); openCastleByers(); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
     applyTime(true);
     document.body.appendChild(sh.back);
@@ -13858,6 +13882,150 @@
   }
 
   return { openWillsRoom };
+};
+
+// ════════ castle-byers.js ════════
+// castle-byers.js — 🏰 Castle Byers, Will's stick fort in the woods behind the Byers' house (openCastleByers).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["castle-byers"] = function (ctx) {
+  'use strict';
+  const { hkShell } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
+  const world = ctx.world;
+  const openHawkins = (...args) => world.openHawkins(...args);
+  const openWillsHouse = (...args) => world.openWillsHouse(...args);
+
+  // ── CASTLE BYERS: THE PLACE ONLY ──
+  // Drawn after the reference photo, tidied for a phone: bare late-winter woods, leaf litter, and the fort in the middle.
+  // Left: a wall of leaning sticks. Middle: a doorway closed by a sheet of corrugated metal, under a stack of roof logs with a
+  // blue striped blanket peeking between them, the painted CASTLE BYERS plank and a red plank on top, dry leaves piled on the roof.
+  // Right: a tall teepee of sticks. A FRIENDS WELCOME arrow sign on a post at the left, a flag on a pole at the right, an old tyre
+  // and a fallen log in front. Nothing is tappable and nothing moves: a still picture in daylight (no time, weather or sound).
+  // Drawn in its own units (360 x 640, fort base at y 560), so to move something, give it those numbers.
+  function openCastleByers() {
+    const sh = hkShell("ao3-castle-byers", "\u{1F3F0} Castle Byers");
+    const { sv, rnd } = sh.kit;
+    const { box, sub, field, caption, pill, close } = sh;
+    sub.textContent = "the woods · behind the byers’";
+    caption.textContent = "Castle Byers. Sticks, a tin door and a sign that says friends are welcome.";
+    box.style.background = "#1c1712";
+
+    const VW = 360, VH = 640;
+    const svg = sv("svg", { viewBox: `0 0 ${VW} ${VH}`, preserveAspectRatio: "xMidYMid slice" });
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
+    const L = (x1, y1, x2, y2, stroke, w, o, p) => A("line", Object.assign({ x1, y1, x2, y2, stroke, "stroke-width": w, "stroke-linecap": "round" }, o || {}), p);
+    const r = k => rnd("cb-" + k);
+
+    grad("cb-sky", [[0, "#dcdad2"], [0.5, "#a49a8a"], [1, "#6e6252"]]);
+    grad("cb-floor", [[0, "#6a5a48"], [0.35, "#5a4936"], [1, "#2e2318"]]);
+    grad("cb-tin", [[0, "#6e675c"], [0.5, "#8e877a"], [1, "#5a544a"]], 1, 0);
+    grad("cb-vig", [[0, "#000", 0.25], [0.25, "#000", 0], [0.8, "#000", 0], [1, "#000", 0.45]]);
+
+    // ── the woods behind ──
+    A("rect", { x: 0, y: 0, width: VW, height: VH, fill: "url(#cb-sky)" });
+    for (let i = 0; i < 46; i++) {                                         // far thin trunks
+      const x = r("ft" + i) * VW, w = 1.5 + r("fw" + i) * 3;
+      A("rect", { x, y: 0, width: w, height: 430, fill: "#5e5446", opacity: 0.35 + r("fo" + i) * 0.3 });
+    }
+    for (let i = 0; i < 70; i++) {                                         // twiggy canopy
+      const x = r("bx" + i) * VW, y = r("by" + i) * 300, a = (r("ba" + i) - 0.5) * 2.4, l = 20 + r("bl" + i) * 50;
+      L(x, y, x + Math.sin(a) * l, y - Math.cos(a) * l, "#4a3f34", 0.6, { opacity: 0.55 });
+    }
+    [[12, 26], [96, 14], [150, 18], [278, 16], [338, 30]].forEach(([x, w], i) => {   // mid trunks
+      A("path", { d: `M${x} 0 L${x + w} 0 L${x + w + 4} 470 L${x - 4} 470 Z`, fill: i % 2 ? "#4a4036" : "#3e352c" });
+      A("rect", { x: x + w * 0.2, y: 0, width: w * 0.18, height: 470, fill: "#7a6e5e", opacity: 0.25 });
+      for (let j = 0; j < 3; j++) { const y = 60 + j * 70 + r("mb" + i + j) * 40, s = r("ms" + i + j) > 0.5 ? 1 : -1; L(x + w / 2, y, x + w / 2 + s * (30 + r("ml" + i + j) * 40), y - 40 - r("mh" + i + j) * 40, "#3e352c", 2 + r("mw" + i + j) * 2); }
+    });
+
+    // ── forest floor ──
+    A("path", { d: `M0 430 Q90 410 180 420 T360 412 V640 H0 Z`, fill: "url(#cb-floor)" });
+    for (let i = 0; i < 260; i++) {                                        // leaf litter
+      const x = r("lx" + i) * VW, y = 420 + Math.pow(r("ly" + i), 0.8) * 220, s = 1 + (y - 420) / 70;
+      A("ellipse", { cx: x, cy: y, rx: 1.6 * s, ry: 0.8 * s, fill: ["#8a6a48", "#6e5236", "#a07e58", "#4e3a28"][i % 4], opacity: 0.7, transform: `rotate(${r("lr" + i) * 180} ${x} ${y})` });
+    }
+
+    // ── the flag on its pole, right ──
+    const flag = A("g", { transform: "translate(-26 56)" });
+    L(318, -60, 324, 540, "#2e251c", 4, {}, flag);
+    const fl = sv("clipPath", { id: "cb-flagclip" }, defs);
+    const flagD = "M321 22 C334 30 344 36 358 50 L358 150 C344 138 334 134 323 132 Z";
+    sv("path", { d: flagD }, fl);
+    const fg = A("g", { "clip-path": "url(#cb-flagclip)" }, flag);
+    for (let i = 0; i < 13; i++) A("rect", { x: 315, y: 18 + i * 12 + (i * 1.2), width: 70, height: 13, fill: i % 2 ? "#e8e0d2" : "#a8323a", transform: "skewY(18) translate(0 -100)" }, fg);
+    A("rect", { x: 315, y: 15, width: 28, height: 66, fill: "#2c3466" }, fg);
+    for (let i = 0; i < 12; i++) A("circle", { cx: 325 + (i % 3) * 6, cy: 28 + Math.floor(i / 3) * 12 + (i % 3) * 2, r: 1.1, fill: "#e8e0d2" }, fg);
+    A("path", { d: "M340 30 C344 70 346 110 344 150", stroke: "#000", "stroke-width": 8, fill: "none", opacity: 0.12 }, fg);
+    A("path", { d: flagD, fill: "none", stroke: "#5a2a2a", "stroke-width": 0.5, opacity: 0.6 }, flag);
+
+    // ── the fort ──
+    const stick = (x1, y1, x2, y2, w, k) => {
+      const c = ["#3a2c20", "#4a3828", "#2e231a", "#5a4632"][Math.floor(r(k) * 4)];
+      L(x1, y1, x2, y2, c, w);
+      L(x1 - w * 0.2, y1, x2 - w * 0.2, y2, "#8a7458", w * 0.25, { opacity: 0.45 });
+    };
+    A("ellipse", { cx: 180, cy: 562, rx: 150, ry: 14, fill: "#1a130c", opacity: 0.55 });
+    // the dark inside behind everything
+    A("path", { d: "M60 560 L72 330 L262 322 L300 560 Z", fill: "#1e1610" });
+    // left wall: leaning sticks
+    for (let i = 0; i < 22; i++) { const t = i / 21, bx = 40 + t * 82 + r("lw" + i) * 6, tx = 64 + t * 60 + r("lt" + i) * 6; stick(bx, 560 + r("lb" + i) * 6, tx, 336 - r("lh" + i) * 14, 3 + r("lz" + i) * 3, "lw" + i); }
+    // the corrugated tin door
+    A("path", { d: "M122 348 L198 344 L204 560 L120 562 Z", fill: "url(#cb-tin)" });
+    for (let x = 124; x < 202; x += 3.2) L(x, 348, x + 2, 560, "#6e685e", 0.8, { opacity: 0.6 });
+    [[150, 400, 16, 30], [172, 470, 12, 22], [140, 520, 10, 14]].forEach(([cx, cy, rx, ry]) => A("ellipse", { cx, cy, rx, ry, fill: "#f2ead8", opacity: 0.16 }));
+    L(198, 344, 204, 560, "#3a332c", 1.4);
+    // right: a teepee of sticks
+    for (let i = 0; i < 34; i++) { const bx = 200 + r("rb" + i) * 110, tx = 220 + r("rt" + i) * 50; stick(bx, 562 + r("ry" + i) * 4, tx, 300 + r("rh" + i) * 40, 2.4 + r("rz" + i) * 3, "rs" + i); }
+    for (let i = 0; i < 8; i++) L(232 + r("bt" + i) * 50, 380 + r("bty" + i) * 140, 236 + r("bt" + i) * 50, 400 + r("bty" + i) * 140, "#2a7a9a", 1.2, { opacity: 0.7 });   // blue tarp glimpsed between the sticks
+    // roof logs
+    for (let i = 0; i < 6; i++) { const y = 346 - i * 9; stick(60 + i * 3, y + 2, 276 - i * 4, y - 6, 7 - i * 0.4, "rl" + i); }
+    A("path", { d: "M118 312 L206 308 L206 318 L118 321 Z", fill: "#3a5a9a" });               // the striped blanket between the logs
+    for (let x = 122; x < 206; x += 7) A("rect", { x, y: 309, width: 3, height: 11, fill: "#e8e8f0", opacity: 0.85 });
+    // the painted sign
+    A("path", { d: "M104 316 L216 310 L218 334 L106 340 Z", fill: "#4a3a2a" });
+    L(104, 316, 216, 310, "#6a5640", 1.2);
+    const sign = A("text", { x: 161, y: 331, "text-anchor": "middle", "font-family": "'Marker Felt','Comic Sans MS','Chalkboard SE',cursive", "font-size": 14, "font-weight": 700, "letter-spacing": 0.5, fill: "#d8b040", transform: "rotate(-3 161 331)" });
+    sign.textContent = "CASTLE BYERS";
+    // the red plank on top
+    A("path", { d: "M88 288 L232 280 L234 296 L90 304 Z", fill: "#7a3430" });
+    A("path", { d: "M100 292 L220 285", stroke: "#a8443a", "stroke-width": 4, opacity: 0.6, "stroke-dasharray": "18 6 30 8" });
+    // dry leaves heaped on the roof, with a few twigs sticking up
+    for (let i = 0; i < 9; i++) L(90 + i * 22, 290, 84 + i * 23 + r("tw" + i) * 14, 236 + r("tw2" + i) * 30, "#3a2c20", 1.3);
+    for (let i = 0; i < 120; i++) {
+      const x = 76 + r("dx" + i) * 210, y = 262 + r("dy" + i) * 34 + Math.abs(x - 180) * 0.06;
+      A("ellipse", { cx: x, cy: y, rx: 4.5, ry: 2.4, fill: ["#d8a060", "#c08048", "#e8c088", "#a86a38"][i % 4], transform: `rotate(${r("dr" + i) * 180} ${x} ${y})`, opacity: 0.92 });
+    }
+
+    // ── the arrow sign on a post, left ──
+    L(26, 300, 30, 566, "#3a2c20", 5);
+    const arrow = A("g", { transform: "rotate(-24 50 290)" });
+    A("path", { d: "M-6 280 L96 280 L108 290 L96 300 L-6 300 Z", fill: "#5a4834" }, arrow);
+    L(-6, 281, 96, 281, "#7a6448", 1, {}, arrow);
+    const aw = A("text", { x: 48, y: 294, "text-anchor": "middle", "font-family": "'Marker Felt','Comic Sans MS','Chalkboard SE',cursive", "font-size": 8.5, "font-weight": 700, fill: "#d8b040" }, arrow);
+    aw.textContent = "FRIENDS WELCOME";
+
+    // ── in front: an old tyre and a fallen log ──
+    A("path", { d: "M210 590 L352 572 L356 590 L214 606 Z", fill: "#7a6650" });
+    A("ellipse", { cx: 354, cy: 581, rx: 4, ry: 9, fill: "#a8926e" });
+    L(214, 598, 350, 581, "#4e3e2e", 1.2);
+    A("ellipse", { cx: 250, cy: 612, rx: 38, ry: 13, fill: "#151210" });
+    A("ellipse", { cx: 250, cy: 609, rx: 22, ry: 6, fill: "#3a2e22" });
+    for (let i = 0; i < 14; i++) stick(i * 26 + r("fs" + i) * 10, 620 + r("fy" + i) * 18, i * 26 + 20 + r("fe" + i) * 10, 612 + r("fz" + i) * 18, 2, "fs" + i);   // twigs in the litter
+
+    A("rect", { x: 0, y: 0, width: VW, height: VH, fill: "url(#cb-vig)", "pointer-events": "none" });
+
+    field.appendChild(svg);
+    pill("\u{1F3DA}️ Will’s house", "Back through the woods to the Byers’ house", () => { close(); openWillsHouse(); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    document.body.appendChild(sh.back);
+  }
+
+  return { openCastleByers };
 };
 
 // ════════ softlanding.js ════════
