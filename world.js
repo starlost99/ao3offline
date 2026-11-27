@@ -180,10 +180,13 @@
   ];
   // ── the live environment: real time of day, and weather that rolls once an hour ──
   // Every scene on the map reads these (Hawkins, the village, the grounds), so all the windows agree. Time of day and weather are Prague's, for real (see hkLiveRefresh).
-  // The buttons set an override that lasts an hour, then the live values take over again. Kept in one small key, ao3-hk-env.
+  // The buttons set an override that lasts for the session only: it lives in memory, so closing and reopening (or reloading) the app
+  // drops it and the live values (real Prague time and weather) take over again.
   const ENV_KEY = "ao3-hk-env", HOUR = 3600000;
-  const hkEnvRead = () => { try { return JSON.parse(localStorage.getItem(ENV_KEY) || "{}") || {}; } catch { return {}; } };
-  const hkEnvWrite = patch => { try { localStorage.setItem(ENV_KEY, JSON.stringify(Object.assign(hkEnvRead(), patch))); } catch {} };
+  let envMem = {};
+  const hkEnvRead = () => envMem;
+  const hkEnvWrite = patch => { envMem = Object.assign({}, envMem, patch); };
+  try { localStorage.removeItem(ENV_KEY); } catch {}                                      // an override saved by an older version
   // Prague clock (Europe/Prague, whatever the phone's own zone says). Prague date as YYYY-MM-DD and minutes since midnight.
   const hkPrague = (at) => {
     const p = {};
@@ -225,7 +228,7 @@
     const h = Math.floor(m / 60); return h >= 5 && h < 8 ? 2 : h >= 8 && h < 17 ? 3 : h >= 17 && h < 20 ? 1 : 0;
   };
   const hkTimeGet = () => { const e = hkEnvRead(); return (e.tmUntil > Date.now() && e.tm >= 0 && e.tm < HK_TIMES.length) ? e.tm | 0 : hkLiveTime(); };
-  const hkTimeSet = i => hkEnvWrite({ tm: i, tmUntil: Date.now() + HOUR });
+  const hkTimeSet = i => hkEnvWrite({ tm: i, tmUntil: Infinity });
   const HK_TIME_ORDER = [0, 2, 3, 1];                                                  // night, dawn, day, dusk: the order the button goes round
   const hkTimeNext = i => HK_TIME_ORDER[(HK_TIME_ORDER.indexOf(i) + 1) % HK_TIME_ORDER.length];
 
@@ -408,8 +411,11 @@
     for (let i = 0; i < w.length; i++) { t -= w[i]; if (t < 0) return i; }
     return 0;
   }
-  const hkWxGet = () => { const e = hkEnvRead(); return (e.wxUntil > Date.now() && e.wx >= 0 && e.wx < HK_WX.length) ? e.wx | 0 : hkLiveWx(); };
-  const hkWxSet = i => hkEnvWrite({ wx: i, wxUntil: Date.now() + HOUR });
+  // falling leaves belong to autumn (and Halloween) only: in any other season, and above all from December on, "leaves" is just a clear day
+  const hkWxOk = i => (i === 4 && hkSeason() !== "autumn" && hkSeason() !== "halloween") ? 0 : i;
+  const hkWxGet = () => { const e = hkEnvRead(); return hkWxOk((e.wxUntil > Date.now() && e.wx >= 0 && e.wx < HK_WX.length) ? e.wx | 0 : hkLiveWx()); };
+  const hkWxSet = i => hkEnvWrite({ wx: i, wxUntil: Infinity });
+  const hkWxNext = i => { let n = (i + 1) % HK_WX.length; if (hkWxOk(n) !== n) n = (n + 1) % HK_WX.length; return n; };     // the weather button: skips "leaves" out of season
   const HK_SEASON_TAG = { halloween: "\u{1F383} spooky season", winter: "\u2744\uFE0F winter", spring: "\u{1F338} spring", summer: "\u2600\uFE0F summer", autumn: "\u{1F342} autumn" };
   function hkSeason() {
     const m = hkPrague().month, p = hkPrefs();
@@ -846,7 +852,7 @@
   }
   hkLiveRefresh();                                                                  // warm the cache as soon as the world loads
 
-  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere };
+  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkWxNext, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere };
 };
 
 // ════════ lib/figures.js ════════
@@ -3413,11 +3419,12 @@
     overlay.style.pointerEvents = "none";
     const wxG = sv("g", {}, overlay);
     const seasonG = sv("g", {}, overlay);
+    const fallG = sv("g", {}, seasonG);                                                                           // the falling leaves or petals: hidden while it snows
     if (!reduce && (season === "autumn" || season === "halloween" || season === "spring")) {
       const cols = season === "spring" ? ["#f6b6cc", "#fbd3e0", "#f09ab8"] : ["#d9731f", "#b5541a", "#e0a032", "#8a4a1e"];
       const N = Math.min(46, Math.round(H / 32));
       for (let i = 0; i < N; i++) {
-        const p = sv("ellipse", { cx: (rnd("lx" + i) * W).toFixed(1), cy: (rnd("ly" + i) * H).toFixed(1), rx: 3, ry: 1.6, fill: cols[i % cols.length], opacity: 0.8 }, seasonG);
+        const p = sv("ellipse", { cx: (rnd("lx" + i) * W).toFixed(1), cy: (rnd("ly" + i) * H).toFixed(1), rx: 3, ry: 1.6, fill: cols[i % cols.length], opacity: 0.8 }, fallG);
         anim(p, `animation:ggFall ${(6 + rnd("ld" + i) * 6).toFixed(1)}s linear -${(rnd("lz" + i) * 8).toFixed(1)}s infinite;`);
       }
     }
@@ -3429,6 +3436,7 @@
       if (keeperOnWeather) keeperOnWeather();
       wxG.textContent = "";
       const kind = WX[wxI][0];
+      fallG.style.display = kind === "snow" ? "none" : "";
       if (kind === "rain" && !reduce) {
         const n = Math.min(190, Math.round(H / 8));
         for (let i = 0; i < n; i++) {
@@ -3476,8 +3484,8 @@
       const b = el("button", "flex:0 0 auto;border:1px solid rgba(190,170,255,0.3);background:rgba(255,255,255,0.06);color:#e6dcf5;border-radius:999px;padding:5px 11px;font:500 12px/1 inherit;font-family:inherit;cursor:pointer;white-space:nowrap;", label);
       b.type = "button"; b.title = title; b.onclick = fn; tools.appendChild(b); return b;
     };
-    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); say(TIMES[tI].say); });
-    const wxBtn = pill(WX[wxI][1], "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % WX.length; hkWxSet(wxI); wxBtn.textContent = WX[wxI][1]; paintWeather(); say(WX_SAY[WX[wxI][0]]); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); say(TIMES[tI].say); });
+    const wxBtn = pill(WX[wxI][1], "Change the weather (it goes back to the real Prague weather until you close the app)", () => { wxI = (wxI + 1) % WX.length; hkWxSet(wxI); wxBtn.textContent = WX[wxI][1]; paintWeather(); say(WX_SAY[WX[wxI][0]]); });
     // Halloween on / off any time of year (October is automatic; this only stores an override)
     const hwBtn = pill("\u{1F383} halloween", hwOn ? "Halloween is on. Tap to turn it off" : "Halloween is off. Tap to turn it on", () => {
       const next = !hwOn;
@@ -5948,7 +5956,7 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["village"] = function (ctx) {
   'use strict';
   const { gyHash } = ctx.shared;
-  const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
+  const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, hkWxNext, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
   const openChapel = (...args) => world.openChapel(...args);
@@ -6440,9 +6448,9 @@
       sub.textContent = "village · " + t.name;
       caption.textContent = t.say;
     };
-    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); });
     const paintWx = () => { wxBtn.textContent = HK_WX[wxI][1]; hkWxOverlay(box, HK_WX[wxI][0], !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)); };
-    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
+    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather until you close the app)", () => { wxI = hkWxNext(wxI); hkWxSet(wxI); paintWx(); });
     paintWx();
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u26EA chapel", "Step inside the chapel", () => { close(); openChapel(); });
@@ -6464,7 +6472,7 @@
   'use strict';
   const { gyHash } = ctx.shared;
   const { getTracked, isWip, readChapterFor, fmtWords, daysSince, wordsToReadMinutes, formatReadTime, READ_LOG_KEY } = ctx.core || {};
-  const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
+  const { hkTimeGet, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, hkWxNext, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHollowbrook = (...args) => world.openHollowbrook(...args);
@@ -7821,9 +7829,9 @@
       sub.textContent = "behind Hollowbrook · " + t.name + (bits.length ? " · " + bits.join(" · ") : "");
       renderCaption();
     };
-    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real Prague time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(); });
     const paintWx = () => { wxBtn.textContent = HK_WX[wxI][1]; hkWxOverlay(box, HK_WX[wxI][0], !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)); };
-    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
+    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather until you close the app)", () => { wxI = hkWxNext(wxI); hkWxSet(wxI); paintWx(); });
     paintWx();
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(); } if (w !== wxI) { wxI = w; paintWx(); } });
     const soundBtn = pill("", "Tap: sounds on or off. Hold: set the background sound link (YouTube)", null);
@@ -8668,7 +8676,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["hawkins"] = function (ctx) {
   'use strict';
-  const { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkWxGet, hkWxSet, hkWxNext, HK_WX, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time (the scenes open each other, so none can capture another up front).
   const world = ctx.world;
   const openWheelers = (...args) => world.openWheelers(...args);
@@ -8827,9 +8835,9 @@
       sub.textContent = "indiana \u00B7 " + t.name;
       if (announce) caption.textContent = t.say.map;
     };
-    const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
     const paintWx = () => { wxBtn.textContent = HK_WX[wxI][1]; hkWxOverlay(box, HK_WX[wxI][0], reduce); };
-    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWx(); });
+    const wxBtn = pill("", "Change the weather (it goes back to the real Prague weather until you close the app)", () => { wxI = hkWxNext(wxI); hkWxSet(wxI); paintWx(); });
     paintWx();
     hkEnvWatch(box, (t, w) => { if (t !== tI) { tI = t; applyTime(false); } if (w !== wxI) { wxI = w; paintWx(); } });
     pill("\u{1F3E1} Wheelers\u2019", "Walk up to the Wheelers\u2019 house", () => { close(); openWheelers(); });
@@ -8870,7 +8878,7 @@
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["wheelers"] = function (ctx) {
   'use strict';
   const {
-    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkCrackle, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkWhere
+    hkShell, hkSeason, hkTimeGet, hkWxGet, hkKnock, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkWxNext, hkCrackle, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkWhere
   } = ctx.lib["hawkins-kit"];
   const { bellMuted } = ctx.lib["bell-audio"];
   const { bsKit } = ctx.lib["figures"];
@@ -9174,10 +9182,11 @@
     overlay.style.pointerEvents = "none";
     const wxG = sv("g", {}, overlay);
     const seasonG = sv("g", {}, overlay);
+    const fallG = sv("g", {}, seasonG);                                                                           // the falling leaves or petals: hidden while it snows
     if (!reduce && (season === "autumn" || season === "halloween" || season === "spring")) {
       const cols = season === "spring" ? ["#f6b6cc", "#fbd3e0", "#f09ab8"] : ["#d9731f", "#b5541a", "#e0a032", "#8a4a1e"];
       for (let i = 0; i < 26; i++) {
-        const p = sv("ellipse", { cx: (rnd("lx" + i) * W).toFixed(1), cy: (rnd("ly" + i) * H).toFixed(1), rx: 3, ry: 1.6, fill: cols[i % cols.length], opacity: 0.8 }, seasonG);
+        const p = sv("ellipse", { cx: (rnd("lx" + i) * W).toFixed(1), cy: (rnd("ly" + i) * H).toFixed(1), rx: 3, ry: 1.6, fill: cols[i % cols.length], opacity: 0.8 }, fallG);
         anim(p, `animation:hkFall ${(6 + rnd("ld" + i) * 6).toFixed(1)}s linear -${(rnd("lz" + i) * 8).toFixed(1)}s infinite;`);
       }
     }
@@ -9197,6 +9206,7 @@
     const paintWeather = () => {
       const kind = HK_WX[wxI][0], cozy = kind === "snow";
       wxG.textContent = ""; flashEl = null;
+      fallG.style.display = cozy ? "none" : "";
       if (kind === "rain" || kind === "storm") {
         const storm = kind === "storm";
         sv("rect", { x: 0, y: 0, width: W, height: H, fill: "#0a1230", opacity: storm ? 0.26 : 0.14 }, wxG);
@@ -9266,8 +9276,8 @@
       sub.textContent = "hawkins \u00B7 " + t.name + " \u00B7 " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
       if (announce) say(cozy ? COZY[t.name] : kind === "clear" || kind === "leaves" ? t.say.house : wxLine());
     };
-    const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
-    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather until you close the app)", () => { wxI = hkWxNext(wxI); hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
     hkSoundPill(pill, amb);
     const callBtn = !asleep && !inRoom ? pill("✦ call up", "Whistle up at Mike’s window to call them to his room", () => {
       if (entering || inRoom) return; hkWhere.call("room"); inRoom = true; downstairs = false; callBtn.style.display = "none";
@@ -12261,7 +12271,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["willshouse"] = function (ctx) {
   'use strict';
-  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkThunder, hkAmbience, hkSoundPill, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkWxNext, hkThunder, hkAmbience, hkSoundPill, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
@@ -12308,6 +12318,10 @@
     const P = (d, fill, o, parent) => A("path", Object.assign({ d, fill }, o || {}), parent);
     const r1 = (k, a, b) => a + rnd(k) * (b - a);
 
+    // every leafy shape registers here with its summer green, so paintFoliage() can recolour the trees for the season and the snow
+    const FOL = [];
+    const fol = (el, base, kind, x, y, hide, vein) => { FOL.push({ el, base, kind, x: x || 0, y: y || 0, h: rnd("fol" + FOL.length), hide, vein }); return el; };
+
     // ── sky ──
     rad("wh-sun", [["0%", "#fff6d0", 0.7], ["100%", "#fff6d0", 0]]);
     rad("wh-sunw", [["0%", "#ffb067", 0.8], ["100%", "#ffb067", 0]]);
@@ -12328,11 +12342,16 @@
     const ovc = R(VX - 400, VY - 600, VW + 800, 1100, "#7d8a99", { opacity: 0 });                  // overcast: rain, storm, fog and snow grey the whole sky
 
     // ── the trees: round canopies built from three stacked balls (dark base, mid, sunlit top) ──
-    const ball = (cx, cy, r, pal) => { C(cx, cy, r, pal[0]); C(cx - r * 0.1, cy - r * 0.12, r * 0.86, pal[1]); C(cx - r * 0.24, cy - r * 0.3, r * 0.52, pal[2], { opacity: 0.9 }); };
+    const ball = (cx, cy, r, pal) => {
+      fol(C(cx, cy, r, pal[0]), pal[0], "canopy", cx, cy);
+      fol(C(cx - r * 0.1, cy - r * 0.12, r * 0.86, pal[1]), pal[1], "canopy", cx, cy);
+      fol(C(cx - r * 0.24, cy - r * 0.3, r * 0.52, pal[2], { opacity: 0.9 }), pal[2], "canopy", cx, cy);
+    };
     const blob = (cx, cy, r, cols, seed, n) => {
       for (let i = 0; i < (n || 9); i++) {
         const a = rnd(seed + "a" + i) * 6.283, d = rnd(seed + "d" + i) * r * 0.75, rr = r * (0.35 + rnd(seed + "r" + i) * 0.4);
-        C((cx + Math.cos(a) * d).toFixed(1), (cy + Math.sin(a) * d * 0.8).toFixed(1), rr.toFixed(1), cols[Math.floor(rnd(seed + "c" + i) * cols.length)]);
+        const bx = cx + Math.cos(a) * d, by = cy + Math.sin(a) * d * 0.8, col = cols[Math.floor(rnd(seed + "c" + i) * cols.length)];
+        fol(C(bx.toFixed(1), by.toFixed(1), rr.toFixed(1), col), col, "canopy", bx, by);
       }
     };
     const DARKP = ["#1c3d24", "#27522d", "#36703a"], MIDP = ["#2a5a2c", "#3a7632", "#56933a"], SUNP = ["#46822e", "#69a438", "#9bc84a"];
@@ -12343,7 +12362,7 @@
         const t = (k / 36) * 6.2832, rr = r * (0.5 + 0.5 * Math.pow(Math.abs(Math.cos(2 * t)), 0.6));
         d += (k ? "L" : "M") + (Math.cos(t) * rr).toFixed(1) + " " + (Math.sin(t) * rr).toFixed(1) + " ";
       }
-      A("path", { d: d + "Z", fill: col, transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(0)})` }, parent);
+      fol(A("path", { d: d + "Z", fill: col, transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(0)})` }, parent), col, "leaf", cx, cy);
     };
     const LEAF_D = ["#24502a", "#2c5a28", "#336630"], LEAF_M = ["#3f7a2f", "#4a8634", "#56933a"], LEAF_L = ["#6aa63c", "#7fb840", "#98c84a"];
     const leafy = (cx, cy, r, seed, size) => {
@@ -12358,7 +12377,7 @@
     // a tall pine behind the right end of the roof
     const pine = sv("g", {}, svg);
     R(857, 90, 7, 330, "#3a2c22", {}, pine);
-    [[860, 40, 24], [860, 82, 38], [862, 132, 52], [864, 190, 66], [866, 254, 80], [868, 322, 90]].forEach(([cx, cy, w], i) => PG(`${cx},${cy - 44} ${cx + w},${cy + 22} ${cx - w},${cy + 22}`, i % 2 ? "#1d3a2e" : "#26482f", {}, pine));
+    [[860, 40, 24], [860, 82, 38], [862, 132, 52], [864, 190, 66], [866, 254, 80], [868, 322, 90]].forEach(([cx, cy, w], i) => { const pc = i % 2 ? "#1d3a2e" : "#26482f"; fol(PG(`${cx},${cy - 44} ${cx + w},${cy + 22} ${cx - w},${cy + 22}`, pc, {}, pine), pc, "pine", cx, cy); });
     // the far tree line, behind the house
     for (let i = -2; i < 11; i++) blob(150 + i * 92, 340 + (i % 2) * 14, 96, ["#2c5a2c", "#336630", "#2a5228", "#4f8a33", "#5e9a36", "#477f31"], "tl" + i, 10);
     // a second, lower row so the tree line reaches down to the lawn and no sky shows under it
@@ -12386,6 +12405,7 @@
       const t = rnd("gs" + i), y = 540 + Math.pow(t, 0.8) * 618, k = (y - 538) / 622, left = 432 - 192 * k, right = 584 + 346 * k;
       E((left + rnd("gt" + i) * (right - left)).toFixed(1), y.toFixed(1), (1 + rnd("gu" + i) * 2.6).toFixed(1), (0.7 + rnd("gv" + i) * 1.2).toFixed(1), ["#d6d1c0", "#8a8470", "#c4bda9", "#6f6a5a"][Math.floor(rnd("gw" + i) * 4)], { opacity: 0.8 });
     }
+    const groundG = A("g", { "pointer-events": "none" });                                                    // snow on the grass and drive: sits behind the mailbox, house and car
     // a mailbox by the drive
     R(262, 604, 5, 56, "#6a5a42"); R(248, 586, 34, 18, "#3a4a5c", { rx: 4 }); R(248, 586, 34, 5, "#5a6c80", { rx: 3 }); R(280, 580, 3, 14, "#c8402a"); R(280, 578, 9, 5, "#c8402a");
     E(264, 662, 12, 3, "#000", { opacity: 0.25 });
@@ -12538,8 +12558,9 @@
         d += (k ? "L" : "M") + (Math.cos(t) * rr).toFixed(1) + " " + (Math.sin(t) * rr).toFixed(1) + " ";
       }
       const g = sv("g", { transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${rot.toFixed(0)})` }, leaves);
-      A("path", { d: d + "Z", fill: col }, g);
-      A("path", { d: `M${-r * 0.8} 0 H${r * 0.8} M0 0 L${r * 0.5} ${-r * 0.5} M0 0 L${r * 0.5} ${r * 0.5}`, stroke: "#b6dc82", "stroke-width": 1, opacity: 0.4, fill: "none" }, g);
+      const body = A("path", { d: d + "Z", fill: col }, g);
+      const vein = A("path", { d: `M${-r * 0.8} 0 H${r * 0.8} M0 0 L${r * 0.5} ${-r * 0.5} M0 0 L${r * 0.5} ${r * 0.5}`, stroke: "#b6dc82", "stroke-width": 1, opacity: 0.4, fill: "none" }, g);
+      fol(body, col, "maple", cx, cy, g, vein);
     };
     const MAPLE = ["#2f5f2a", "#3a7030", "#4a8636", "#5a9a42", "#6aa94e", "#2a5626"];
     // a leaf hung on a short stem from a point on a twig; the stem is drawn into the branch group so it is visibly attached
@@ -12624,17 +12645,78 @@
     const wxLine = () => { const k = HK_WX[wxI][0]; return k === "clear" && HK_TIMES[tI].name === "day" ? WX_SAY.sunny : WX_SAY[k]; };
     const wxLabel = () => HK_WX[wxI][0] === "clear" ? (HK_TIMES[tI].name === "day" ? "☀️ sunny" : "✨ clear") : HK_WX[wxI][1];
 
+    // ── the trees follow the season: autumn is full and fiery, snow and winter leave them thin, muted and frosted, spring is fresh (with a little blossom), summer is the original green ──
+    const hx = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+    const mix = (a, b, t) => { const p = hx(a), q = hx(b); return "#" + p.map((v, i) => Math.max(0, Math.min(255, Math.round(v + (q[i] - v) * t))).toString(16).padStart(2, "0")).join(""); };
+    const lumOf = h => { const [r, g, b] = hx(h); return (0.3 * r + 0.59 * g + 0.11 * b) / 255; };
+    const ramp = (s, t) => t < 0.5 ? mix(s[0], s[1], t * 2) : mix(s[1], s[2], (t - 0.5) * 2);          // [dark, mid, light] -> colour for t in 0..1
+    const FALL = [["#6b2a14", "#b5471c", "#e8892a"], ["#6e4a10", "#c88a1c", "#f0c23c"], ["#5a1418", "#a02a22", "#d9503a"], ["#5a2c12", "#9a5420", "#cf8a3c"]];   // orange, gold, red, copper
+    const BARE = ["#4a403c", "#7d716b", "#c3c9d2"], SPRING = ["#2f6a30", "#5fa43c", "#aedc62"], BLOSSOM = ["#b9627a", "#e48aa6", "#f7c5d4"];
+    const paintFoliage = () => {
+      const kind = HK_WX[wxI][0], bare = season === "winter" || kind === "snow";
+      const mode = bare ? "bare" : season === "autumn" ? "fall" : season === "halloween" ? "hallow" : season === "spring" ? "spring" : "summer";
+      FOL.forEach(f => {
+        const t = Math.max(0, Math.min(1, (lumOf(f.base) - 0.17) / 0.51));
+        let col = f.base, veinCol = "#b6dc82", gone = false;
+        if (mode === "bare") {
+          if (f.kind === "pine") col = mix(f.base, "#d4dde8", 0.55);                                  // the evergreen keeps its shape but goes grey-green and dusted
+          else {
+            col = mix(ramp(BARE, t), "#6b5a52", f.h * 0.25);
+            if (f.kind === "maple" || f.kind === "leaf") gone = season === "winter" || f.h > (f.kind === "maple" ? 0.4 : 0.5);   // from December on every leaf is gone; in an early snow most have dropped
+          }
+          veinCol = "#d6cdc6";
+        } else if (mode === "fall" || mode === "hallow") {
+          if (f.kind !== "pine") {
+            let i = Math.floor(((Math.sin(f.x * 0.012 + 1.3) + Math.sin(f.y * 0.02 + 0.4) + 2) / 4) * 4);   // patches of colour across the woods
+            if (f.kind !== "canopy" && f.h < 0.3) i += 1;                                              // single leaves wander off into a neighbouring colour
+            col = ramp(FALL[((i % 4) + 4) % 4], t);
+            if (mode === "hallow") col = mix(col, "#2a1018", 0.22);
+          }
+          veinCol = "#ffd89a";
+        } else if (mode === "spring") {
+          if (f.kind !== "pine") col = (f.kind !== "canopy" && f.h < 0.1) ? ramp(BLOSSOM, t) : ramp(SPRING, t);
+          veinCol = "#e6f5b8";
+        }
+        f.el.setAttribute("fill", col);
+        if (f.vein) f.vein.setAttribute("stroke", veinCol);
+        (f.hide || f.el).style.display = gone ? "none" : "";
+      });
+    };
+
     // what the weather and the season leave on the yard: snow on the roof and lawn, leaves in autumn, fireflies on summer evenings
     const paintDyn = () => {
-      dynG.textContent = "";
+      dynG.textContent = ""; groundG.textContent = "";
+      paintFoliage();
       const kind = HK_WX[wxI][0], n = HK_TIMES[tI].name, cover = season === "winter" || kind === "snow";
       if (cover) {
-        PG("186,380 268,314 786,316 884,383", "#eef2ff", { opacity: 0.88 }, dynG);                                       // the roof
-        R(206, 499, 496, 4, "#f2f5ff", { opacity: 0.9 }, dynG);                                                         // the porch floor edge
-        PG(`${VX - 500},500 440,534 250,1160 ${VX - 500},1160`, "#f1f4fc", { opacity: 0.5 }, dynG);                       // the lawns
-        PG(`580,534 ${VX + VW + 500},500 ${VX + VW + 500},1160 780,1160`, "#f1f4fc", { opacity: 0.5 }, dynG);
-        for (let i = 0; i < 26; i++) E(r1("sa" + i, VX - 200, VX + VW + 200).toFixed(0), r1("sb" + i, 560, 1140).toFixed(0), r1("sc" + i, 22, 56).toFixed(0), r1("sd" + i, 5, 10).toFixed(0), "#fbfcff", { opacity: 0.7 }, dynG);
-        E(814, 460, 62, 7, "#f4f7ff", { opacity: 0.85 }, dynG);                                                          // the car roof
+        // the roof, with a ridge and chimney caps
+        PG("184,381 266,313 788,315 886,384", "#eef2ff", { opacity: 0.9 }, dynG);
+        R(262, 304, 530, 4, "#f4f7ff", { opacity: 0.95, rx: 2 }, dynG);
+        R(247, 291, 32, 3, "#f4f7ff", { opacity: 0.95 }, dynG); R(719, 294, 32, 3, "#f4f7ff", { opacity: 0.95 }, dynG);
+        R(206, 523, 270, 3, "#f2f5ff", { opacity: 0.85 }, dynG); R(598, 523, 104, 3, "#f2f5ff", { opacity: 0.85 }, dynG);   // along the top of the foundation, leaving a gap where the bikes stand
+        // the lawns: only the grass, never the gravel (the drive's edges are x = 432 - 192k on the left and 584 + 346k on the right, k = (y - 538) / 622)
+        const dl = y => 432 - 192 * ((y - 538) / 622), dr = y => 584 + 346 * ((y - 538) / 622);
+        PG(`${VX - 500},486 432,486 432,538 240,1160 ${VX - 500},1160`, "#f1f4fc", { opacity: 0.8 }, groundG);
+        PG(`584,486 ${VX + VW + 500},486 ${VX + VW + 500},1160 930,1160 584,538`, "#f1f4fc", { opacity: 0.8 }, groundG);
+        // plough banks along both edges of the drive
+        PG("432,538 424,538 226,1160 240,1160", "#f7f9ff", { opacity: 0.9 }, groundG);
+        PG("584,538 591,538 946,1160 930,1160", "#f7f9ff", { opacity: 0.9 }, groundG);
+        PG("432,538 584,538 930,1160 240,1160", "#f4f7ff", { opacity: 0.14 }, groundG);                                    // a thin frost over the gravel
+        // soft drifts lying flat on the grass, bigger and wider toward the front
+        let placed = 0;
+        for (let i = 0; i < 120 && placed < 22; i++) {
+          const y = r1("sb" + i, 600, 1140), x = r1("sa" + i, VX - 200, VX + VW + 200), k = (y - 538) / 622;
+          const rx = 16 + k * 46, ry = 2.5 + k * 7;
+          if (x + rx < dl(y) - 8 || x - rx > dr(y) + 8) { E(x.toFixed(0), y.toFixed(0), rx.toFixed(0), ry.toFixed(1), "#fbfcff", { opacity: 0.8 }, groundG); placed++; }
+        }
+        for (let i = 0; i < 70; i++) {                                                                                  // flecks left on the gravel
+          const y = r1("fy" + i, 560, 1150), k = (y - 538) / 622, x = r1("fx" + i, dl(y) + 10, dr(y) - 10);
+          E(x.toFixed(0), y.toFixed(0), (1.5 + k * 3).toFixed(1), (0.7 + k * 1.1).toFixed(1), "#f4f7ff", { opacity: 0.55 }, groundG);
+        }
+        E(265, 586, 17, 3.5, "#f6f8ff", { opacity: 0.95 }, dynG);                                                         // the mailbox cap
+        // the car: a cap along its roof line and a strip along the bumper
+        PG("738,473 770,460 850,457 878,472 850,466 770,469", "#f4f7ff", { opacity: 0.92 }, dynG);
+        R(748, 529, 160, 3, "#f4f7ff", { opacity: 0.85, rx: 1.5 }, dynG);
       }
       if ((season === "autumn" || season === "halloween") && !cover) for (let i = 0; i < 18; i++) { const lx = r1("lf" + i, VX - 100, VX + VW + 100).toFixed(0), ly = r1("lg" + i, 570, 1100).toFixed(0); E(lx, ly, 5, 2.4, ["#d9731f", "#b5541a", "#e0a032"][i % 3], { opacity: 0.75, transform: `rotate(${Math.round(rnd("lr" + i) * 180)} ${lx} ${ly})` }, dynG); }
       if (season === "summer" && (n === "dusk" || n === "night")) for (let i = 0; i < 14; i++) {
@@ -12672,8 +12754,8 @@
       paintDyn();
       if (announce) say(cozy ? COZY[n] : kind === "clear" || kind === "leaves" ? BY_SAY[n] : wxLine());
     };
-    const timeBtn = pill("", "Change the time of day (it goes back to the real time after an hour)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
-    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather after an hour)", () => { wxI = (wxI + 1) % HK_WX.length; hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather until you close the app)", () => { wxI = hkWxNext(wxI); hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
     hkSoundPill(pill, amb);
     // lightning, and thunder a moment later, when it storms
     const sched = (fn, lo, hi) => later(() => { if (gone) return; fn(); sched(fn, lo, hi); }, lo + Math.random() * (hi - lo));
