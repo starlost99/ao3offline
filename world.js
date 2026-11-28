@@ -1225,6 +1225,9 @@
   const PERIOD_KEY     = "ao3_period_log_v1";
   const SHIFT_KEY      = "ao3_cycle_shift_v1";
   const MOOD_KEY        = "ao3_mood_log_v1";
+  const TITLES_KEY     = "ao3_cycle_day_titles_v1";
+  const WPM            = 215;
+  const MONTHLY_GOAL   = 700000;
   const PERIOD_CYCLE_LOOKBACK = 6;
   function getLog() {
     try { return JSON.parse(localStorage.getItem(LOG_KEY) || "[]"); }
@@ -1730,7 +1733,126 @@
     return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n);
   }
 
-  return { getLog, getMoodForDate, getPeriodStats, getDayPrediction, getPhaseForStatsDay, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS };
+  // ── the day title ("hungry and chill", your own phrase or the automatic one) and the monthly goal helpers, copied from v18.34 ──
+  const symptomIcon = () => "";   // the dashboard has an icon per symptom; the world only needs the words
+  const TITLE_MIN_COUNT = 2;     // a symptom must have shown up this many times...
+  const TITLE_MIN_SHARE = 0.5;   // ...and on at least this share of the logged days
+  const TITLE_MAX_SYMPTOMS = 3;
+  const TITLE_MOOD_DIFF = 0.5;   // distance from your usual (1-5 scale) worth mentioning
+  const TITLE_PHRASES = {
+    "Cramps": "cramps", "Pre-period cramps": "early cramps", "Ovulation pain": "ovulation twinge", "Spasms": "spasms",
+    "Headache": "headache", "Tender breasts": "tender breasts", "Bloating": "bloated", "Muscle aches": "achy",
+    "PMS flu": "pms flu", "Spotting": "spotting", "Acne": "breakouts", "Oily hair": "oily hair",
+    "Watery discharge": "watery discharge", "Sweating": "sweaty", "Hot flashes": "hot flashes", "Dry eyes": "dry eyes",
+    "Eye strain": "eye strain", "Fatigue": "tired", "Hungry": "hungry", "Small appetite": "small appetite",
+    "Cravings": "cravings", "Craving chocolate": "chocolate craving", "Vivid dreams": "vivid dreams", "Nesting": "nesting",
+    "Emotional": "emotional", "Irritable": "irritable", "Anxiety": "anxious", "Overthinking": "overthinking",
+    "Self critical": "self-critical", "Hopelessness": "hopeless", "PMDD": "pmdd flare", "Calm": "calm",
+    "Confident": "confident", "Feeling okay": "feeling okay", "Hating men": "hating men",
+    "Taking it personally": "taking things personally", "Over it": "over it", "Sad": "sad",
+    "Sociable": "sociable", "Solitary": "wants solitude", "Flirty": "flirty", "High libido": "high libido", "Low libido": "low libido",
+  };
+
+  function getCycleDayTitles() {
+    try {
+      const o = JSON.parse(localStorage.getItem(TITLES_KEY) || "{}");
+      return (o && typeof o === "object" && !Array.isArray(o)) ? o : {};
+    } catch { return {}; }
+  }
+  function getCycleDayTags(day, stats) {
+    const { cycleLen, ovulationDay, pmsStart } = getCycleMarkers(stats.avgCycle, stats.avgPeriod);
+    const tags = [];
+    if (day === 1) tags.push("period starts");
+    if (day === ovulationDay - 1) tags.push("first day of possible ovulation");
+    if (day === ovulationDay + 1) tags.push("last day of possible ovulation");
+    if (day === pmsStart) tags.push("pms week starts");
+    if (day === cycleLen) tags.push("period due around now");
+    return tags;
+  }
+
+  const TITLE_NOTE_ICONS = {
+    "good-mood day": "😊", "low-mood day": "🌧️", "high energy": "⚡", "low energy": "🪫",
+    "rough sleep": "😵‍💫", "good sleep": "😴",
+  };
+
+  // Structured pieces of the automatic title: heads-up tags plus items
+  // ({label, icon}) for symptoms and mood/energy/sleep notes.
+  function buildAutoCycleDayTitleParts(day, bucket, baseline, stats) {
+    const tags = getCycleDayTags(day, stats);
+    const items = [];
+    if (bucket && bucket.entryCount >= 2) {
+      Object.entries(bucket.symptoms || {})
+        .filter(([, n]) => n >= TITLE_MIN_COUNT && n / bucket.entryCount >= TITLE_MIN_SHARE)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, TITLE_MAX_SYMPTOMS)
+        .forEach(([name]) => items.push({ label: TITLE_PHRASES[name] || name.toLowerCase(), icon: symptomIcon(name) }));
+      const avg = (sum, n) => (n >= 2 ? sum / n : null);
+      const mood = avg(bucket.moodSum, bucket.moodCount), energy = avg(bucket.energySum, bucket.energyCount), sleep = avg(bucket.sleepSum, bucket.sleepCount);
+      const note = label => items.push({ label, icon: TITLE_NOTE_ICONS[label] || "" });
+      if (mood != null && baseline.mood != null) {
+        if (mood - baseline.mood >= TITLE_MOOD_DIFF) note("good-mood day");
+        else if (baseline.mood - mood >= TITLE_MOOD_DIFF) note("low-mood day");
+      }
+      if (energy != null && baseline.energy != null) {
+        if (energy - baseline.energy >= TITLE_MOOD_DIFF) note("high energy");
+        else if (baseline.energy - energy >= TITLE_MOOD_DIFF) note("low energy");
+      }
+      if (sleep != null && baseline.sleep != null) {
+        if (baseline.sleep - sleep >= TITLE_MOOD_DIFF) note("rough sleep");
+        else if (sleep - baseline.sleep >= TITLE_MOOD_DIFF) note("good sleep");
+      }
+    }
+    const shown = items.slice(0, 4);
+    let empty = null;
+    if (!tags.length && !shown.length) empty = (bucket && bucket.entryCount) ? "no clear pattern yet" : "nothing logged on this day yet";
+    return { tags, items: shown, empty };
+  }
+
+  function buildAutoCycleDayTitle(day, bucket, baseline, stats) {
+    const { tags, items, empty } = buildAutoCycleDayTitleParts(day, bucket, baseline, stats);
+    if (empty) return empty;
+    return [...tags, items.map(i => i.label).join(", ")].filter(Boolean).join(" · ");
+  }
+
+  // { text, custom, tags, items, empty } — pass precomputed buckets/baseline when titling many days.
+  function getCycleDayTitle(day, stats, buckets, baseline) {
+    const custom = getCycleDayTitles()[day];
+    // Your own title never hides the heads-up tags (period starts, ovulation, pms week starts…)
+    if (custom) return { text: custom, custom: true, tags: getCycleDayTags(day, stats || getPeriodStats()), items: [], empty: null };
+    const b = (buckets || getMoodStatsByCycleDay())[day] || null;
+    const parts = buildAutoCycleDayTitleParts(day, b, baseline || getOverallMoodBaseline(), stats || getPeriodStats());
+    const text = parts.empty || [...parts.tags, parts.items.map(i => i.label).join(", ")].filter(Boolean).join(" · ");
+    return { text, custom: false, ...parts };
+  }
+
+  function isSameDay(d1, d2) {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth()    === d2.getMonth()    &&
+           d1.getDate()     === d2.getDate();
+  }
+  function isSameMonth(d1, d2) {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth()    === d2.getMonth();
+  }
+  // Highest words-in-a-month total across all *completed* months strictly
+  // before `beforeDate`'s month (so the in-progress current month never
+  // counts as a "best" it then has to beat). Used to set the next monthly
+  // goal against your all-time best month rather than just last month.
+  function getBestCompletedMonthWords(beforeDate) {
+    const totals = {};
+    getLog().forEach(e => {
+      const d = new Date(e.date);
+      if (d.getFullYear() > beforeDate.getFullYear() ||
+          (d.getFullYear() === beforeDate.getFullYear() && d.getMonth() >= beforeDate.getMonth())) {
+        return; // skip beforeDate's month and anything after it
+      }
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      totals[key] = (totals[key] || 0) + e.words;
+    });
+    const values = Object.values(totals);
+    return values.length ? Math.max(...values) : 0;
+  }
+  return { WPM, MONTHLY_GOAL, isSameDay, isSameMonth, getBestCompletedMonthWords, getCycleDayTitle, getLog, getMoodForDate, getPeriodStats, getDayPrediction, getPhaseForStatsDay, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS };
 };
 
 // ════════ lib/night-summary.js ════════
@@ -1756,6 +1878,7 @@
   const nsWeather = code => code === 0 ? "☀️ clear" : code <= 2 ? "🌤️ partly cloudy" : code === 3 ? "☁️ cloudy" : code <= 48 ? "🌫️ fog"
     : code <= 67 ? "🌧️ rain" : code <= 77 ? "🌨️ snow" : code <= 82 ? "🌧️ showers" : code <= 86 ? "🌨️ snow showers" : "⛈️ storms";
   const nsPlural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+  const nsMinutes = m => m < 60 ? m + " min" : Math.floor(m / 60) + "h" + (m % 60 ? " " + (m % 60) + "m" : "");
   const NS_SLEEP = ["", "very poor", "poor", "okay", "good", "great"];
 
   // everything on the card, as [{ title, lines: [text] }]; each part fails on its own, so one bad record never blanks the card
@@ -1763,23 +1886,23 @@
     const today = D.getPragueTodayIso();                                                  // the app's day: it turns over at 2 am, Prague time
     const next = D.getPragueNow(); next.setDate(next.getDate() + 1);
     const tomorrow = D.toLocalIso(next);
-    const out = [], part = (title, fn) => { let lines; try { lines = fn(); } catch { lines = ["Couldn’t read this tonight."]; } out.push({ title, lines: lines.filter(Boolean) }); };
+    const out = [], part = (icon, title, fn) => { let r; try { r = fn(); } catch { r = ["Couldn’t read this tonight."]; } const o = Array.isArray(r) ? { lines: r } : r; out.push({ icon, title, lines: (o.lines || []).filter(Boolean), big: o.big, pips: o.pips, bar: o.bar, score: o.score, day: o.day }); };
     const entry = () => D.getMoodForDate(today);
     let stats = null; try { stats = D.getPeriodStats(); } catch {}
 
-    part("📖 Read today", () => {
+    part("📖", "Read today", () => {
       const dayOf = e => { const d = new Date(e.date); return isNaN(d) ? "" : D.toLocalIso(d); };
       const log = (D.getLog() || []).filter(e => e && e.date), mine = log.filter(e => dayOf(e) === today);
       if (!mine.length) return ["Nothing logged today."];
       const words = mine.reduce((a, e) => a + (Number(e.words) || 0), 0);
-      const lines = [words.toLocaleString("en-US") + " words · " + nsPlural(mine.length, "chapter")];
+      const lines = [], mins = Math.round(words / D.WPM), big = [[words.toLocaleString("en-US"), "words"], [nsMinutes(mins), "read time"], [String(mine.length), mine.length === 1 ? "chapter" : "chapters"]];
       // finished today: a finished fic whose latest logged chapter is today's
       const ids = new Set(mine.map(e => String(e.key || "").split("::")[0]));
       const done = (core.getTracked ? core.getTracked() : []).filter(f => f && f.finished && ids.has(String(f.workId)));
       if (done.length) lines.push("Finished: " + done.map(f => String(f.title || "a story")).join(", "));
-      return lines;
+      return { big, lines };
     });
-    part("🌙 Cycle today", () => {
+    part("🌙", "Cycle today", () => {
       if (!stats || stats.currentCycleDay == null) return ["No period logged yet."];
       const key = D.getPhaseForStatsDay(stats.currentCycleDay, stats), ph = D.PHASE_DEFS.find(p => p.key === key);
       const lines = ["Day " + stats.currentCycleDay + (ph ? " · " + ph.label + " phase" : "")];
@@ -1792,28 +1915,48 @@
       lines.push(sy.length ? "Logged: " + sy.join(", ") : "No symptoms logged.");
       return lines;
     });
-    part("📝 Check-in", () => {
-      const e = entry(), bits = [];
-      if (e && e.mood) bits.push("Mood " + e.mood + "/5");
-      if (e && e.energy) bits.push("Energy " + e.energy + "/5");
-      return [bits.length ? bits.join(" · ") : "Mood and energy not logged."];
+    // this month's reading goal, worked out the way the dashboard's month-progress popup does
+    part("🎯", "Monthly goal", () => {
+      const now = D.getPragueNow(), last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const log = D.getLog() || [], inDay = e => D.isSameDay(new Date(e.date), now);
+      const monthWords = log.filter(e => { const d = new Date(e.date); return D.isSameMonth(d, now) && d <= end; }).reduce((a, e) => a + (Number(e.words) || 0), 0);
+      const best = D.getBestCompletedMonthWords(now), beat = best > D.MONTHLY_GOAL, target = beat ? best + 1 : D.MONTHLY_GOAL;
+      const pct = Math.min(100, monthWords / target * 100), elapsed = Math.min(1, (now.getDate() - 1 + now.getHours() / 24) / last);
+      const diff = monthWords - target * elapsed, lines = [];
+      lines.push(Math.abs(diff) <= target * 0.01 ? "🎯 On track" : diff > 0 ? "🚀 Ahead by " + Math.round(diff).toLocaleString("en-US") + " words (" + nsMinutes(Math.round(diff / D.WPM)) + ")" : "⏳ Behind by " + Math.round(-diff).toLocaleString("en-US") + " words (" + nsMinutes(Math.round(-diff / D.WPM)) + ")");
+      const left = Math.max(0, target - monthWords), daysLeft = last - now.getDate() + 1;
+      if (left > 0) {
+        const todayW = log.filter(inDay).reduce((a, e) => a + (Number(e.words) || 0), 0);
+        const perDay = Math.ceil(Math.max(0, target - (monthWords - todayW)) / daysLeft);
+        lines.push(perDay.toLocaleString("en-US") + " words a day (" + nsMinutes(Math.round(perDay / D.WPM)) + ") to " + (beat ? "beat your best month" : "hit " + D.MONTHLY_GOAL.toLocaleString("en-US")) + " · " + nsPlural(daysLeft, "day") + " left");
+      } else lines.push(beat ? "✦ Best month beaten!" : "✦ Monthly goal reached!");
+      return { bar: [pct, monthWords.toLocaleString("en-US") + " / " + target.toLocaleString("en-US") + " words · " + Math.round(pct) + "%"], lines };
+    });
+    // how tomorrow goes: the dashboard's day score and the day's phrase (your own title, or the automatic one)
+    part("🔮", "How tomorrow goes", () => {
+      if (!stats || stats.currentCycleDay == null) return ["No period logged yet."];
+      const day = stats.currentCycleDay + 1, p = D.getDayPrediction(day, stats), ds = p && p.ready ? p.dayScore : null;
+      const gt = D.getCycleDayTitle(day, stats), phrase = [...(gt.tags || []), gt.custom ? gt.text : (gt.items || []).map(i => i.label).join(", ")].filter(Boolean).join(" · ") || gt.empty;
+      return { score: ds ? { n: ds.score, label: ds.label, color: ds.color } : null, day, lines: [phrase] };
     });
     // the same number as the dashboard's "tomorrow" card: what you most often logged on that cycle day (or in that phase)
-    part("😴 Next-day sleep forecast", () => {
+    part("😴", "Sleep tomorrow", () => {
       const p = stats && stats.currentCycleDay != null ? D.getDayPrediction(stats.currentCycleDay + 1, stats) : null;
       if (!p || !p.ready || p.avgSleep == null) return ["Not enough sleep logs to predict yet."];
       const diff = p.sleepDiff, vs = diff == null ? "" : Math.abs(diff) < 0.15 ? "About your usual." : Math.abs(diff).toFixed(1) + (diff > 0 ? " above" : " below") + " your usual.";
-      return [p.avgSleep + "/5 · likely " + (NS_SLEEP[Math.round(p.avgSleep)] || "okay"), vs];
+      return { pips: [["Likely " + (NS_SLEEP[Math.round(p.avgSleep)] || "okay"), Math.round(p.avgSleep)]], lines: [vs] };
     });
-    part("🌤️ Tomorrow", () => {
+    part("🌤️", "Tomorrow’s weather", () => {
       const f = hkForecast(tomorrow);
       return [
-        stats && stats.currentCycleDay != null ? "Cycle day " + (stats.currentCycleDay + 1) : "",
+        
         f && f[0] != null && f[1] != null && f[2] != null ? "Prague: " + nsWeather(f[0]) + ", " + Math.round(f[2]) + " to " + Math.round(f[1]) + " °C" : "Weather forecast not available right now."];
     });
 
     let soft = false; try { const e = entry(); soft = !!e && ((e.mood > 0 && e.mood <= 2) || (e.energy > 0 && e.energy <= 2)); } catch {}
     const pool = soft ? NS_SOFT : NS_CLOSE;
+    // sleep forecast sits with the tomorrow card
     return { sections: out, close: pool[gyHash(today + "ns") % pool.length] };
   }
 
@@ -1821,23 +1964,86 @@
   function nsShow(sh) {
     if (!sh.back.isConnected || sh.back.querySelector("[data-night-summary]")) return;
     const el = sh.kit.el, data = nsSections();
-    const veil = el("div", "position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 16px) 18px calc(env(safe-area-inset-bottom,0px) + 16px);background:rgba(4,3,12,0.6);box-sizing:border-box;");
+    const SERIF = "Georgia,'Times New Roman',serif", GOLD = "#ffe2a8", LILAC = "rgba(207,198,242,0.72)";
+    const veil = el("div", "position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);overflow:hidden;background:radial-gradient(ellipse at 50% 30%,rgba(30,22,64,0.78),rgba(4,3,12,0.9));-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);box-sizing:border-box;animation:nsVeil .6s ease both;");
     veil.setAttribute("data-night-summary", "");
-    const card = el("div", "width:100%;max-width:360px;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding:16px 18px;border-radius:18px;background:#17132b;border:1px solid rgba(190,170,255,0.3);box-shadow:0 12px 40px rgba(0,0,0,0.6);color:#ece6fb;font:13px/1.45 Georgia,'Times New Roman',serif;");
-    card.setAttribute("role", "dialog"); card.setAttribute("aria-label", "Today");
-    card.appendChild(el("div", "font-size:15px;font-weight:700;letter-spacing:0.06em;text-align:center;margin-bottom:4px;", "✦ today ✦"));
-    data.sections.forEach(s => {
-      const box = el("div", "padding:8px 0;border-bottom:1px solid rgba(190,170,255,0.16);");
-      box.appendChild(el("div", "font-size:11px;letter-spacing:0.05em;color:rgba(217,208,245,0.65);", s.title));
-      s.lines.forEach(t => box.appendChild(el("div", "", t)));
+    const css = document.createElement("style");
+    css.textContent = "@keyframes nsVeil{from{opacity:0}to{opacity:1}}@keyframes nsRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes nsTwinkle{0%,100%{opacity:.25}50%{opacity:1}}" +
+      "@media (prefers-reduced-motion:reduce){[data-night-summary],[data-night-summary] *{animation:none!important}}" +
+      "[data-night-summary] ::-webkit-scrollbar{display:none}";
+    veil.appendChild(css);
+    const frame = el("div", "position:relative;width:100%;max-width:350px;max-height:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;border-radius:26px;background:radial-gradient(circle at 85% 0%,rgba(120,96,210,0.35),transparent 55%),radial-gradient(circle at 5% 100%,rgba(70,100,190,0.22),transparent 55%),linear-gradient(170deg,#241c4a,#14102b 60%,#0f0c22);border:1px solid rgba(200,184,255,0.28);box-shadow:0 18px 60px rgba(0,0,0,0.65),0 0 0 1px rgba(255,255,255,0.03) inset,0 0 50px rgba(120,96,210,0.18);color:#ece6fb;font:13px/1.45 " + SERIF + ";");
+    frame.setAttribute("role", "dialog"); frame.setAttribute("aria-label", "Today");
+    const card = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;box-sizing:border-box;padding:20px 14px 14px;overflow-wrap:anywhere;");
+    frame.appendChild(card);
+    // a few twinkling stars drifting in the corners of the card
+    [[14, 12, 2], [86, 8, 1.6], [92, 30, 1.2], [8, 40, 1.2], [70, 5, 1.2], [30, 6, 1.4]].forEach(([x, y, r], k) => {
+      frame.appendChild(el("div", "position:absolute;z-index:1;left:" + x + "%;top:" + y + "px;width:" + r + "px;height:" + r + "px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff;pointer-events:none;animation:nsTwinkle " + (2.6 + k * 0.7) + "s ease-in-out " + (k * 0.4) + "s infinite;"));
+    });
+    // header: a crescent moon over the title
+    const head = el("div", "text-align:center;margin-bottom:14px;animation:nsRise .6s ease both;");
+    head.appendChild(el("div", "width:34px;height:34px;margin:0 auto 6px;border-radius:50%;box-shadow:inset -11px -3px 0 0 " + GOLD + ",0 0 18px rgba(255,226,168,0.45);transform:rotate(-12deg);"));
+    head.appendChild(el("div", "font-size:19px;letter-spacing:0.14em;font-weight:400;color:" + GOLD + ";", "tonight"));
+    head.appendChild(el("div", "font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:" + LILAC + ";margin-top:2px;", "how today went"));
+    card.appendChild(head);
+
+    // the sections, each a soft glass tile that rises in one after another
+    data.sections.forEach((s, k) => {
+      const box = el("div", "margin-top:8px;padding:11px 13px;border-radius:16px;background:rgba(255,255,255,0.045);border:1px solid rgba(200,184,255,0.13);animation:nsRise .55s ease " + (0.12 + k * 0.09) + "s both;");
+      const row = el("div", "display:flex;align-items:center;gap:8px;margin-bottom:5px;");
+      row.appendChild(el("span", "display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:rgba(190,170,255,0.16);font-size:13px;line-height:1;", s.icon));
+      row.appendChild(el("span", "font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:" + LILAC + ";", s.title));
+      box.appendChild(row);
+      if (s.big) {
+        const g = el("div", "display:flex;gap:8px;margin:2px 0 2px;");
+        s.big.forEach(([v, l]) => {
+          const t = el("div", "flex:1 1 0;min-width:0;text-align:center;padding:8px 2px;border-radius:12px;background:rgba(255,226,168,0.07);");
+          t.appendChild(el("div", "font-size:clamp(18px,6vw,24px);line-height:1.1;white-space:nowrap;color:" + GOLD + ";", v));
+          t.appendChild(el("div", "font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:" + LILAC + ";margin-top:2px;", l));
+          g.appendChild(t);
+        });
+        box.appendChild(g);
+      }
+      if (s.bar) {
+        const track = el("div", "height:8px;border-radius:999px;background:rgba(255,255,255,0.1);overflow:hidden;margin:4px 0 5px;");
+        track.appendChild(el("div", "height:100%;width:" + s.bar[0].toFixed(1) + "%;border-radius:999px;background:linear-gradient(90deg,#b9a2ff," + GOLD + ");box-shadow:0 0 10px rgba(255,226,168,0.5);"));
+        box.appendChild(track); box.appendChild(el("div", "font-size:12.5px;color:#e4def8;margin-bottom:3px;", s.bar[1]));
+      }
+      if (s.score) {
+        const g = el("div", "display:flex;align-items:center;gap:12px;margin:2px 0 4px;");
+        const c = s.score.color || GOLD;
+        const ring = el("div", "flex:none;width:62px;height:62px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(20,16,43,0.9) 58%,transparent 60%),conic-gradient(" + c + " " + s.score.n * 3.6 + "deg,rgba(255,255,255,0.1) 0);");
+        ring.appendChild(el("div", "font-size:20px;line-height:1;color:" + GOLD + ";", String(s.score.n)));
+        ring.appendChild(el("div", "font-size:9px;color:" + LILAC + ";", "/100"));
+        g.appendChild(ring);
+        const tx = el("div", "min-width:0;flex:1;");
+        tx.appendChild(el("div", "font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:" + LILAC + ";", "Day " + s.day));
+        tx.appendChild(el("div", "font-size:15px;color:" + GOLD + ";", s.score.label || ""));
+        g.appendChild(tx); box.appendChild(g);
+      }
+      if (s.pips) s.pips.forEach(([label, n]) => {
+        const r = el("div", "display:flex;align-items:center;justify-content:space-between;gap:10px;margin:3px 0;min-width:0;");
+        r.appendChild(el("span", "", label));
+        const dots = el("span", "display:inline-flex;flex:none;gap:5px;");
+        for (let d = 1; d <= 5; d++) dots.appendChild(el("span", "width:9px;height:9px;border-radius:50%;" + (d <= n ? "background:" + GOLD + ";box-shadow:0 0 6px rgba(255,226,168,0.55);" : "background:rgba(255,255,255,0.12);"), ""));
+        r.appendChild(dots); box.appendChild(r);
+      });
+      s.lines.forEach(t => box.appendChild(el("div", "color:#e4def8;" + (s.big || s.pips || s.bar ? "font-size:12px;color:" + LILAC + ";margin-top:3px;" : s.score ? "font-style:italic;font-size:14px;color:#f3ecff;" : ""), t)));
       card.appendChild(box);
     });
-    card.appendChild(el("div", "margin-top:12px;text-align:center;font-style:italic;font-size:14px;color:#ffe9c2;", "“" + data.close[1] + "”"));
-    card.appendChild(el("div", "text-align:center;font-size:11px;color:rgba(217,208,245,0.55);", "— " + data.close[0]));
-    card.appendChild(el("div", "margin-top:12px;padding-top:10px;border-top:1px solid rgba(190,170,255,0.16);text-align:center;color:#cfc6f2;", "💤 Mike and Will are safe and sound in dreamland. You can drift off too. No need to worry."));
-    const btn = el("button", "display:block;margin:12px auto 0;padding:8px 22px;border-radius:999px;border:1px solid rgba(190,170,255,0.4);background:rgba(190,170,255,0.14);color:#ece6fb;font:inherit;cursor:pointer;", "🌙 goodnight");
-    btn.type = "button"; card.appendChild(btn);
-    veil.appendChild(card);
+
+    // the closing line
+    const end = el("div", "margin-top:16px;padding:0 6px;text-align:center;animation:nsRise .6s ease " + (0.2 + data.sections.length * 0.09) + "s both;");
+    end.appendChild(el("div", "font-style:italic;font-size:14.5px;line-height:1.5;color:" + GOLD + ";", "“" + data.close[1] + "”"));
+    end.appendChild(el("div", "font-size:11px;letter-spacing:0.12em;color:" + LILAC + ";margin-top:4px;", "— " + data.close[0]));
+    end.appendChild(el("div", "width:40px;height:1px;margin:14px auto 12px;background:linear-gradient(90deg,transparent,rgba(200,184,255,0.5),transparent);"));
+    end.appendChild(el("div", "font-size:12.5px;color:#cfc6f2;", "💤 Mike and Will are safe and sound in dreamland. You can drift off too. No need to worry."));
+    card.appendChild(end);
+    const btn = el("button", "display:block;margin:0 auto;padding:10px 26px;border-radius:999px;border:1px solid rgba(255,226,168,0.4);background:linear-gradient(180deg,rgba(255,226,168,0.2),rgba(255,226,168,0.08));color:" + GOLD + ";font:inherit;letter-spacing:0.08em;cursor:pointer;box-shadow:0 0 18px rgba(255,226,168,0.14);", "🌙 goodnight");
+    btn.type = "button";
+    const foot = el("div", "flex:none;position:relative;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px) * 0);background:linear-gradient(180deg,rgba(15,12,34,0),rgba(15,12,34,0.92) 38%);margin-top:-14px;");
+    foot.appendChild(btn); frame.appendChild(foot);
+    veil.appendChild(frame);
     veil.addEventListener("click", ev => { ev.stopPropagation(); if (ev.target === veil || ev.target === btn) veil.remove(); });
     sh.back.appendChild(veil);
   }
