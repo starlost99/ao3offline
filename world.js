@@ -12234,6 +12234,7 @@
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
   const openCastleByers = (...args) => world.openCastleByers(...args);
   const openLoversLake = (...args) => world.openLoversLake(...args);
+  const openHawkinsHigh = (...args) => world.openHawkinsHigh(...args);
 
   // ── 🚌 HAWKINS, INDIANA ──
   // The bus stop in Hollowbrook (tap the shelter at the end of the Hawkins road, answer "board") takes you here:
@@ -12267,7 +12268,7 @@
 
     // streets: a wide dark road with a faint dashed centre line
     const road = (d, w) => { sv("path", { d, stroke: "#2a3454", "stroke-width": w || 11, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, svg); sv("path", { d, stroke: "#46527a", "stroke-width": 0.8, "stroke-dasharray": "4 4", fill: "none", opacity: 0.6 }, svg); };
-    [["M173 52 V570"], ["M26 178 H336"], ["M54 238 H346"], ["M215 238 V338"], ["M215 305 H346"], ["M300 94 V338"], ["M75 150 V420"], ["M70 398 L172 336"]].forEach(([d]) => road(d));
+    [["M173 52 V570"], ["M26 178 H336"], ["M54 238 H346"], ["M215 238 V338"], ["M215 305 H346"], ["M300 94 V338"], ["M75 150 V420"], ["M70 398 L172 336"], ["M173 462 H238"]].forEach(([d]) => road(d));
     const street = (txt, x, y, rot) => { const t = sv("text", { x, y, "text-anchor": "middle", "font-family": "Georgia,serif", "font-size": 5, "letter-spacing": 1, fill: "#9aa6cc", opacity: 0.8, transform: rot ? `rotate(${rot} ${x} ${y})` : "" }, svg); t.textContent = txt; };
     street("CHERRY OAK DRIVE", 173, 430, -90); street("WATER STREET", 262, 180, 0); street("MAIN STREET", 120, 240, 0);
     street("MULBERRY STREET", 300, 215, -90); street("KERLEY BLVD", 75, 340, -90); street("6TH STREET", 280, 307, 0); street("OAK STREET", 215, 285, -90);
@@ -12342,6 +12343,30 @@
       const cbHit = sv("rect", { x: cx - 22, y: by - 26, width: 44, height: 42, fill: "transparent" }, svg);
       cbHit.style.cursor = "pointer"; cbHit.setAttribute("role", "button"); cbHit.setAttribute("aria-label", "Walk out to Castle Byers");
       cbHit.addEventListener("click", () => { close(); openCastleByers(); });
+    }
+    // Hawkins High (right, below Hopper's cabin): the outside is open (hawkins-high.js); a soft ring, and a tap walks up to the front lawn
+    {
+      solids.push([232, 430, 116, 108]);
+      const hh = sv("g", {}, svg);
+      sv("rect", { x: 246, y: 486, width: 90, height: 30, rx: 3, fill: "#1f3d33" }, hh);                 // the football field
+      sv("rect", { x: 250, y: 490, width: 82, height: 22, fill: "none", stroke: "#cfe0d0", "stroke-width": 0.5, opacity: 0.45 }, hh);
+      for (let i = 1; i < 6; i++) sv("line", { x1: 250 + i * 13.7, y1: 490, x2: 250 + i * 13.7, y2: 512, stroke: "#cfe0d0", "stroke-width": 0.4, opacity: 0.4 }, hh);
+      sv("rect", { x: 240, y: 452, width: 40, height: 20, fill: "#8a3a30" }, hh);                        // left wing
+      sv("rect", { x: 300, y: 452, width: 40, height: 20, fill: "#8a3a30" }, hh);                        // right wing
+      sv("rect", { x: 276, y: 444, width: 28, height: 28, fill: "#7a3228" }, hh);                        // the middle block
+      sv("rect", { x: 238, y: 449, width: 104, height: 4, fill: "#2a2236" }, hh);                        // the flat roof
+      sv("rect", { x: 274, y: 441, width: 32, height: 4, fill: "#2a2236" }, hh);
+      sv("rect", { x: 282, y: 462, width: 16, height: 10, fill: "#5a2a28" }, hh);                        // the entrance
+      sv("line", { x1: 340, y1: 444, x2: 340, y2: 462, stroke: "#9a94b0", "stroke-width": 0.8 }, hh);   // a light tower
+      litRect(284, 464, 12, 6, 0.95, 12);
+      [246, 258, 306, 318, 330].forEach(wx => litRect(wx, 459, 6, 7, 0.85, 9));
+      [281, 291].forEach(wx => litRect(wx, 450, 6, 7, 0.85, 9));
+      label("Hawkins High", 290, 481);
+      const hhRing = anim(sv("ellipse", { cx: 290, cy: 464, rx: 60, ry: 26, fill: "none", stroke: "#ffd98a", "stroke-width": 1.2, "stroke-dasharray": "3 4" }, svg), "animation:hkPulse 2.8s ease-in-out infinite;");
+      hhRing.setAttribute("pointer-events", "none");
+      const hhHit = sv("rect", { x: 236, y: 436, width: 108, height: 84, fill: "transparent" }, svg);
+      hhHit.style.cursor = "pointer"; hhHit.setAttribute("role", "button"); hhHit.setAttribute("aria-label", "Walk up to Hawkins High");
+      hhHit.addEventListener("click", () => { close(); openHawkinsHigh(); });
     }
     building(20, 416, 54, 58, "#4a5570", "#2a2236", "Hawkins Lab");
     building(196, 68, 40, 34, "#2a4a5a", "#23203a", "The Creels\u2019", { pitch: 12 });
@@ -12426,6 +12451,7 @@
     pill("\u{1F3E0} Will\u2019s", "Walk up to Will\u2019s house", () => { close(); openWillsHouse(); });
     pill("\u{1F3F0} Castle Byers", "Walk out to Castle Byers", () => { close(); openCastleByers(); });
     pill("\u{1F332} Lover\u2019s Lake", "Walk down to Lover\u2019s Lake", () => { close(); openLoversLake(); });
+    pill("\u{1F3EB} Hawkins High", "Walk up to Hawkins High", () => { close(); openHawkinsHigh(); });
     pill("\u{1F68C} bus stop", "Take the bus back to Hollowbrook", () => { close(); openHollowbrook(); });
     applyTime(true);
     document.body.appendChild(sh.back);
@@ -19694,6 +19720,267 @@
   }
 
   return { openLoversLake };
+};
+
+// ════════ hawkins-high.js ════════
+// hawkins-high.js — 🏫 Hawkins High, the school from the street (openHawkinsHigh).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["hawkins-high"] = function (ctx) {
+  'use strict';
+  const { hkShell } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
+  const world = ctx.world;
+  const openHawkins = (...args) => world.openHawkins(...args);
+
+  // ── HAWKINS HIGH: THE OUTSIDE ONLY ──
+  // A still picture of the school at dusk in autumn, no taps, nobody there, no sound, no live time or weather (all still to come).
+  // Back to front: a dusk sky with a low moon and stars, a far tree line with the stadium light tower and the boiler chimney behind the roof,
+  // the long two-storey red-brick building (two classroom wings, a taller middle block with the name on a band, a clock, a flat entrance canopy
+  // on four white posts, glass doors, wall lamps and steps), hedges along its foot, the lawn with a walkway, a flagpole, a bike rack, a brick
+  // sign, two lamp posts and fallen leaves, the kerb, the street with the school bus and two parked cars, and two autumn trees framing the edges.
+  // Drawn in its own units (360 x 640); a phone shows roughly y 30 to 610, so keep anything that matters inside that.
+  // Ground line of the building y 360, roof y 268, middle block up to y 233; the lawn runs to y 484, the street from y 496.
+  function openHawkinsHigh() {
+    const sh = hkShell("ao3-hawkins-high", "\u{1F3EB} Hawkins High");
+    const { sv, rnd, anim } = sh.kit;
+    const { box, sub, field, caption, pill, close } = sh;
+    sub.textContent = "hawkins · the high school · dusk";
+    caption.textContent = "Hawkins High. A few classrooms are still lit, and the flag hangs quiet.";
+    box.style.background = "#1a1a30";
+
+    const VW = 360, VH = 640;
+    const svg = sv("svg", { viewBox: `0 0 ${VW} ${VH}`, preserveAspectRatio: "xMidYMid slice" });
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const rad = (id, stops) => {
+      const g = sv("radialGradient", { id, cx: 0.5, cy: 0.5, r: 0.5 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op }, g));
+    };
+    const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
+    const L = (x1, y1, x2, y2, stroke, w, o) => A("line", Object.assign({ x1, y1, x2, y2, stroke, "stroke-width": w, "stroke-linecap": "round" }, o || {}));
+    const R = (x, y, w, h, fill, o) => A("rect", Object.assign({ x, y, width: w, height: h, fill }, o || {}));
+    const r = k => rnd("hh-" + k);
+    const glow = (cx, cy, rr, id, op) => A("circle", { cx, cy, r: rr, fill: `url(#${id})`, opacity: op == null ? 1 : op, style: "mix-blend-mode:screen", "pointer-events": "none" });
+
+    grad("hh-sky", [[0, "#272650"], [0.45, "#5e4f7e"], [0.8, "#c07e7c"], [1, "#e6a880"]]);
+    grad("hh-dusk", [[0, "#2a2850", 0.36], [1, "#2a2850", 0.04]]);
+    grad("hh-lit", [[0, "#ffe9b0"], [1, "#efae58"]]);
+    grad("hh-dark", [[0, "#2c3250"], [1, "#171a2e"]]);
+    grad("hh-lawn", [[0, "#34523a"], [1, "#223a2c"]]);
+    grad("hh-walk", [[0, "#a29bac"], [1, "#6f6a80"]]);
+    grad("hh-street", [[0, "#2e2c3a"], [1, "#1a1924"]]);
+    grad("hh-spill", [[0, "#ffd890", 0.5], [1, "#ffd890", 0]]);
+    grad("hh-steps", [[0, "#b8b0a8"], [1, "#6c6670"]]);
+    grad("hh-vig", [[0, "#000", 0.34], [0.25, "#000", 0], [0.78, "#000", 0], [1, "#000", 0.5]]);
+    grad("hh-mist", [[0, "#d8c8d8", 0], [0.5, "#c8b8d0", 0.22], [1, "#b8a8c8", 0]], 1, 0);
+    rad("hh-moon", [[0, "#fff4d8", 0.9], [0.3, "#f4dca8", 0.35], [1, "#f4dca8", 0]]);
+    rad("hh-lamp", [[0, "#ffe2a0", 0.85], [0.4, "#ffb55a", 0.32], [1, "#ff9a3a", 0]]);
+    rad("hh-win", [[0, "#ffd890", 0.55], [1, "#ffb860", 0]]);
+    rad("hh-flood", [[0, "#fff6d8", 0.95], [0.35, "#fff0c0", 0.4], [1, "#fff0c0", 0]]);
+    const brick = sv("pattern", { id: "hh-brick", width: 14, height: 7, patternUnits: "userSpaceOnUse" }, defs);
+    sv("rect", { x: 0, y: 0, width: 14, height: 7, fill: "#8a4030" }, brick);
+    sv("rect", { x: 1, y: 0.5, width: 5, height: 2.6, fill: "#964734", opacity: 0.8 }, brick);
+    sv("rect", { x: 8, y: 4, width: 5, height: 2.6, fill: "#7c372a", opacity: 0.8 }, brick);
+    sv("path", { d: "M0 0.4 H14 M0 3.9 H14 M0 0 V3.5 M7 3.5 V7", stroke: "#5a2a24", "stroke-width": 0.7, fill: "none" }, brick);
+
+    const HOR = 292, GY = 360;
+
+    // ── sky, stars, moon ──
+    R(0, 0, VW, HOR + 4, "url(#hh-sky)");
+    for (let i = 0; i < 42; i++) anim(A("circle", { cx: (r("sx" + i) * VW).toFixed(1), cy: (r("sy" + i) * 170).toFixed(1), r: (0.4 + r("sr" + i) * 0.7).toFixed(2), fill: "#fff", opacity: (0.25 + r("so" + i) * 0.5).toFixed(2) }), `animation:hkTwinkle ${(3 + r("st" + i) * 4).toFixed(1)}s ease-in-out -${(r("sd" + i) * 4).toFixed(1)}s infinite;`);
+    A("circle", { cx: 292, cy: 92, r: 54, fill: "url(#hh-moon)", style: "mix-blend-mode:screen" });
+    A("circle", { cx: 292, cy: 92, r: 15, fill: "#f8ecc8" });
+    [[287, 87, 2.8], [297, 98, 2.2], [288, 99, 1.6]].forEach(([x, y, rr]) => A("circle", { cx: x, cy: y, r: rr, fill: "#e4d4a8", opacity: 0.6 }));
+    [[60, 86, 90, 7], [150, 128, 120, 6], [250, 160, 80, 5]].forEach(([x, y, w, h]) => A("ellipse", { cx: x, cy: y, rx: w / 2, ry: h / 2, fill: "#9a86a4", opacity: 0.25 }));
+
+    // ── the far tree line, the boiler chimney and the stadium light tower, all behind the roof ──
+    for (let i = 0; i < 26; i++) {
+      const x = -6 + i * 15 + r("tx" + i) * 8, rr = 13 + r("tr" + i) * 10;
+      A("circle", { cx: x.toFixed(1), cy: (274 - r("ty" + i) * 8).toFixed(1), r: rr.toFixed(1), fill: ["#3c3454", "#463c5a", "#5a4254", "#4a3a52"][Math.floor(r("tc" + i) * 4)] });
+    }
+    R(52, 206, 13, 70, "url(#hh-brick)"); R(50, 201, 17, 6, "#3b3a48");                                   // the boiler chimney
+    R(52, 206, 13, 70, "#2a2850", { opacity: 0.3 });
+    for (let i = 0; i < 3; i++) anim(A("ellipse", { cx: 58, cy: 192 - i * 4, rx: 7 + i * 2, ry: 5 + i, fill: "#c8bcd4", opacity: 0.0 }), `animation:hkSmoke ${(5 + i * 1.6).toFixed(1)}s ease-out -${(i * 1.7).toFixed(1)}s infinite;`);
+    L(322, 276, 322, 170, "#26243a", 3); L(304, 170, 340, 170, "#26243a", 3);                              // the stadium light tower
+    [308, 316, 324, 332].forEach((x, i) => { R(x - 2.5, 162, 5, 8, "#3a384c", { rx: 1 }); R(x - 1.8, 169, 3.6, 3, "#fff2c8"); });
+    glow(322, 170, 48, "hh-flood", 0.6);
+
+    // ── the building ──
+    const win = (x, y, w, h, k) => {
+      const lit = r("w" + k) > 0.36;
+      R(x - 1.6, y - 1.6, w + 3.2, h + 3.2, "#1d1a22");                                                     // the dark frame
+      R(x, y, w, h, lit ? "url(#hh-lit)" : "url(#hh-dark)");
+      if (lit) {
+        const blinds = 1 + Math.floor(r("wb" + k) * 3);
+        for (let b = 0; b < blinds; b++) R(x, y + 1.5 + r("wy" + k + b) * (h * 0.55), w, 1.4, "#b8803c", { opacity: 0.55 });
+        R(x + w * 0.35, y, 1.4, h, "#1d1a22", { opacity: 0.65 });                                          // the mullion
+        glow(x + w / 2, y + h / 2, 26, "hh-win", 0.8);
+      } else {
+        A("polygon", { points: `${x + 2},${y + h} ${x + w * 0.5},${y} ${x + w * 0.72},${y} ${x + w * 0.25},${y + h}`, fill: "#b8b0e0", opacity: 0.09 });
+        R(x + w * 0.35, y, 1.4, h, "#0e0f1c", { opacity: 0.8 });
+      }
+      R(x - 2.4, y + h + 1.6, w + 4.8, 2.2, "#b9b0a2");                                                      // the sill
+    };
+    const wing = (x0, x1) => {
+      R(x0, 277, x1 - x0, GY - 277, "url(#hh-brick)");
+      R(x0, 268, x1 - x0, 5, "#3b3a48"); R(x0, 273, x1 - x0, 5, "#cfc6b8"); R(x0, 278, x1 - x0, 2.5, "#2a2236", { opacity: 0.45 });
+      R(x0, 312, x1 - x0, 4, "#b9b0a2"); R(x0, 316, x1 - x0, 1.6, "#2a2236", { opacity: 0.4 });          // the string course between the floors
+      R(x0, 351, x1 - x0, 9, "#6c6670");
+    };
+    wing(-10, 145); wing(215, 370);
+    [6, 33, 60, 87, 114].forEach((x, i) => { win(x, 288, 18, 20, "l1" + i); win(x, 325, 18, 21, "l2" + i); });
+    [222, 249, 276, 303, 330].forEach((x, i) => { win(x, 288, 18, 20, "r1" + i); win(x, 325, 18, 21, "r2" + i); });
+
+    // the middle block
+    R(140, 240, 80, GY - 240, "url(#hh-brick)");
+    R(137, 233, 86, 7, "#3b3a48");
+    R(140, 244, 80, 20, "#d9d0c0"); R(140, 264, 80, 2, "#2a2236", { opacity: 0.4 });                       // the sign band
+    const nm = A("text", { x: 180, y: 258, "text-anchor": "middle", "font-family": "Georgia,'Times New Roman',serif", "font-weight": 700, "font-size": 11, fill: "#6a2424", textLength: 68, lengthAdjust: "spacingAndGlyphs" });
+    nm.textContent = "HAWKINS HIGH";
+    R(151, 272, 14, 36, "#1d1a22"); R(153, 274, 10, 32, "url(#hh-lit)"); R(158, 274, 1.2, 32, "#1d1a22", { opacity: 0.6 });   // the stair-tower windows
+    R(195, 272, 14, 36, "#1d1a22"); R(197, 274, 10, 32, "url(#hh-lit)"); R(202, 274, 1.2, 32, "#1d1a22", { opacity: 0.6 });
+    glow(158, 290, 28, "hh-win", 0.8); glow(202, 290, 28, "hh-win", 0.8);
+    A("circle", { cx: 180, cy: 289, r: 8.5, fill: "#cfc6b8" }); A("circle", { cx: 180, cy: 289, r: 7, fill: "#efe6d0" });   // the clock
+    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; L(180 + Math.sin(a) * 5.4, 289 - Math.cos(a) * 5.4, 180 + Math.sin(a) * 6.2, 289 - Math.cos(a) * 6.2, "#3a3030", 0.5); }
+    L(180, 289, 180, 284, "#2a2020", 0.9); L(180, 289, 184, 291, "#2a2020", 0.9);
+    R(140, 312, 80, 4, "#b9b0a2");
+    R(140, 351, 80, 9, "#6c6670");
+
+    // the entrance: canopy, glass doors, posts, lamps, steps
+    R(150, 326, 60, 33, "#1d1a22");
+    R(152, 328, 56, 30, "url(#hh-lit)");
+    [152, 166, 180, 194].forEach((x, i) => { R(x + 13, 328, 1.4, 30, "#1d1a22", { opacity: 0.8 }); R(x + 6.4, 328, 1, 30, "#1d1a22", { opacity: 0.35 }); });
+    R(152, 337, 56, 1.4, "#1d1a22", { opacity: 0.7 });                                                      // the transom
+    [[164, 346], [172, 346], [188, 346], [196, 346]].forEach(([x, y]) => R(x, y, 1.6, 5, "#8a6a30"));       // handles
+    R(128, 316, 104, 6, "#d8cfc0"); R(128, 322, 104, 3, "#2a2630", { opacity: 0.55 }); R(128, 315, 104, 1.6, "#f0e8d8");
+    [141, 163, 195, 217].forEach(x => { R(x, 322, 5, 37, "#d8cfc0"); R(x + 3.6, 322, 1.4, 37, "#8a8294", { opacity: 0.4 }); });
+    A("polygon", { points: "150,359 210,359 252,484 108,484", fill: "url(#hh-spill)", style: "mix-blend-mode:screen", "pointer-events": "none" });
+    [[133, 336], [227, 336]].forEach(([x, y], i) => {                                                      // wall lamps beside the canopy
+      R(x - 2.5, y - 4, 5, 8, "#2c2218", { rx: 1 }); R(x - 1.6, y - 2.6, 3.2, 5.2, "#ffd890");
+      anim(glow(x, y, 20, "hh-lamp"), `animation:hkFlicker ${(3 + i).toFixed(1)}s ease-in-out infinite;`);
+    });
+    R(142, 359, 76, 3, "#d8cfc0"); R(138, 362, 84, 3, "url(#hh-steps)"); R(134, 365, 92, 3, "url(#hh-steps)");
+    R(-10, 233, 380, GY - 233, "url(#hh-dusk)", { "pointer-events": "none" });
+    [143, 217].forEach(x => R(x - 1.4, 280, 2.8, 74, "#2a2630", { opacity: 0.8 }));                          // the drainpipes
+
+    // hedges along the foot of the wall
+    const hedge = (x0, x1) => { for (let x = x0; x < x1; x += 12) { const k = Math.round(x); A("ellipse", { cx: x + 6, cy: 356, rx: 8, ry: 6.5, fill: r("h" + k) > 0.5 ? "#27432f" : "#2d4e36" }); A("ellipse", { cx: x + 4, cy: 353, rx: 4, ry: 2.6, fill: "#3a6244", opacity: 0.7 }); } };
+    hedge(-8, 128); hedge(232, 366);
+
+    // ── the lawn and the walkway ──
+    R(0, GY + 8, VW, 484 - GY - 8, "url(#hh-lawn)");
+    for (let i = 0; i < 90; i++) { const x = r("gx" + i) * VW, y = GY + 12 + r("gy" + i) * 110; L(x, y, x + (r("gl" + i) - 0.5) * 3, y - 3 - r("gh" + i) * 3, i % 2 ? "#4a7048" : "#2c4a34", 0.8, { opacity: 0.6 }); }
+    A("polygon", { points: "146,368 214,368 264,488 96,488", fill: "url(#hh-walk)" });
+    for (let i = 1; i < 6; i++) { const t = i / 6, y = 368 + t * t * 120, hw = 34 + (y - 368) * 0.43; L(180 - hw, y, 180 + hw, y, "#4a465a", 0.8, { opacity: 0.6 }); }
+    L(180, 368, 180, 488, "#4a465a", 0.7, { opacity: 0.4 });
+    A("polygon", { points: "146,368 150,368 100,488 96,488", fill: "#c8c0cc", opacity: 0.4 });
+    anim(R(-20, 436, VW + 40, 26, "url(#hh-mist)", { "pointer-events": "none" }), "animation:hkMist 12s ease-in-out infinite;");
+
+    // the flagpole, left of the walkway
+    A("ellipse", { cx: 84, cy: 437, rx: 9, ry: 2.6, fill: "#17261e" });
+    L(84, 437, 84, 242, "#d8d0e0", 2.2); A("circle", { cx: 84, cy: 240, r: 2.4, fill: "#e0b850" });
+    const fl = A("g", { transform: "translate(86 246)" });
+    ["#b3342f", "#efe6d6", "#b3342f", "#efe6d6", "#b3342f"].forEach((c, i) => A("path", { d: `M0 ${i * 4} Q16 ${i * 4 - 2.5} 34 ${i * 4 + 1.2} L34 ${i * 4 + 5.2} Q16 ${i * 4 + 1.5} 0 ${i * 4 + 4} Z`, fill: c }, fl));
+    A("path", { d: "M0 0 L15 -1.2 L15 11.5 L0 12 Z", fill: "#2a3a6a" }, fl);
+    [[3, 3], [8, 2.6], [12, 3.4], [5.5, 7], [10.5, 7.4], [3.4, 10], [8.5, 10.4]].forEach(([x, y]) => A("circle", { cx: x, cy: y, r: 0.7, fill: "#f4ecd8" }, fl));
+
+    // the bike rack, bottom left of the lawn
+    L(20, 458, 72, 458, "#5a5666", 1.6);
+    [[28, "#a83a30"], [46, "#2f4c7a"], [62, "#c8a24a"]].forEach(([x, c], i) => {
+      A("circle", { cx: x - 6, cy: 454, r: 5.4, fill: "none", stroke: "#0f1220", "stroke-width": 1.2 }); A("circle", { cx: x + 6, cy: 454, r: 5.4, fill: "none", stroke: "#0f1220", "stroke-width": 1.2 });
+      A("path", { d: `M${x - 6} 454 L${x - 1} 446 L${x + 6} 454 M${x - 1} 446 L${x + 3} 446 M${x - 4} 443 L${x - 1} 446`, fill: "none", stroke: c, "stroke-width": 1.3, "stroke-linecap": "round" });
+    });
+
+    // the brick sign, right of the walkway
+    R(282, 430, 66, 18, "url(#hh-brick)"); R(282, 430, 66, 18, "#2a2850", { opacity: 0.25 }); R(280, 427, 70, 4, "#b9b0a2");
+    R(284, 400, 62, 28, "#d2c9b6"); R(284, 400, 62, 28, "#2a2850", { opacity: 0.18 });
+    const t1 = A("text", { x: 315, y: 412, "text-anchor": "middle", "font-family": "Georgia,'Times New Roman',serif", "font-weight": 700, "font-size": 8, fill: "#6a2424", textLength: 52, lengthAdjust: "spacingAndGlyphs" }); t1.textContent = "HAWKINS HIGH";
+    const t2 = A("text", { x: 315, y: 418.5, "text-anchor": "middle", "font-family": "Georgia,'Times New Roman',serif", "font-size": 4.4, "letter-spacing": 1.4, fill: "#4a3a3a" }); t2.textContent = "SCHOOL";
+    const t3 = A("text", { x: 315, y: 425, "text-anchor": "middle", "font-family": "Georgia,'Times New Roman',serif", "font-style": "italic", "font-size": 4.2, fill: "#8a3a2a" }); t3.textContent = "Home of the Tigers";
+    [[290, "#d9822a"], [340, "#c8602a"]].forEach(([x, c]) => { A("ellipse", { cx: x, cy: 448, rx: 8, ry: 4.6, fill: "#27432f" }); for (let i = 0; i < 5; i++) A("circle", { cx: x - 5 + i * 2.6, cy: 446 + (i % 2), r: 1.6, fill: c }); });
+    [[292, 450], [338, 450]].forEach(([x, y]) => A("ellipse", { cx: x, cy: y, rx: 14, ry: 5, fill: "url(#hh-win)", style: "mix-blend-mode:screen", opacity: 0.8 }));
+
+    // two lamp posts
+    [[100, 480], [262, 480]].forEach(([x, y], i) => {
+      R(x - 1.2, y - 78, 2.4, 78, "#1c1a24"); R(x - 4, y - 84, 8, 7, "#1c1a24", { rx: 1.5 }); R(x - 2.8, y - 82.4, 5.6, 4.4, "#ffe2a0");
+      anim(glow(x, y - 80, 44, "hh-lamp"), `animation:hkFlicker ${(3.4 + i * 1.3).toFixed(1)}s ease-in-out infinite;`);
+      A("ellipse", { cx: x, cy: y + 2, rx: 34, ry: 6, fill: "#ffd890", opacity: 0.16, style: "mix-blend-mode:screen" });
+    });
+
+    // fallen leaves on the lawn and the walk
+    const leafCols = ["#c4642a", "#d98a2e", "#a6402a", "#e0a840", "#8a3a22"];
+    for (let i = 0; i < 70; i++) {
+      const x = 4 + r("lx" + i) * (VW - 8), y = GY + 18 + r("ly" + i) * 108;
+      if (x > 278 && x < 352 && y > 396 && y < 452) continue;                                              // not on the sign
+      A("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: (1.3 + r("lr" + i) * 1.4).toFixed(1), ry: (0.8 + r("lq" + i) * 0.8).toFixed(1), fill: leafCols[Math.floor(r("lc" + i) * 5)], opacity: 0.85, transform: `rotate(${Math.round(r("la" + i) * 180)} ${x.toFixed(1)} ${y.toFixed(1)})` });
+    }
+
+    // ── the kerb and the street ──
+    R(0, 484, VW, 12, "#7a748a"); R(0, 484, VW, 2, "#a8a2b6"); R(0, 494, VW, 3, "#2a2836");
+    R(0, 497, VW, VH - 497, "url(#hh-street)");
+    for (let i = 0; i < 9; i++) R(8 + i * 42, 596, 24, 2.4, "#c8a840", { opacity: 0.7 });
+    for (let i = 0; i < 120; i++) A("circle", { cx: (r("ax" + i) * VW).toFixed(1), cy: (500 + r("ay" + i) * 140).toFixed(1), r: 0.6, fill: "#3a3748", opacity: 0.7 });
+    A("ellipse", { cx: 100, cy: 520, rx: 70, ry: 12, fill: "#ffd890", opacity: 0.1, style: "mix-blend-mode:screen" });
+    A("ellipse", { cx: 262, cy: 520, rx: 70, ry: 12, fill: "#ffd890", opacity: 0.1, style: "mix-blend-mode:screen" });
+
+    // the school bus, facing right, parked along the kerb
+    {
+      const x = 8, g = 546;
+      A("ellipse", { cx: x + 66, cy: g + 1, rx: 70, ry: 4, fill: "#0e0d16", opacity: 0.6 });
+      A("path", { d: `M${x} ${g - 38} Q${x} ${g - 42} ${x + 5} ${g - 42} H${x + 100} Q${x + 106} ${g - 42} ${x + 108} ${g - 34} L${x + 110} ${g - 20} H${x + 126} Q${x + 132} ${g - 20} ${x + 132} ${g - 14} V${g - 6} H${x} Z`, fill: "#d9a62e" });
+      R(x, g - 32, 110, 3, "#1a1618");                                                                    // the black rub rail
+      R(x, g - 14, 132, 2.6, "#1a1618");
+      for (let i = 0; i < 8; i++) { R(x + 6 + i * 12.2, g - 38, 9, 9, "#1d1a22", { rx: 1 }); R(x + 7 + i * 12.2, g - 37, 7, 7, r("bw" + i) > 0.5 ? "#f0c070" : "#30385a", { rx: 0.8 }); }
+      A("path", { d: `M${x + 106} ${g - 38} L${x + 110} ${g - 22} H${x + 118} L${x + 114} ${g - 38} Z`, fill: "#30385a" });  // the windscreen
+      R(x + 122, g - 17, 6, 3.4, "#fff2c0"); glow(x + 128, g - 15, 22, "hh-lamp", 0.9);                    // the headlight
+      R(x + 1, g - 17, 3, 4, "#c9482e");                                                                    // the tail light
+      A("polygon", { points: `${x + 20},${g - 44} ${x + 26},${g - 44} ${x + 28},${g - 40} ${x + 18},${g - 40}`, fill: "#c9482e" });
+      [x + 22, x + 100].forEach(cx => { A("circle", { cx, cy: g - 2, r: 7, fill: "#14121c" }); A("circle", { cx, cy: g - 2, r: 3, fill: "#5a566a" }); });
+    }
+    // two parked cars, side on
+    const car = (x, g, w, col, k) => {
+      A("ellipse", { cx: x + w / 2, cy: g + 1, rx: w / 2 + 4, ry: 3.4, fill: "#0e0d16", opacity: 0.6 });
+      A("path", { d: `M${x} ${g - 6} V${g - 14} Q${x} ${g - 17} ${x + 4} ${g - 17} H${x + w - 4} Q${x + w} ${g - 17} ${x + w} ${g - 13} V${g - 6} Z`, fill: col });
+      A("path", { d: `M${x + w * 0.16} ${g - 17} L${x + w * 0.26} ${g - 27} H${x + w * 0.8} L${x + w * 0.9} ${g - 17} Z`, fill: col });
+      A("path", { d: `M${x + w * 0.2} ${g - 18} L${x + w * 0.28} ${g - 25.4} H${x + w * 0.48} V${g - 18} Z M${x + w * 0.52} ${g - 18} V${g - 25.4} H${x + w * 0.78} L${x + w * 0.86} ${g - 18} Z`, fill: "#232a44" });
+      R(x + 2, g - 12, w - 4, 1.4, "#fff", { opacity: 0.16 });
+      R(x + w - 2.4, g - 13, 3, 3.4, "#fff2c0"); R(x - 0.6, g - 13, 3, 3.4, "#c9482e");
+      glow(x + w, g - 12, 18, "hh-lamp", 0.7);
+      [x + w * 0.22, x + w * 0.78].forEach(cx => { A("circle", { cx, cy: g - 3, r: 4.8, fill: "#14121c" }); A("circle", { cx, cy: g - 3, r: 2, fill: "#5a566a" }); });
+    };
+    car(150, 548, 64, "#2f4c7a", "c1"); car(232, 548, 58, "#8e2f2f", "c2"); car(304, 548, 52, "#c8b48a", "c3");
+
+    // ── two autumn trees framing the edges ──
+    const tree = (tx, base, flip, k) => {
+      const s = flip ? -1 : 1, X = d => tx + s * d;
+      A("path", { d: `M${X(-5)} ${base} Q${X(-3)} ${base - 90} ${X(-7)} ${base - 170} L${X(2)} ${base - 170} Q${X(6)} ${base - 90} ${X(6)} ${base} Z`, fill: "#241a22" });
+      L(X(-3), base - 120, X(22), base - 190, "#241a22", 4); L(X(0), base - 140, X(-8), base - 206, "#241a22", 3.4);
+      const cols = ["#c4642a", "#d98a2e", "#a6402a", "#e0a840", "#8a3a22"];
+      for (let i = 0; i < 14; i++) {
+        const cx = X(-8 + r(k + "cx" + i) * 46), cy = base - 200 - r(k + "cy" + i) * 56 + (i % 3) * 6, rr = 12 + r(k + "cr" + i) * 11;
+        A("circle", { cx: cx.toFixed(1), cy: cy.toFixed(1), r: rr.toFixed(1), fill: cols[Math.floor(r(k + "cc" + i) * 5)] });
+      }
+      for (let i = 0; i < 8; i++) A("circle", { cx: X(r(k + "dx" + i) * 46 - 6).toFixed(1), cy: (base - 196 + r(k + "dy" + i) * 18).toFixed(1), r: (7 + r(k + "dr" + i) * 6).toFixed(1), fill: "#5a2a22", opacity: 0.55 });   // the shaded underside
+      for (let i = 0; i < 7; i++) A("circle", { cx: X(r(k + "hx" + i) * 44).toFixed(1), cy: (base - 252 + r(k + "hy" + i) * 30).toFixed(1), r: (5 + r(k + "hr" + i) * 5).toFixed(1), fill: "#f0b858", opacity: 0.5 });  // the last light on top
+    };
+    tree(10, 482, false, "tl"); tree(350, 482, true, "tr");
+    for (let i = 0; i < 18; i++) {                                                                          // leaves under the trees
+      const left = i % 2 === 0, x = left ? 4 + r("ux" + i) * 66 : 290 + r("uy" + i) * 66, y = 468 + r("uz" + i) * 20;
+      A("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: 2.2, ry: 1.2, fill: leafCols[Math.floor(r("ul" + i) * 5)], opacity: 0.9 });
+    }
+
+    A("rect", { x: 0, y: 0, width: VW, height: VH, fill: "url(#hh-vig)", "pointer-events": "none" });
+
+    field.appendChild(svg);
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    document.body.appendChild(sh.back);
+  }
+
+  return { openHawkinsHigh };
 };
 
 // ════════ softlanding.js ════════
