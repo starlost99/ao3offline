@@ -13099,11 +13099,32 @@
     sv("rect", { x: 22, y: 68, width: 70, height: 30, fill: "#cfc9dc" }, svg);
     hkWindowSky(sv, rnd, svg, 25, 71, 64, 24, HK_TIMES[hkTimeGet()], HK_WX[hkWxGet()][0]);
     sv("path", { d: "M57 71 V95", stroke: "#cfc9dc", "stroke-width": 2 }, svg);
-    // the stairs up to the house, on the right
-    sv("polygon", { points: "262,330 350,330 350,60 322,60", fill: "#2c2028" }, svg);
-    for (let i = 0; i < 9; i++) sv("path", { d: `M${262 + i * 6.6} ${330 - i * 30} H350`, stroke: "#4a3340", "stroke-width": 1.6 }, svg);
-    sv("rect", { x: 322, y: 46, width: 28, height: 30, fill: "#f0b45a", opacity: 0.8 }, svg);
-    sv("circle", { cx: 336, cy: 62, r: 24, fill: "url(#bs-glow)", opacity: 0.4 }, svg);
+    // the stairs up to the house, on the right: steep basement stairs seen from the side, closed risers with a nosing on every tread,
+    // a newel post and a handrail on the open side, a plank landing at the top and the lit kitchen doorway cut through the ceiling
+    {
+      const SX = 226, SY = 330, TOPY = 84, TOPX = 336, N = 11, rise = (SY - TOPY) / N, run = (TOPX - SX) / N, m = rise / run;
+      const railY = x => SY - rise - 34 - (x - SX) * m;
+      sv("rect", { x: 318, y: 16, width: 32, height: 70, fill: "#f0b45a", opacity: 0.85 }, svg);                       // the doorway at the top, light from the kitchen
+      sv("rect", { x: 316, y: 14, width: 36, height: 74, fill: "none", stroke: "#1b1320", "stroke-width": 3 }, svg);
+      sv("polygon", { points: "318,16 303,24 303,80 318,86", fill: "#2a1d1a" }, svg);                                  // the door, swung back into the room
+      sv("circle", { cx: 334, cy: 58, r: 34, fill: "url(#bs-glow)", opacity: 0.4 }, svg);
+      let d = `M${SX} ${SY}`;
+      for (let i = 0; i < N; i++) { const x = SX + i * run, y = SY - (i + 1) * rise; d += ` V${y.toFixed(1)} H${(x + run).toFixed(1)}`; }
+      d += ` H350 V${SY} Z`;
+      sv("path", { d, fill: "#2a1c25" }, svg);                                                                          // the solid body of the stairs, under the steps
+      sv("polygon", { points: `${SX + 30},${SY} 350,${SY} 350,${TOPY + 30} ${TOPX + 12},${TOPY + 30}`, fill: "#150d14", opacity: 0.55 }, svg);   // the dark space under them
+      for (let i = 0; i < N; i++) {
+        const x = SX + i * run, y = SY - (i + 1) * rise;
+        sv("rect", { x: x + 0.8, y, width: 1.4, height: rise, fill: "#4a3340" }, svg);                                  // the riser board
+        sv("rect", { x: x - 2.4, y: y - 0.2, width: run + 3.2, height: 3.4, rx: 0.8, fill: "#7a5a4a" }, svg);          // the tread, with its nosing
+        sv("rect", { x: x - 2.4, y: y - 0.2, width: run + 3.2, height: 0.9, fill: "#a07e68", opacity: 0.8 }, svg);
+      }
+      sv("rect", { x: TOPX - 2, y: TOPY - 0.2, width: 18, height: 3.6, rx: 0.8, fill: "#7a5a4a" }, svg);               // the landing
+      sv("path", { d: `M${SX} ${SY} L${TOPX} ${TOPY + 3}`, stroke: "#4a3340", "stroke-width": 1.2, opacity: 0.6 }, svg);   // the stringer's edge
+      for (let i = 0; i < N - 1; i++) { const bx = SX + i * run + run * 0.55, ty = SY - (i + 1) * rise; sv("path", { d: `M${bx.toFixed(1)} ${ty.toFixed(1)} V${railY(bx).toFixed(1)}`, stroke: "#5a4150", "stroke-width": 1.2 }, svg); }
+      sv("rect", { x: SX - 9, y: SY - 52, width: 6, height: 54, rx: 1, fill: "#6a4a3a" }, svg);                         // the newel post
+      sv("path", { d: `M${SX - 6} ${railY(SX - 6).toFixed(1)} L${TOPX - run} ${railY(TOPX - run).toFixed(1)}`, stroke: "#8a6450", "stroke-width": 3, "stroke-linecap": "round" }, svg);   // the handrail
+    }
     // shelves of games on the left wall
     [[20, 138], [20, 186]].forEach(([sx, sy], r) => {
       sv("rect", { x: sx, y: sy + 28, width: 112, height: 4, fill: "#4a3326" }, svg);
@@ -13321,7 +13342,7 @@
     const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
     let climbing = false;
     const goUp = () => { if (climbing || leaving) return; climbing = true; say("Up the stairs and through the door at the top, into the kitchen\u2026"); bfFade(sh, () => openKitchen()); };
-    hit(262, 60, 90, 270, "The stairs up, to the kitchen", goUp);
+    hit(214, 14, 136, 318, "The stairs up, to the kitchen", goUp);
     hit(116, 232, 60, 92, "The one in the striped sweater", shift);
     hit(176, 218, 70, 106, "The one with the curly hair", shift);
     hit(90, 328, 180, 40, "The campaign map", () => say(["The campaign map, hand-drawn and much folded. Somebody has marked an X in red pencil.", "The route runs from the little town, through the forest, straight at the mountains. Nobody is happy about that.", "In the corner, in tiny letters: HERE BE DRAGONS. Underlined twice."][nMap++ % 3]));
