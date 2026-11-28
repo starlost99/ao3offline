@@ -459,6 +459,25 @@
     } catch {}
   }
 
+  // a way through to the next room: a small pulsing arrow on an edge of the scene, with a tiny label
+  // (sh: the shell; side: "left" | "right" | "bottom" | "top"; label: where it leads; fn: what it does; o.at: where along the edge, e.g. "58%")
+  function hkArrow(sh, side, label, fn, o) {
+    o = o || {};
+    const at = o.at || (side === "left" || side === "right" ? "56%" : "50%");
+    const glyph = { left: "\u2039", right: "\u203A", bottom: "\u2304", top: "\u2303" }[side] || "\u203A";
+    const edge = side === "left" ? "left:6px;" : side === "right" ? "right:6px;" : "";
+    const place = side === "left" || side === "right" ? `${edge}top:${at};transform:translateY(-50%);` : `${side}:8px;left:${at};transform:translateX(-50%);`;
+    const b = sh.kit.el("button", `position:absolute;${place}z-index:6;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;`);
+    b.type = "button"; b.title = o.title || label; b.setAttribute("aria-label", o.title || label);
+    const c = sh.kit.el("span", "display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.42);border:1px solid rgba(255,217,138,0.45);color:#ffd98a;font-size:24px;line-height:1;padding-bottom:3px;box-sizing:border-box;", glyph);
+    c.className = "hk-anim"; c.style.animation = "hkPulse 2.6s ease-in-out infinite";
+    const t = sh.kit.el("span", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:10px;line-height:1.1;color:#ffe9b8;text-shadow:0 1px 3px rgba(0,0,0,0.9);max-width:62px;text-align:center;", label);
+    b.appendChild(c); b.appendChild(t);
+    b.addEventListener("click", e => { e.stopPropagation(); fn(); });
+    sh.field.appendChild(b);
+    return b;
+  }
+
   // fade the scene to black, close it, and run fn (which opens the next one)
   function bfFade(sh, fn) {
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -892,7 +911,7 @@
   }
   hkLiveRefresh();                                                                  // warm the cache as soon as the world loads
 
-  return { hkForecast, hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkWxNext, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere, hkFindThem };
+  return { hkForecast, hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkWxNext, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere, hkFindThem, hkArrow };
 };
 
 // ════════ lib/figures.js ════════
@@ -16587,7 +16606,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["willshouse"] = function (ctx) {
   'use strict';
-  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkWxNext, hkThunder, hkAmbience, hkSoundPill, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkWxNext, hkThunder, hkAmbience, hkSoundPill, hkWxOverlay, hkEnvWatch, hkKnock, bfFade } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
@@ -17083,8 +17102,26 @@
     // the live values roll over by themselves if you stay (a new hour, or an override running out)
     hkEnvWatch(box, (t, w) => { if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); } });
 
+    // the front door: the first tap knocks (the lanterns flicker), the second lets you in to the living room, like the Wheelers' garage door
+    let nKnock = 0, entering = false;
+    const goLiving = () => { if (entering) return; entering = true; say("The door opens before you can knock a third time. Warm air, and the smell of something on the stove\u2026"); bfFade(sh, () => openByersLivingRoom()); };
+    const ring = A("rect", { x: 426, y: 392, width: 60, height: 116, rx: 6, fill: "none", stroke: "#fff3c4", "stroke-width": 2.2, "stroke-dasharray": "6 5", "pointer-events": "none", opacity: 0.55 });
+    anim(ring, "animation:hkPulse 3.2s ease-in-out infinite;");
+    const doorHit = R(424, 390, 64, 120, "transparent", { role: "button", "aria-label": "The front door, and the way in to the living room" });
+    doorHit.style.cursor = "pointer";
+    doorHit.addEventListener("click", () => {
+      if (entering) return;
+      if (nKnock++ === 0) {
+        hkKnock();
+        try { if (navigator.vibrate) navigator.vibrate([12, 60, 12, 60, 12]); } catch {}
+        try { if (glowG.animate) glowG.animate([{ opacity: 1 }, { opacity: 0.4 }, { opacity: 1 }, { opacity: 0.55 }, { opacity: 1 }], { duration: 700 }); } catch {}
+        say("You knock. A floorboard creaks inside, then footsteps. Tap the door again to go in.");
+        return;
+      }
+      goLiving();
+    });
     field.appendChild(svg);
-    pill("\u{1F6CB}\uFE0F living room", "Step inside to the living room", () => { close(); openByersLivingRoom(); });
+    pill("\u{1F6CB}\uFE0F living room", "Step inside to the living room", () => goLiving());
     pill("\u{1F5FA}\uFE0F map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
     applyTime(true);
     paintWeather();
@@ -17099,7 +17136,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["byers-living-room"] = function (ctx) {
   'use strict';
-  const { hkShell, hkSleep, hkWhere, hkFindThem } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSleep, hkWhere, hkFindThem, hkArrow, bfFade } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
@@ -17716,6 +17753,12 @@
     if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (finding) return; finding = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike to the sofa", () => { hkWhere.call("byers"); close(); openByersLivingRoom(); });
     else if (!empty) { pill("\u{1F4AC} next", "Hear the next line sooner", next); pill("\u{1F501} another", "A different moment", another); }
+    // ways through: down the hall to Will's room (left), the kitchen (right), the front door (bottom)
+    let leaving = false;
+    const go = (line, open) => { if (leaving) return; leaving = true; say(line); bfFade(sh, () => open()); };
+    hkArrow(sh, "left", "Will\u2019s room", () => go("Down the short hall, to the door with the shark poster\u2026", openWillsRoom), { title: "Down the hall to Will\u2019s room" });
+    hkArrow(sh, "right", "kitchen", () => go("Through the doorway to the kitchen, where the lamp is always on\u2026", openByersKitchen), { title: "Through to the kitchen" });
+    hkArrow(sh, "bottom", "outside", () => go("You open the front door and step out onto the porch\u2026", openWillsHouse), { title: "Out the front door" });
     pill("\u{1F373} kitchen", "Through to the kitchen", () => { close(); openByersKitchen(); });
     pill("\u{1F6CF}️ Will’s room", "Down the hall to Will’s room", () => { close(); openWillsRoom(); });
     pill("\u{1F3DA}️ outside", "Back out to the front of Will’s house", () => { close(); openWillsHouse(); });
@@ -17732,13 +17775,14 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["byers-kitchen"] = function (ctx) {
   'use strict';
-  const { hkShell, hkSleep, hkWhere, bfFade, hkFindThem, hkVoice } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSleep, hkWhere, bfFade, hkFindThem, hkVoice, hkArrow } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
   const openByersLivingRoom = (...args) => world.openByersLivingRoom(...args);
+  const openWillsRoom = (...args) => world.openWillsRoom(...args);
 
   // ── Will and Mike at the Byers' round table (the hkWhere place "byerskitchen") ──
   // Each moment: props on the table (the place settings are always there), then beats [who, text, patch?]. who: "w" Will, "m" Mike, "n" the caption only.
@@ -18286,7 +18330,13 @@
     hits.slice().reverse().forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); hitRect[label] = r; r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     R(VX, VY, VW, VH, "url(#ky-vig)", { "pointer-events": "none" });
     field.appendChild(svg); field.appendChild(ov);
+    // ways through: the living room (left), down the hall to Will's room (right), the front door (bottom)
+    const goTo = (line, open) => { if (leaving) return; leaving = true; say(line); bfFade(sh, () => open()); };
+    hkArrow(sh, "left", "living room", () => goTo("Through the doorway to the living room\u2026", openByersLivingRoom), { title: "Through to the living room", at: "60%" });
+    hkArrow(sh, "right", "Will\u2019s room", () => goTo("Down the hall to Will\u2019s room\u2026", openWillsRoom), { title: "Down the hall to Will\u2019s room", at: "60%" });
+    hkArrow(sh, "bottom", "outside", () => goTo("Out through the front room and onto the porch\u2026", openWillsHouse), { title: "Out to the front of Will\u2019s house" });
     pill("\u{1F6CB}️ living room", "Through to the living room", () => { if (leaving) return; leaving = true; close(); openByersLivingRoom(); });
+    pill("\u{1F6CF}️ Will’s room", "Down the hall to Will’s room", () => { if (leaving) return; leaving = true; close(); openWillsRoom(); });
     pill("\u{1F3DA}️ outside", "Out to the front of Will’s house", () => { if (leaving) return; leaving = true; close(); openWillsHouse(); });
     if (!empty) { pill("\u{1F4AC} next", "Hear the next line sooner", next); pill("\u{1F501} another", "A different moment", another); }
     if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
@@ -18307,7 +18357,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["wills-room"] = function (ctx) {
   'use strict';
-  const { hkShell, HK_WX, hkWxGet, bfFade, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkVoice, hkWhere, hkFindThem } = ctx.lib["hawkins-kit"];
+  const { hkShell, HK_WX, hkWxGet, bfFade, hkAmbience, hkSoundPill, hkSleep, hkSleepSound, hkVoice, hkWhere, hkFindThem, hkArrow } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
@@ -19090,6 +19140,10 @@
     sndBtn.style.display = tmBtn.style.display = zzOn ? "" : "none"; sndLabel(); timerLabel();
     if (away) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
     if (away && !sleptElsewhere) pill("✦ call them here", "Call Will and Mike to Will’s room", () => { if (leaving) return; leaving = true; hkWhere.call("wills"); say("You knock softly. Two voices: “Come in!”"); bfFade(sh, () => openWillsRoom()); });
+    // ways through: the hall to the living room (left) and the kitchen (right)
+    const goHall = (line, open) => { if (leaving) return; leaving = true; say(line); bfFade(sh, () => open()); };
+    hkArrow(sh, "left", "living room", () => goHall("You slip out into the hall, towards the sofa and the alphabet wall\u2026", openByersLivingRoom), { title: "Down the hall to the living room", at: "62%" });
+    hkArrow(sh, "right", "kitchen", () => goHall("Down the hall and round the corner, to the kitchen\u2026", openByersKitchen), { title: "Down the hall to the kitchen", at: "62%" });
     pill("\u{1F6CB}️ living room", "Back to the living room", () => { close(); openByersLivingRoom(); });
     pill("\u{1F373} kitchen", "Through to the kitchen", () => { close(); openByersKitchen(); });
     pill("\u{1F3DA}️ outside", "Out to the front of Will’s house", () => { close(); openWillsHouse(); });
@@ -19727,26 +19781,29 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["hawkins-high"] = function (ctx) {
   'use strict';
-  const { hkShell } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkWxNext, hkThunder, hkAmbience, hkSoundPill, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
 
   // ── HAWKINS HIGH: THE OUTSIDE ONLY ──
-  // A still picture of the school at dusk in autumn, no taps, nobody there, no sound, no live time or weather (all still to come).
-  // Back to front: a dusk sky with a low moon and stars, a far tree line with the stadium light tower and the boiler chimney behind the roof,
+  // The school from the street, no taps, nobody there. **Time of day, weather, season and sound are the live Hawkins environment, the same logic as
+  // Will's house and Castle Byers** (hawkins-kit): the sky, sun, moon and stars follow the clock; a colour tint, lit classrooms, wall lamps, lamp
+  // posts, the stadium lights and the vehicles' lights come with dusk, night and dawn (by day the windows show the sky); rain, storm (lightning
+  // and thunder), fog, snow (roofs, sills, steps, lawn, hedges, sign, bus, cars, kerb) and falling leaves come with the real weather, with its
+  // sound; the two trees, the far tree line, the lawn and the mums on the sign follow the season (autumn, bare and frosted in winter or snow,
+  // spring green with blossom, summer green with fireflies at dusk). Pills for time, weather and sound, then the map.
+  // Back to front: a sky with a sun, a low moon and stars, a far tree line with the stadium light tower and the boiler chimney behind the roof,
   // the long two-storey red-brick building (two classroom wings, a taller middle block with the name on a band, a clock, a flat entrance canopy
   // on four white posts, glass doors, wall lamps and steps), hedges along its foot, the lawn with a walkway, a flagpole, a bike rack, a brick
-  // sign, two lamp posts and fallen leaves, the kerb, the street with the school bus and two parked cars, and two autumn trees framing the edges.
+  // sign, two lamp posts and fallen leaves, the kerb, the street with the school bus and three parked cars, then the light of the hour over all of
+  // it, what glows on its own, and two trees framing the edges.
   // Drawn in its own units (360 x 640); a phone shows roughly y 30 to 610, so keep anything that matters inside that.
   // Ground line of the building y 360, roof y 268, middle block up to y 233; the lawn runs to y 484, the street from y 496.
   function openHawkinsHigh() {
     const sh = hkShell("ao3-hawkins-high", "\u{1F3EB} Hawkins High");
     const { sv, rnd, anim } = sh.kit;
-    const { box, sub, field, caption, pill, close } = sh;
-    sub.textContent = "hawkins · the high school · dusk";
-    caption.textContent = "Hawkins High. A few classrooms are still lit, and the flag hangs quiet.";
-    box.style.background = "#1a1a30";
+    const { box, sub, field, caption, pill, close, later } = sh;
 
     const VW = 360, VH = 640;
     const svg = sv("svg", { viewBox: `0 0 ${VW} ${VH}`, preserveAspectRatio: "xMidYMid slice" });
@@ -19761,10 +19818,15 @@
       stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op }, g));
     };
     const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
-    const L = (x1, y1, x2, y2, stroke, w, o) => A("line", Object.assign({ x1, y1, x2, y2, stroke, "stroke-width": w, "stroke-linecap": "round" }, o || {}));
-    const R = (x, y, w, h, fill, o) => A("rect", Object.assign({ x, y, width: w, height: h, fill }, o || {}));
+    const L = (x1, y1, x2, y2, stroke, w, o, p) => A("line", Object.assign({ x1, y1, x2, y2, stroke, "stroke-width": w, "stroke-linecap": "round" }, o || {}), p);
+    const R = (x, y, w, h, fill, o, p) => A("rect", Object.assign({ x, y, width: w, height: h, fill }, o || {}), p);
     const r = k => rnd("hh-" + k);
-    const glow = (cx, cy, rr, id, op) => A("circle", { cx, cy, r: rr, fill: `url(#${id})`, opacity: op == null ? 1 : op, style: "mix-blend-mode:screen", "pointer-events": "none" });
+    const glowGs = [];                                                                                      // every glow drawn in place sits in its own group, so daylight can switch them off
+    const AG = (tag, attrs) => { const g = A("g", { "pointer-events": "none" }); glowGs.push(g); return A(tag, attrs, g); };
+    const glow = (cx, cy, rr, id, op) => AG("circle", { cx, cy, r: rr, fill: `url(#${id})`, opacity: op == null ? 1 : op, style: "mix-blend-mode:screen", "pointer-events": "none" });
+    const FOL = [];                                                                                         // every leafy or woody shape that follows the season
+    const reg = (el, kind, base, h, extra, prop) => { FOL.push(Object.assign({ el, kind, base, h, prop: prop || "fill" }, extra || {})); return el; };
+    const wins = [], hedgePts = [], carPts = [], mums = [];
 
     grad("hh-sky", [[0, "#272650"], [0.45, "#5e4f7e"], [0.8, "#c07e7c"], [1, "#e6a880"]]);
     grad("hh-dusk", [[0, "#2a2850", 0.36], [1, "#2a2850", 0.04]]);
@@ -19781,6 +19843,9 @@
     rad("hh-lamp", [[0, "#ffe2a0", 0.85], [0.4, "#ffb55a", 0.32], [1, "#ff9a3a", 0]]);
     rad("hh-win", [[0, "#ffd890", 0.55], [1, "#ffb860", 0]]);
     rad("hh-flood", [[0, "#fff6d8", 0.95], [0.35, "#fff0c0", 0.4], [1, "#fff0c0", 0]]);
+    grad("hh-dayglass", [[0, "#d4e6f6"], [0.55, "#a2c0dc"], [1, "#7a98ba"]]);
+    grad("hh-fogv", [[0, "#ffffff", 0], [0.5, "#ffffff", 1], [1, "#ffffff", 0]]);
+    rad("hh-sunglow", [[0, "#fffbe0", 0.95], [0.22, "#ffe9a0", 0.5], [1, "#ffd080", 0]]);
     const brick = sv("pattern", { id: "hh-brick", width: 14, height: 7, patternUnits: "userSpaceOnUse" }, defs);
     sv("rect", { x: 0, y: 0, width: 14, height: 7, fill: "#8a4030" }, brick);
     sv("rect", { x: 1, y: 0.5, width: 5, height: 2.6, fill: "#964734", opacity: 0.8 }, brick);
@@ -19789,18 +19854,30 @@
 
     const HOR = 292, GY = 360;
 
-    // ── sky, stars, moon ──
+    // ── sky, sun, moon, stars, clouds ──
     R(0, 0, VW, HOR + 4, "url(#hh-sky)");
-    for (let i = 0; i < 42; i++) anim(A("circle", { cx: (r("sx" + i) * VW).toFixed(1), cy: (r("sy" + i) * 170).toFixed(1), r: (0.4 + r("sr" + i) * 0.7).toFixed(2), fill: "#fff", opacity: (0.25 + r("so" + i) * 0.5).toFixed(2) }), `animation:hkTwinkle ${(3 + r("st" + i) * 4).toFixed(1)}s ease-in-out -${(r("sd" + i) * 4).toFixed(1)}s infinite;`);
-    A("circle", { cx: 292, cy: 92, r: 54, fill: "url(#hh-moon)", style: "mix-blend-mode:screen" });
-    A("circle", { cx: 292, cy: 92, r: 15, fill: "#f8ecc8" });
-    [[287, 87, 2.8], [297, 98, 2.2], [288, 99, 1.6]].forEach(([x, y, rr]) => A("circle", { cx: x, cy: y, r: rr, fill: "#e4d4a8", opacity: 0.6 }));
-    [[60, 86, 90, 7], [150, 128, 120, 6], [250, 160, 80, 5]].forEach(([x, y, w, h]) => A("ellipse", { cx: x, cy: y, rx: w / 2, ry: h / 2, fill: "#9a86a4", opacity: 0.25 }));
+    const starG = A("g", {});
+    for (let i = 0; i < 42; i++) anim(A("circle", { cx: (r("sx" + i) * VW).toFixed(1), cy: (r("sy" + i) * 170).toFixed(1), r: (0.4 + r("sr" + i) * 0.7).toFixed(2), fill: "#fff", opacity: (0.25 + r("so" + i) * 0.5).toFixed(2) }, starG), `animation:hkTwinkle ${(3 + r("st" + i) * 4).toFixed(1)}s ease-in-out -${(r("sd" + i) * 4).toFixed(1)}s infinite;`);
+    const sunG = A("g", { opacity: 0, "pointer-events": "none" });
+    A("circle", { cx: 0, cy: 0, r: 84, fill: "url(#hh-sunglow)", style: "mix-blend-mode:screen" }, sunG);
+    const sunDisc = A("circle", { cx: 0, cy: 0, r: 13, fill: "#fffbe8" }, sunG);
+    const moonG = A("g", { "pointer-events": "none" });
+    A("circle", { cx: 292, cy: 92, r: 54, fill: "url(#hh-moon)", style: "mix-blend-mode:screen" }, moonG);
+    A("circle", { cx: 292, cy: 92, r: 15, fill: "#f8ecc8" }, moonG);
+    [[287, 87, 2.8], [297, 98, 2.2], [288, 99, 1.6]].forEach(([x, y, rr]) => A("circle", { cx: x, cy: y, r: rr, fill: "#e4d4a8", opacity: 0.6 }, moonG));
+    const cloudsG = A("g", { "pointer-events": "none" }), cloudEls = [];
+    [[60, 86, 90, 7], [150, 128, 120, 6], [250, 160, 80, 5]].forEach(([x, y, w, h]) => cloudEls.push(A("ellipse", { cx: x, cy: y, rx: w / 2, ry: h / 2, fill: "#9a86a4", opacity: 0.25 }, cloudsG)));
+    [[88, 64, 1], [232, 118, 0.8], [40, 150, 0.7], [310, 190, 0.6]].forEach(([x, y, k]) => {                  // fair-weather puffs: only the day and the dawn show them
+      const g = A("g", { opacity: 0, "data-puff": 1 }, cloudsG);
+      [[0, 0, 26, 8], [-16, 3, 16, 6], [15, 3, 18, 6], [3, -5, 15, 7]].forEach(([dx, dy, rx, ry]) => cloudEls.push(A("ellipse", { cx: x + dx * k, cy: y + dy * k, rx: rx * k, ry: ry * k, fill: "#fff" }, g)));
+    });
+    const ovc = R(0, 0, VW, HOR + 4, "#7d8a99", { opacity: 0, "pointer-events": "none" });                      // rain, storm, fog and snow clouds
 
     // ── the far tree line, the boiler chimney and the stadium light tower, all behind the roof ──
     for (let i = 0; i < 26; i++) {
       const x = -6 + i * 15 + r("tx" + i) * 8, rr = 13 + r("tr" + i) * 10;
-      A("circle", { cx: x.toFixed(1), cy: (274 - r("ty" + i) * 8).toFixed(1), r: rr.toFixed(1), fill: ["#3c3454", "#463c5a", "#5a4254", "#4a3a52"][Math.floor(r("tc" + i) * 4)] });
+      const ci = Math.floor(r("tc" + i) * 4);
+      reg(A("circle", { cx: x.toFixed(1), cy: (274 - r("ty" + i) * 8).toFixed(1), r: rr.toFixed(1), fill: ["#3c3454", "#463c5a", "#5a4254", "#4a3a52"][ci] }), "far", "#3c3454", 0, { i: ci });
     }
     R(52, 206, 13, 70, "url(#hh-brick)"); R(50, 201, 17, 6, "#3b3a48");                                   // the boiler chimney
     R(52, 206, 13, 70, "#2a2850", { opacity: 0.3 });
@@ -19809,6 +19886,7 @@
     [308, 316, 324, 332].forEach((x, i) => { R(x - 2.5, 162, 5, 8, "#3a384c", { rx: 1 }); R(x - 1.8, 169, 3.6, 3, "#fff2c8"); });
     glow(322, 170, 48, "hh-flood", 0.6);
 
+    R(0, GY - 10, VW, 484 - GY + 10, "url(#hh-lawn)");                                                    // the lawn, laid first so no sky shows between the hedges and the grass
     // ── the building ──
     const win = (x, y, w, h, k) => {
       const lit = r("w" + k) > 0.36;
@@ -19824,6 +19902,7 @@
         R(x + w * 0.35, y, 1.4, h, "#0e0f1c", { opacity: 0.8 });
       }
       R(x - 2.4, y + h + 1.6, w + 4.8, 2.2, "#b9b0a2");                                                      // the sill
+      wins.push({ x, y, w, h, lit });
     };
     const wing = (x0, x1) => {
       R(x0, 277, x1 - x0, GY - 277, "url(#hh-brick)");
@@ -19858,27 +19937,31 @@
     [[164, 346], [172, 346], [188, 346], [196, 346]].forEach(([x, y]) => R(x, y, 1.6, 5, "#8a6a30"));       // handles
     R(128, 316, 104, 6, "#d8cfc0"); R(128, 322, 104, 3, "#2a2630", { opacity: 0.55 }); R(128, 315, 104, 1.6, "#f0e8d8");
     [141, 163, 195, 217].forEach(x => { R(x, 322, 5, 37, "#d8cfc0"); R(x + 3.6, 322, 1.4, 37, "#8a8294", { opacity: 0.4 }); });
-    A("polygon", { points: "150,359 210,359 252,484 108,484", fill: "url(#hh-spill)", style: "mix-blend-mode:screen", "pointer-events": "none" });
+    AG("polygon", { points: "150,359 210,359 252,484 108,484", fill: "url(#hh-spill)", style: "mix-blend-mode:screen", "pointer-events": "none" });
     [[133, 336], [227, 336]].forEach(([x, y], i) => {                                                      // wall lamps beside the canopy
       R(x - 2.5, y - 4, 5, 8, "#2c2218", { rx: 1 }); R(x - 1.6, y - 2.6, 3.2, 5.2, "#ffd890");
       anim(glow(x, y, 20, "hh-lamp"), `animation:hkFlicker ${(3 + i).toFixed(1)}s ease-in-out infinite;`);
     });
     R(142, 359, 76, 3, "#d8cfc0"); R(138, 362, 84, 3, "url(#hh-steps)"); R(134, 365, 92, 3, "url(#hh-steps)");
-    R(-10, 233, 380, GY - 233, "url(#hh-dusk)", { "pointer-events": "none" });
-    [143, 217].forEach(x => R(x - 1.4, 280, 2.8, 74, "#2a2630", { opacity: 0.8 }));                          // the drainpipes
+    const wallTintG = A("g", { "pointer-events": "none" });                                                  // the dusk tint, on the walls only (it fades out by day)
+    [[-10, 268, 155], [215, 268, 155], [140, 233, 80]].forEach(([x, y, w]) => R(x, y, w, GY - y, "url(#hh-dusk)", { "pointer-events": "none" }, wallTintG));
+    [143, 217].forEach(x => R(x - 1.4, 280, 2.8, 35, "#2a2630", { opacity: 0.8 }));                          // the drainpipes
+    const snowRoofG = A("g", { "pointer-events": "none" });                                                  // snow on the roofs, sills and steps (paintDyn)
 
     // hedges along the foot of the wall
-    const hedge = (x0, x1) => { for (let x = x0; x < x1; x += 12) { const k = Math.round(x); A("ellipse", { cx: x + 6, cy: 356, rx: 8, ry: 6.5, fill: r("h" + k) > 0.5 ? "#27432f" : "#2d4e36" }); A("ellipse", { cx: x + 4, cy: 353, rx: 4, ry: 2.6, fill: "#3a6244", opacity: 0.7 }); } };
+    const hedge = (x0, x1) => { for (let x = x0; x < x1; x += 12) { const k = Math.round(x); hedgePts.push(x + 6); A("ellipse", { cx: x + 6, cy: 356, rx: 8, ry: 6.5, fill: r("h" + k) > 0.5 ? "#27432f" : "#2d4e36" }); A("ellipse", { cx: x + 4, cy: 353, rx: 4, ry: 2.6, fill: "#3a6244", opacity: 0.7 }); } };
     hedge(-8, 128); hedge(232, 366);
+    const snowHedgeG = A("g", { "pointer-events": "none" });
 
     // ── the lawn and the walkway ──
-    R(0, GY + 8, VW, 484 - GY - 8, "url(#hh-lawn)");
     for (let i = 0; i < 90; i++) { const x = r("gx" + i) * VW, y = GY + 12 + r("gy" + i) * 110; L(x, y, x + (r("gl" + i) - 0.5) * 3, y - 3 - r("gh" + i) * 3, i % 2 ? "#4a7048" : "#2c4a34", 0.8, { opacity: 0.6 }); }
     A("polygon", { points: "146,368 214,368 264,488 96,488", fill: "url(#hh-walk)" });
     for (let i = 1; i < 6; i++) { const t = i / 6, y = 368 + t * t * 120, hw = 34 + (y - 368) * 0.43; L(180 - hw, y, 180 + hw, y, "#4a465a", 0.8, { opacity: 0.6 }); }
     L(180, 368, 180, 488, "#4a465a", 0.7, { opacity: 0.4 });
     A("polygon", { points: "146,368 150,368 100,488 96,488", fill: "#c8c0cc", opacity: 0.4 });
-    anim(R(-20, 436, VW + 40, 26, "url(#hh-mist)", { "pointer-events": "none" }), "animation:hkMist 12s ease-in-out infinite;");
+    const snowGroundG = A("g", { "pointer-events": "none" });                                                // snow on the lawn and walk (paintDyn)
+    const mistG = A("g", {});
+    anim(R(-20, 436, VW + 40, 26, "url(#hh-mist)", { "pointer-events": "none" }, mistG), "animation:hkMist 12s ease-in-out infinite;");
 
     // the flagpole, left of the walkway
     A("ellipse", { cx: 84, cy: 437, rx: 9, ry: 2.6, fill: "#17261e" });
@@ -19901,22 +19984,24 @@
     const t1 = A("text", { x: 315, y: 412, "text-anchor": "middle", "font-family": "Georgia,'Times New Roman',serif", "font-weight": 700, "font-size": 8, fill: "#6a2424", textLength: 52, lengthAdjust: "spacingAndGlyphs" }); t1.textContent = "HAWKINS HIGH";
     const t2 = A("text", { x: 315, y: 418.5, "text-anchor": "middle", "font-family": "Georgia,'Times New Roman',serif", "font-size": 4.4, "letter-spacing": 1.4, fill: "#4a3a3a" }); t2.textContent = "SCHOOL";
     const t3 = A("text", { x: 315, y: 425, "text-anchor": "middle", "font-family": "Georgia,'Times New Roman',serif", "font-style": "italic", "font-size": 4.2, fill: "#8a3a2a" }); t3.textContent = "Home of the Tigers";
-    [[290, "#d9822a"], [340, "#c8602a"]].forEach(([x, c]) => { A("ellipse", { cx: x, cy: 448, rx: 8, ry: 4.6, fill: "#27432f" }); for (let i = 0; i < 5; i++) A("circle", { cx: x - 5 + i * 2.6, cy: 446 + (i % 2), r: 1.6, fill: c }); });
-    [[292, 450], [338, 450]].forEach(([x, y]) => A("ellipse", { cx: x, cy: y, rx: 14, ry: 5, fill: "url(#hh-win)", style: "mix-blend-mode:screen", opacity: 0.8 }));
+    [[290, "#d9822a"], [340, "#c8602a"]].forEach(([x, c], bi) => { A("ellipse", { cx: x, cy: 448, rx: 8, ry: 4.6, fill: "#27432f" }); for (let i = 0; i < 5; i++) mums.push({ el: A("circle", { cx: x - 5 + i * 2.6, cy: 446 + (i % 2), r: 1.6, fill: c }), bi, i }); });
+    const snowSignG = A("g", { "pointer-events": "none" });
+    [[292, 450], [338, 450]].forEach(([x, y]) => AG("ellipse", { cx: x, cy: y, rx: 14, ry: 5, fill: "url(#hh-win)", style: "mix-blend-mode:screen", opacity: 0.8 }));
 
     // two lamp posts
     [[100, 480], [262, 480]].forEach(([x, y], i) => {
       R(x - 1.2, y - 78, 2.4, 78, "#1c1a24"); R(x - 4, y - 84, 8, 7, "#1c1a24", { rx: 1.5 }); R(x - 2.8, y - 82.4, 5.6, 4.4, "#ffe2a0");
       anim(glow(x, y - 80, 44, "hh-lamp"), `animation:hkFlicker ${(3.4 + i * 1.3).toFixed(1)}s ease-in-out infinite;`);
-      A("ellipse", { cx: x, cy: y + 2, rx: 34, ry: 6, fill: "#ffd890", opacity: 0.16, style: "mix-blend-mode:screen" });
+      AG("ellipse", { cx: x, cy: y + 2, rx: 34, ry: 6, fill: "#ffd890", opacity: 0.16, style: "mix-blend-mode:screen" });
     });
 
     // fallen leaves on the lawn and the walk
     const leafCols = ["#c4642a", "#d98a2e", "#a6402a", "#e0a840", "#8a3a22"];
+    const leafG = A("g", {});                                                                                // fallen leaves: autumn only, and not under snow
     for (let i = 0; i < 70; i++) {
-      const x = 4 + r("lx" + i) * (VW - 8), y = GY + 18 + r("ly" + i) * 108;
+      const x = 4 + r("lx" + i) * (VW - 8), y = GY + 18 + r("ly" + i) * 104;
       if (x > 278 && x < 352 && y > 396 && y < 452) continue;                                              // not on the sign
-      A("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: (1.3 + r("lr" + i) * 1.4).toFixed(1), ry: (0.8 + r("lq" + i) * 0.8).toFixed(1), fill: leafCols[Math.floor(r("lc" + i) * 5)], opacity: 0.85, transform: `rotate(${Math.round(r("la" + i) * 180)} ${x.toFixed(1)} ${y.toFixed(1)})` });
+      A("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: (1.3 + r("lr" + i) * 1.4).toFixed(1), ry: (0.8 + r("lq" + i) * 0.8).toFixed(1), fill: leafCols[Math.floor(r("lc" + i) * 5)], opacity: 0.85, transform: `rotate(${Math.round(r("la" + i) * 180)} ${x.toFixed(1)} ${y.toFixed(1)})` }, leafG);
     }
 
     // ── the kerb and the street ──
@@ -19924,18 +20009,22 @@
     R(0, 497, VW, VH - 497, "url(#hh-street)");
     for (let i = 0; i < 9; i++) R(8 + i * 42, 596, 24, 2.4, "#c8a840", { opacity: 0.7 });
     for (let i = 0; i < 120; i++) A("circle", { cx: (r("ax" + i) * VW).toFixed(1), cy: (500 + r("ay" + i) * 140).toFixed(1), r: 0.6, fill: "#3a3748", opacity: 0.7 });
-    A("ellipse", { cx: 100, cy: 520, rx: 70, ry: 12, fill: "#ffd890", opacity: 0.1, style: "mix-blend-mode:screen" });
-    A("ellipse", { cx: 262, cy: 520, rx: 70, ry: 12, fill: "#ffd890", opacity: 0.1, style: "mix-blend-mode:screen" });
+    AG("ellipse", { cx: 100, cy: 520, rx: 70, ry: 12, fill: "#ffd890", opacity: 0.1, style: "mix-blend-mode:screen" });
+    AG("ellipse", { cx: 262, cy: 520, rx: 70, ry: 12, fill: "#ffd890", opacity: 0.1, style: "mix-blend-mode:screen" });
+    const snowStreetG = A("g", { "pointer-events": "none" });                                               // kerb and street snow (paintDyn)
+    const wetG = A("g", { "pointer-events": "none", opacity: 0 });                                          // a wet street in rain
+    R(0, 497, VW, VH - 497, "#9fb0d8", { opacity: 0.08, style: "mix-blend-mode:screen" }, wetG);
+    [[100, 548, 5, 40], [262, 548, 5, 40], [140, 566, 16, 3], [188, 566, 12, 3]].forEach(([x, y, rx, ry]) => A("ellipse", { cx: x, cy: y, rx, ry, fill: "#ffd890", opacity: 0.2, style: "mix-blend-mode:screen" }, wetG));
 
     // the school bus, facing right, parked along the kerb
     {
       const x = 8, g = 546;
       A("ellipse", { cx: x + 66, cy: g + 1, rx: 70, ry: 4, fill: "#0e0d16", opacity: 0.6 });
-      A("path", { d: `M${x} ${g - 38} Q${x} ${g - 42} ${x + 5} ${g - 42} H${x + 100} Q${x + 106} ${g - 42} ${x + 108} ${g - 34} L${x + 110} ${g - 20} H${x + 126} Q${x + 132} ${g - 20} ${x + 132} ${g - 14} V${g - 6} H${x} Z`, fill: "#d9a62e" });
-      R(x, g - 32, 110, 3, "#1a1618");                                                                    // the black rub rail
+      A("path", { d: `M${x} ${g - 38} Q${x} ${g - 42} ${x + 5} ${g - 42} H${x + 104} Q${x + 110} ${g - 42} ${x + 112} ${g - 34} L${x + 114} ${g - 20} H${x + 126} Q${x + 132} ${g - 20} ${x + 132} ${g - 14} V${g - 6} H${x} Z`, fill: "#d9a62e" });
+      R(x, g - 32, 112, 3, "#1a1618");                                                                    // the black rub rail
       R(x, g - 14, 132, 2.6, "#1a1618");
-      for (let i = 0; i < 8; i++) { R(x + 6 + i * 12.2, g - 38, 9, 9, "#1d1a22", { rx: 1 }); R(x + 7 + i * 12.2, g - 37, 7, 7, r("bw" + i) > 0.5 ? "#f0c070" : "#30385a", { rx: 0.8 }); }
-      A("path", { d: `M${x + 106} ${g - 38} L${x + 110} ${g - 22} H${x + 118} L${x + 114} ${g - 38} Z`, fill: "#30385a" });  // the windscreen
+      for (let i = 0; i < 8; i++) { R(x + 6 + i * 11.6, g - 38, 9, 9, "#1d1a22", { rx: 1 }); R(x + 7 + i * 11.6, g - 37, 7, 7, r("bw" + i) > 0.5 ? "#f0c070" : "#30385a", { rx: 0.8 }); }
+      A("path", { d: `M${x + 103} ${g - 38} H${x + 108} L${x + 112} ${g - 23} H${x + 107} Z`, fill: "#30385a" });  // the windscreen
       R(x + 122, g - 17, 6, 3.4, "#fff2c0"); glow(x + 128, g - 15, 22, "hh-lamp", 0.9);                    // the headlight
       R(x + 1, g - 17, 3, 4, "#c9482e");                                                                    // the tail light
       A("polygon", { points: `${x + 20},${g - 44} ${x + 26},${g - 44} ${x + 28},${g - 40} ${x + 18},${g - 40}`, fill: "#c9482e" });
@@ -19943,6 +20032,7 @@
     }
     // two parked cars, side on
     const car = (x, g, w, col, k) => {
+      carPts.push([x, g, w]);
       A("ellipse", { cx: x + w / 2, cy: g + 1, rx: w / 2 + 4, ry: 3.4, fill: "#0e0d16", opacity: 0.6 });
       A("path", { d: `M${x} ${g - 6} V${g - 14} Q${x} ${g - 17} ${x + 4} ${g - 17} H${x + w - 4} Q${x + w} ${g - 17} ${x + w} ${g - 13} V${g - 6} Z`, fill: col });
       A("path", { d: `M${x + w * 0.16} ${g - 17} L${x + w * 0.26} ${g - 27} H${x + w * 0.8} L${x + w * 0.9} ${g - 17} Z`, fill: col });
@@ -19954,29 +20044,265 @@
     };
     car(150, 548, 64, "#2f4c7a", "c1"); car(232, 548, 58, "#8e2f2f", "c2"); car(304, 548, 52, "#c8b48a", "c3");
 
-    // ── two autumn trees framing the edges ──
+    // ── the light of the hour over the scene (the sky above y 170 keeps its own colours), the weather, and what glows on its own ──
+    const snowVehG = A("g", { "pointer-events": "none" });                                                  // snow on the bus and the cars (paintDyn)
+    const tintGr = sv("linearGradient", { id: "hh-tintg", gradientUnits: "userSpaceOnUse", x1: 0, y1: 170, x2: 0, y2: 250 }, defs);
+    const tintS = [0, 1].map(o => sv("stop", { offset: o, "stop-color": "#000", "stop-opacity": o }, tintGr));
+    const tint = R(0, 0, VW, VH, "url(#hh-tintg)", { opacity: 0, "pointer-events": "none" });               // the colour of the hour
+    const liftGr = sv("linearGradient", { id: "hh-liftg", gradientUnits: "userSpaceOnUse", x1: 0, y1: 150, x2: 0, y2: 250 }, defs);
+    [0, 1].forEach(o => sv("stop", { offset: o, "stop-color": "#eaf3ff", "stop-opacity": o }, liftGr));
+    const lift = R(0, 0, VW, VH, "url(#hh-liftg)", { opacity: 0, "pointer-events": "none", style: "mix-blend-mode:screen" });   // daylight lifts the darks
+    const dim = R(0, 0, VW, VH, "#0a1230", { opacity: 0, "pointer-events": "none" });                       // rain and storm darken it further
+    const fogFar = R(-10, 196, VW + 20, 210, "url(#hh-fogv)", { opacity: 0, "pointer-events": "none" });
+    const fogNear = R(-10, 400, VW + 20, 190, "url(#hh-fogv)", { opacity: 0, "pointer-events": "none" });
+    // by day the classroom windows show the sky
+    const dayG = A("g", { "pointer-events": "none", opacity: 0 });
+    wins.forEach(w => {
+      R(w.x, w.y, w.w, w.h, "url(#hh-dayglass)", { opacity: w.lit ? 0.74 : 0.93 }, dayG);
+      A("polygon", { points: `${w.x},${w.y + w.h} ${w.x + w.w * 0.45},${w.y} ${w.x + w.w * 0.7},${w.y} ${w.x + w.w * 0.25},${w.y + w.h}`, fill: "#fff", opacity: 0.2 }, dayG);
+      R(w.x + w.w * 0.35, w.y, 1.4, w.h, "#2a3a52", { opacity: 0.5 }, dayG);
+    });
+    [[153, 274, 10, 32, 0.7], [197, 274, 10, 32, 0.7], [152, 328, 56, 30, 0.62]].forEach(([x, y, w, h, o]) => R(x, y, w, h, "url(#hh-dayglass)", { opacity: o }, dayG));
+    [152, 166, 180, 194].forEach(x => R(x + 13, 328, 1.4, 30, "#2a3a52", { opacity: 0.6 }, dayG));
+    // what glows on its own, above the tint: the lit classrooms, the doors, the lamps, the stadium lights and the vehicles' lights
+    const gLight = A("g", { "pointer-events": "none", opacity: 0 });
+    const GL = (cx, cy, rr, id, op) => A("circle", { cx, cy, r: rr, fill: `url(#${id})`, opacity: op == null ? 1 : op, style: "mix-blend-mode:screen" }, gLight);
+    wins.forEach(w => {
+      if (!w.lit) return;
+      R(w.x, w.y, w.w, w.h, "#ffd27a", { opacity: 0.92 }, gLight);
+      R(w.x, w.y, w.w, w.h * 0.35, "#fff1b8", { opacity: 0.5 }, gLight);
+      R(w.x + w.w * 0.35, w.y, 1.4, w.h, "#1d1a22", { opacity: 0.65 }, gLight);
+      GL(w.x + w.w / 2, w.y + w.h / 2, 26, "hh-win", 0.8);
+    });
+    [[153, 274, 10, 32], [197, 274, 10, 32]].forEach(([x, y, w, h]) => { R(x, y, w, h, "#ffe2a0", { opacity: 0.95 }, gLight); R(x + 5, y, 1.2, h, "#1d1a22", { opacity: 0.6 }, gLight); });
+    GL(158, 290, 28, "hh-win", 0.8); GL(202, 290, 28, "hh-win", 0.8);
+    R(152, 328, 56, 30, "#ffe2a0", { opacity: 0.95 }, gLight);
+    [152, 166, 180, 194].forEach(x => R(x + 13, 328, 1.4, 30, "#1d1a22", { opacity: 0.8 }, gLight));
+    R(152, 337, 56, 1.4, "#1d1a22", { opacity: 0.7 }, gLight);
+    A("polygon", { points: "150,359 210,359 252,484 108,484", fill: "url(#hh-spill)", style: "mix-blend-mode:screen" }, gLight);
+    [[133, 336], [227, 336]].forEach(([x, y]) => { R(x - 1.6, y - 2.6, 3.2, 5.2, "#ffd890", {}, gLight); GL(x, y, 20, "hh-lamp"); });
+    [[100, 480], [262, 480]].forEach(([x, y]) => { R(x - 2.8, y - 82.4, 5.6, 4.4, "#ffe2a0", {}, gLight); GL(x, y - 80, 44, "hh-lamp"); A("ellipse", { cx: x, cy: y + 2, rx: 34, ry: 6, fill: "#ffd890", opacity: 0.16, style: "mix-blend-mode:screen" }, gLight); });
+    [308, 316, 324, 332].forEach(x => R(x - 1.8, 169, 3.6, 3, "#fff2c8", {}, gLight)); GL(322, 170, 48, "hh-flood", 0.6);
+    [[292, 450], [338, 450]].forEach(([x, y]) => A("ellipse", { cx: x, cy: y, rx: 14, ry: 5, fill: "url(#hh-win)", style: "mix-blend-mode:screen", opacity: 0.8 }, gLight));
+    R(130, 529, 6, 3.4, "#fff2c0", {}, gLight); GL(136, 531, 22, "hh-lamp", 0.9); R(9, 529, 3, 4, "#c9482e", {}, gLight);
+    carPts.forEach(([x, g, w]) => { R(x + w - 2.4, g - 13, 3, 3.4, "#fff2c0", {}, gLight); R(x - 0.6, g - 13, 3, 3.4, "#c9482e", {}, gLight); GL(x + w, g - 12, 18, "hh-lamp", 0.7); });
+    [[100, 520], [262, 520]].forEach(([x, y]) => A("ellipse", { cx: x, cy: y, rx: 70, ry: 12, fill: "#ffd890", opacity: 0.1, style: "mix-blend-mode:screen" }, gLight));
+
+    // ── two trees framing the edges: the colours follow the season (autumn colours as drawn, fresh green in spring, deep green in summer, bare and frosted in winter or snow) ──
+    const AUTC = ["#c4642a", "#d98a2e", "#a6402a", "#e0a840", "#8a3a22"];
+    const bareG = A("g", { "pointer-events": "none" }), frostG = A("g", { "pointer-events": "none" });
     const tree = (tx, base, flip, k) => {
-      const s = flip ? -1 : 1, X = d => tx + s * d;
-      A("path", { d: `M${X(-5)} ${base} Q${X(-3)} ${base - 90} ${X(-7)} ${base - 170} L${X(2)} ${base - 170} Q${X(6)} ${base - 90} ${X(6)} ${base} Z`, fill: "#241a22" });
-      L(X(-3), base - 120, X(22), base - 190, "#241a22", 4); L(X(0), base - 140, X(-8), base - 206, "#241a22", 3.4);
-      const cols = ["#c4642a", "#d98a2e", "#a6402a", "#e0a840", "#8a3a22"];
-      for (let i = 0; i < 14; i++) {
-        const cx = X(-8 + r(k + "cx" + i) * 46), cy = base - 200 - r(k + "cy" + i) * 56 + (i % 3) * 6, rr = 12 + r(k + "cr" + i) * 11;
-        A("circle", { cx: cx.toFixed(1), cy: cy.toFixed(1), r: rr.toFixed(1), fill: cols[Math.floor(r(k + "cc" + i) * 5)] });
+      const s = flip ? -1 : 1, X = d => tx + s * d, W = "#241a22";
+      reg(A("path", { d: `M${X(-5)} ${base} Q${X(-3)} ${base - 90} ${X(-7)} ${base - 170} L${X(2)} ${base - 170} Q${X(6)} ${base - 90} ${X(6)} ${base} Z`, fill: W }), "wood", W, 0);
+      reg(L(X(-3), base - 120, X(22), base - 190, W, 4), "wood", W, 0, {}, "stroke");
+      reg(L(X(0), base - 140, X(-8), base - 206, W, 3.4), "wood", W, 0, {}, "stroke");
+      // the bare twigs, only shown in winter or snow: they grow from the trunk top and the two branches
+      const anchors = [[X(-2), base - 168], [X(22), base - 190], [X(-8), base - 206]];
+      for (let i = 0; i < 13; i++) {
+        const [ax, ay] = anchors[i % 3], a = (r(k + "ta" + i) - 0.5) * 2 + 0.35, len = 26 + r(k + "tl" + i) * 38;
+        const ex = ax + s * Math.sin(a) * len, ey = ay - Math.cos(a) * len, mx = ax + (ex - ax) * 0.6, my = ay + (ey - ay) * 0.6, a2 = a + (i % 2 ? 0.75 : -0.75), l2 = len * 0.45;
+        const sx = mx + s * Math.sin(a2) * l2, sy = my - Math.cos(a2) * l2;
+        reg(L(ax, ay, ex, ey, W, 2.2, {}, bareG), "wood", W, 0, {}, "stroke");
+        reg(L(mx, my, sx, sy, W, 1.3, {}, bareG), "wood", W, 0, {}, "stroke");
+        L(ax, ay - 1.2, ex, ey - 1.2, "#eef3fb", 1.1, { opacity: 0.85 }, frostG);
+        L(mx, my - 1, sx, sy - 1, "#eef3fb", 0.8, { opacity: 0.8 }, frostG);
       }
-      for (let i = 0; i < 8; i++) A("circle", { cx: X(r(k + "dx" + i) * 46 - 6).toFixed(1), cy: (base - 196 + r(k + "dy" + i) * 18).toFixed(1), r: (7 + r(k + "dr" + i) * 6).toFixed(1), fill: "#5a2a22", opacity: 0.55 });   // the shaded underside
-      for (let i = 0; i < 7; i++) A("circle", { cx: X(r(k + "hx" + i) * 44).toFixed(1), cy: (base - 252 + r(k + "hy" + i) * 30).toFixed(1), r: (5 + r(k + "hr" + i) * 5).toFixed(1), fill: "#f0b858", opacity: 0.5 });  // the last light on top
+      for (let i = 0; i < 14; i++) {
+        const cx = X(-8 + r(k + "cx" + i) * 46), cy = base - 200 - r(k + "cy" + i) * 56 + (i % 3) * 6, rr = 12 + r(k + "cr" + i) * 11, ci = Math.floor(r(k + "cc" + i) * 5);
+        reg(A("circle", { cx: cx.toFixed(1), cy: cy.toFixed(1), r: rr.toFixed(1), fill: AUTC[ci] }), "crown", AUTC[ci], r(k + "ch" + i), { i: ci });
+      }
+      for (let i = 0; i < 8; i++) reg(A("circle", { cx: X(r(k + "dx" + i) * 46 - 6).toFixed(1), cy: (base - 196 + r(k + "dy" + i) * 18).toFixed(1), r: (7 + r(k + "dr" + i) * 6).toFixed(1), fill: "#5a2a22", opacity: 0.55 }), "shade", "#5a2a22", 0, { i });   // the shaded underside
+      for (let i = 0; i < 7; i++) reg(A("circle", { cx: X(r(k + "hx" + i) * 44).toFixed(1), cy: (base - 252 + r(k + "hy" + i) * 30).toFixed(1), r: (5 + r(k + "hr" + i) * 5).toFixed(1), fill: "#f0b858", opacity: 0.5 }), "high", "#f0b858", 0, { i });   // the last light on top
     };
     tree(10, 482, false, "tl"); tree(350, 482, true, "tr");
-    for (let i = 0; i < 18; i++) {                                                                          // leaves under the trees
-      const left = i % 2 === 0, x = left ? 4 + r("ux" + i) * 66 : 290 + r("uy" + i) * 66, y = 468 + r("uz" + i) * 20;
-      A("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: 2.2, ry: 1.2, fill: leafCols[Math.floor(r("ul" + i) * 5)], opacity: 0.9 });
+    const leafG2 = A("g", {});                                                                              // leaves under the trees (autumn only)
+    for (let i = 0; i < 18; i++) {
+      const left = i % 2 === 0, x = left ? 4 + r("ux" + i) * 66 : 290 + r("uy" + i) * 66, y = 468 + r("uz" + i) * 13;
+      A("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: 2.2, ry: 1.2, fill: leafCols[Math.floor(r("ul" + i) * 5)], opacity: 0.9 }, leafG2);
     }
+    const dynG = A("g", { "pointer-events": "none" });                                                      // spring flowers and summer fireflies (paintDyn)
+    const flash = R(0, 0, VW, VH, "#eaf0ff", { opacity: 0, "pointer-events": "none" });                      // lightning
 
     A("rect", { x: 0, y: 0, width: VW, height: VH, fill: "url(#hh-vig)", "pointer-events": "none" });
 
+    // ── time of day, weather and season: the live Hawkins clock and weather, same logic as Will's house and Castle Byers ──
+    const season = hkSeason();
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const say = t => { caption.textContent = t; };
+    let tI = hkTimeGet(), wxI = hkWxGet(), gone = false, flashEl = null;
+    const amb = hkAmbience({ owner: sh.back });                                                              // the sound of the weather, birds by day, crickets at night
+    sh.onClose = () => { gone = true; amb.stop(); };
+    sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
+    const q = sel => Array.from(defs.querySelectorAll(sel));
+    const skyStops = q("#hh-sky stop"), lawnStops = q("#hh-lawn stop"), walkStops = q("#hh-walk stop"), streetStops = q("#hh-street stop"), vigStops = q("#hh-vig stop"), fogStops = q("#hh-fogv stop"), glassStops = q("#hh-dayglass stop");
+    const vigBase = vigStops.map(st => parseFloat(st.getAttribute("stop-opacity")));
+    const SKY = { night: ["#0b0d2a", "#14183f", "#1f2552", "#2c2f5a"], dusk: ["#272650", "#5e4f7e", "#c07e7c", "#e6a880"], dawn: ["#2f3f80", "#7a82b8", "#e0a8a0", "#f6caa0"], day: ["#5aa4e6", "#8cc4f0", "#bfe0f4", "#e2f0f6"] };
+    const TINT = { night: ["#060a2c", 0.5], dusk: ["#2a2850", 0], dawn: ["#5a5a9a", 0.16], day: ["#000000", 0] };
+    const LIFT = { night: 0, dusk: 0, dawn: 0.05, day: 0.17 }, WALL = { night: 1, dusk: 1, dawn: 0.55, day: 0 }, VIGK = { night: 1, dusk: 1, dawn: 0.8, day: 0.45 };
+    const SUN = { day: [258, 74], dusk: [266, 240], dawn: [94, 242] }, SUNC = { day: "#fffbe8", dusk: "#ffb36a", dawn: "#ffe0a8" };
+    const CLOUD = { night: "#3a3a60", dusk: "#9a86a4", dawn: "#e8b8b8", day: "#ffffff" };
+    const OVC = { rain: ["#6c7886", 0.55], storm: ["#46505f", 0.75], fog: ["#c3cad3", 0.65], snow: ["#c9d2de", 0.55] };
+    const OVK = { night: 0.45, dusk: 0.8, dawn: 0.85, day: 1 }, OVD = { night: 0.65, dusk: 0.25, dawn: 0.15, day: 0 };
+    const FOGC = { night: "#4a5072", dusk: "#c2aac2", dawn: "#dccad2", day: "#e4e9f0" };
+    const LAWN = { autumn: ["#6f8a48", "#4a6c3a"], halloween: ["#5e7440", "#40582f"], spring: ["#79ae4e", "#559040"], summer: ["#5c9440", "#417a34"], winter: ["#8a8f92", "#6f757c"] };
+    const LAWND = { night: ["#0f1c26", 0.8], dusk: ["#1c2c2c", 0.58], dawn: ["#243040", 0.4], day: ["#000000", 0] };
+    const WALK = { night: ["#52536c", "#34354c"], dusk: ["#a29bac", "#6f6a80"], dawn: ["#b6acc2", "#8a8298"], day: ["#d2ccd6", "#aaa4b6"] };
+    const STREET = { night: ["#1e1d2a", "#12111a"], dusk: ["#2e2c3a", "#1a1924"], dawn: ["#3c3a4a", "#26252f"], day: ["#4c4b57", "#34333f"] };
+    const BY_SAY = { night: "Night at Hawkins High. A few classrooms are still lit, and the flag hangs quiet.", dusk: "Hawkins High. A few classrooms are still lit, and the flag hangs quiet.", dawn: "Dawn. A few classroom windows are already lit, and the bus is waiting.", day: "Hawkins High, in session. The lawn is empty and the bus is waiting out front." };
+    const COZY = { day: "Snow in daylight. The school looks closed for the day, and nobody minds.", night: "Snow at night. The lit classrooms glow like lanterns.", dusk: "A snowy dusk. The lamps are on and the steps are untouched.", dawn: "Snow at dawn. Nobody has walked up the steps yet." };
+    const WX_SAY = { clear: "The sky clears. The flag hangs quiet.", rain: "Rain on the brick. Every lit window looks warmer for it.", fog: "Fog over the field. The lamp posts become small moons.", snow: "Snow on the steps, and the flag hangs heavy.", leaves: "A gust of leaves scrapes across the walkway.", storm: "Thunder over the football field. The lit windows look braver for it.", sunny: "Sun on the brick. The bus ticks as it warms." };
+    const wxLine = () => { const k = HK_WX[wxI][0]; return k === "clear" && HK_TIMES[tI].name === "day" ? WX_SAY.sunny : WX_SAY[k]; };
+    const wxLabel = () => HK_WX[wxI][0] === "clear" ? (HK_TIMES[tI].name === "day" ? "☀️ sunny" : "✨ clear") : HK_WX[wxI][1];
+    const hx = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+    const mix = (a, b, t) => { const p = hx(a), qq = hx(b); return "#" + p.map((v, i) => Math.max(0, Math.min(255, Math.round(v + (qq[i] - v) * t))).toString(16).padStart(2, "0")).join(""); };
+    const TONE = { day: ["#fff4d0", 0.1], dawn: ["#1a1030", 0.15], dusk: ["#1a1030", 0], night: ["#0c0f2c", 0.58] };
+    const tone = (c, n) => TONE[n][1] ? mix(c, TONE[n][0], TONE[n][1]) : c;
+        const SPR_G = ["#6fb04a", "#8cc45a", "#5a9a42", "#a4d068", "#7ab850"], SPR_B = ["#f2b6c8", "#f7d0dc", "#e89ab4"], SUM_G = ["#3f8a3a", "#4e9a42", "#357a34", "#5aa44a", "#2f6e30"];
+    const FAR_DAY = { autumn: ["#9a6a48", "#b07a3e", "#6f7a48", "#a8603c"], spring: ["#6a9a6a", "#7aaa6a", "#9ab890", "#8ab07a"], summer: ["#3f6e48", "#4a7a50", "#58865a", "#3a6642"], bare: ["#8f8fa0", "#a2a2b2", "#7e7e92", "#b0b0c0"] };
+    const FAR_DUSK = ["#3c3454", "#463c5a", "#5a4254", "#4a3a52"];
+    const MUM = { autumn: ["#d9822a", "#c8602a"], halloween: ["#d9822a", "#7a3aa0"], spring: ["#f4b6cc", "#fff0a0"], summer: ["#f2d23c", "#e8645a"], winter: ["#7a5a40", "#6a4a38"] };
+
+    const paintFoliage = () => {
+      const kind = HK_WX[wxI][0], n = HK_TIMES[tI].name, bare = season === "winter" || kind === "snow";
+      bareG.style.display = bare ? "" : "none"; frostG.style.display = bare ? "" : "none";
+      FOL.forEach(f => {
+        let col = f.base, hide = false;
+        if (f.kind === "far") {
+          const fm = bare ? "bare" : season === "halloween" ? "autumn" : season;
+          let c = FAR_DAY[fm][f.i];
+          if (season === "halloween" && !bare) c = mix(c, "#2a1018", 0.35);
+          col = mix(c, FAR_DUSK[f.i], { day: 0, dawn: 0.45, dusk: fm === "autumn" ? 1 : 0.7, night: fm === "autumn" ? 1 : 0.7 }[n]);
+        } else if (f.kind === "wood") {
+          col = n === "day" ? mix(f.base, "#5a463e", 0.45) : tone(f.base, n);
+        } else {
+          if (bare) {
+            if (f.kind === "crown") { col = mix("#a8a2ae", "#e8ecf2", f.i / 4); hide = season === "winter" || f.h > 0.18; }   // from December every leaf is gone; in an early snow most have dropped and the rest are frosted
+            else hide = true;
+          } else if (season === "spring") {
+            col = f.kind === "crown" ? (f.h < 0.2 ? SPR_B[f.i % 3] : SPR_G[f.i]) : f.kind === "shade" ? "#244c2c" : "#e0f4a8";
+          } else if (season === "summer") {
+            col = f.kind === "crown" ? SUM_G[f.i] : f.kind === "shade" ? "#1f4a2a" : "#c8e87a";
+          } else if (season === "halloween" && f.kind !== "high") {
+            col = mix(f.base, "#2a1018", 0.3);
+          }
+          col = tone(col, n);
+        }
+        f.el.setAttribute(f.prop, col);
+        f.el.style.display = hide ? "none" : "";
+      });
+    };
+    const paintGround = () => {
+      const n = HK_TIMES[tI].name, d = LAWND[n], lc = LAWN[season] || LAWN.autumn;
+      lawnStops.forEach((st, i) => st.setAttribute("stop-color", mix(lc[i], d[0], d[1])));
+      walkStops.forEach((st, i) => st.setAttribute("stop-color", WALK[n][i]));
+      streetStops.forEach((st, i) => st.setAttribute("stop-color", STREET[n][i]));
+    };
+
+    // what the weather and the season leave behind: snow on the roofs, sills, steps, lawn, hedges, sign, bus, cars and kerb; fallen leaves in autumn; flowers in spring; fireflies on summer evenings
+    const paintDyn = () => {
+      [dynG, snowRoofG, snowHedgeG, snowGroundG, snowSignG, snowStreetG, snowVehG].forEach(g => { g.textContent = ""; });
+      paintFoliage(); paintGround();
+      const kind = HK_WX[wxI][0], n = HK_TIMES[tI].name, cover = season === "winter" || kind === "snow";
+      const leafy = (season === "autumn" || season === "halloween") && !cover;
+      leafG.style.display = leafy ? "" : "none"; leafG2.style.display = leafy ? "" : "none";
+      const mc = MUM[season] || MUM.autumn;
+      mums.forEach(m => { m.el.setAttribute("fill", mc[m.bi]); m.el.style.display = cover ? "none" : ""; });
+      const wl = y => 146 - (y - 368) * 0.4167, wr = y => 214 + (y - 368) * 0.4167;                          // the walkway's edges
+      if (cover) {
+        const sop = { night: 0.8, dusk: 0.92, dawn: 0.95, day: 1 }[n];
+        const S = (tag, attrs, g) => A(tag, Object.assign({ fill: "#f2f5ff" }, attrs), g);
+        [[-10, 145], [215, 370]].forEach(([x0, x1]) => { S("rect", { x: x0, y: 263.5, width: x1 - x0, height: 5, rx: 2, opacity: 0.96 }, snowRoofG); S("rect", { x: x0, y: 272.4, width: x1 - x0, height: 1.8, fill: "#fff", opacity: 0.55 }, snowRoofG); });
+        S("rect", { x: 137, y: 228, width: 86, height: 6, rx: 2.5, opacity: 0.96 }, snowRoofG);                // the middle block's roof
+        S("rect", { x: 50, y: 197, width: 17, height: 4.5, rx: 2, opacity: 0.96 }, snowRoofG);                 // the chimney cap
+        S("rect", { x: 127, y: 311, width: 106, height: 4.6, rx: 1.6, opacity: 0.96 }, snowRoofG);             // the canopy
+        wins.forEach(w => S("rect", { x: w.x - 2.4, y: w.y + w.h + 0.3, width: w.w + 4.8, height: 1.9, rx: 0.8, opacity: 0.92 }, snowRoofG));
+        [[142, 359, 76], [138, 362, 84], [134, 365, 92]].forEach(([x, y, w]) => S("rect", { x, y, width: w, height: 1.7, fill: "#f6f8ff", opacity: 0.95 }, snowRoofG));
+        hedgePts.forEach(x => S("ellipse", { cx: x, cy: 351.5, rx: 7.5, ry: 3, opacity: 0.94 }, snowHedgeG));
+        S("polygon", { points: "-10,362 130,362 146,368 96,490 -10,490", opacity: 0.94 * sop }, snowGroundG);
+        S("polygon", { points: "214,368 230,362 370,362 370,490 264,490", opacity: 0.94 * sop }, snowGroundG);
+        S("polygon", { points: "146,368 214,368 264,488 96,488", fill: "#f4f7ff", opacity: 0.2 }, snowGroundG);       // a thin frost on the swept walk
+        for (let i = 0, placed = 0; i < 120 && placed < 26; i++) {
+          const y = 374 + r("sy" + i) * 108, x = -4 + r("sx" + i) * (VW + 8), k = (y - 368) / 120;
+          if (x > wl(y) - 12 && x < wr(y) + 12) continue;
+          S("ellipse", { cx: x.toFixed(0), cy: y.toFixed(0), rx: (9 + k * 28).toFixed(0), ry: (1.8 + k * 4.4).toFixed(1), fill: "#fbfcff", opacity: 0.8 * sop }, snowGroundG); placed++;
+        }
+        S("rect", { x: 284, y: 397.8, width: 62, height: 3, rx: 1.4, fill: "#f6f8ff", opacity: 0.96 }, snowSignG);   // the brick sign
+        S("rect", { x: 280, y: 425.6, width: 70, height: 2.6, rx: 1.2, fill: "#f6f8ff", opacity: 0.9 }, snowSignG);
+        S("rect", { x: 0, y: 483, width: VW, height: 3, fill: "#f6f8ff", opacity: 0.92 }, snowStreetG);        // the kerb, a bank along it and slush on the road
+        for (let x = -10; x < VW + 20; x += 30) S("ellipse", { cx: x, cy: 498, rx: 20, ry: 4.5, fill: "#eef2fb", opacity: 0.88 }, snowStreetG);
+        S("rect", { x: 0, y: 500, width: VW, height: VH - 500, fill: "#c8d0e0", opacity: 0.13 }, snowStreetG);
+        S("rect", { x: 12, y: 500.6, width: 96, height: 4, rx: 2, opacity: 0.96 }, snowVehG);                  // the bus roof
+        carPts.forEach(([x, g, w]) => S("rect", { x: x + w * 0.26, y: g - 29.8, width: w * 0.54, height: 3.2, rx: 1.4, opacity: 0.96 }, snowVehG));
+      }
+      if (season === "spring" && !cover) for (let i = 0; i < 44; i++) {
+        const y = 376 + r("fy" + i) * 104, x = 4 + r("fx" + i) * (VW - 8);
+        if (x > wl(y) - 6 && x < wr(y) + 6) continue;
+        A("circle", { cx: x.toFixed(0), cy: y.toFixed(0), r: 1.3, fill: ["#f4f1ff", "#f7c5d4", "#ffe58a"][i % 3], opacity: 0.9 }, dynG);
+      }
+      if (season === "summer" && (n === "dusk" || n === "night")) for (let i = 0; i < 14; i++) {
+        const f = A("circle", { cx: (20 + r("ff" + i) * 320).toFixed(0), cy: (372 + r("fg" + i) * 110).toFixed(0), r: 2.2, fill: "#e8ff8a" }, dynG);
+        if (!reduce) anim(f, `animation:hkFirefly ${(4 + r("fd" + i) * 4).toFixed(1)}s ease-in-out -${(r("fz" + i) * 5).toFixed(1)}s infinite;`);
+      }
+    };
+    const paintWeather = () => {
+      const kind = HK_WX[wxI][0];
+      dim.setAttribute("opacity", kind === "storm" ? 0.26 : kind === "rain" ? 0.14 : 0);
+      flashEl = kind === "storm" ? flash : null;
+      hkWxOverlay(box, kind, reduce);
+      paintDyn();
+    };
+    const applyTime = announce => {
+      const t = HK_TIMES[tI], kind = HK_WX[wxI][0], n = t.name, cozy = kind === "snow", dull = kind !== "clear" && kind !== "leaves";
+      const over = kind === "clear" || kind === "leaves" ? 1 : kind === "fog" ? 0.4 : 0.2;                  // cloud hides the stars and dims the moon
+      skyStops.forEach((st, i) => st.setAttribute("stop-color", SKY[n][i]));
+      box.style.background = SKY[n][1];
+      starG.setAttribute("opacity", t.stars * over);
+      moonG.setAttribute("opacity", n === "night" ? (over < 1 ? 0.3 + over * 0.5 : 1) : n === "dusk" ? 0.85 * over : 0);
+      if (SUN[n]) { sunG.setAttribute("transform", `translate(${SUN[n][0]} ${SUN[n][1]})`); sunDisc.setAttribute("fill", SUNC[n]); }
+      sunG.setAttribute("opacity", n === "night" ? 0 : over * (n === "day" ? 1 : 0.9));
+      cloudsG.setAttribute("opacity", dull ? 0.75 : 1);
+      cloudEls.forEach(el => el.setAttribute("fill", CLOUD[n]));
+      cloudsG.querySelectorAll("[data-puff]").forEach(g => g.setAttribute("opacity", dull || n === "night" ? 0 : n === "dusk" ? 0.5 : n === "dawn" ? 0.8 : 1));
+      const ov = OVC[kind];
+      ovc.setAttribute("fill", ov ? mix(ov[0], "#0b0f24", OVD[n]) : "#7d8a99"); ovc.setAttribute("opacity", ov ? ov[1] * OVK[n] : 0);
+      tintS.forEach(st => st.setAttribute("stop-color", TINT[n][0])); tint.setAttribute("opacity", TINT[n][1]);
+      lift.setAttribute("opacity", LIFT[n] * (dull ? 0.5 : 1));
+      wallTintG.setAttribute("opacity", WALL[n]);
+      vigStops.forEach((st, i) => st.setAttribute("stop-opacity", vigBase[i] * VIGK[n]));
+      glassStops.forEach((st, i) => st.setAttribute("stop-color", n === "dawn" ? ["#e6d4e0", "#c4a8c0", "#9a82a8"][i] : ["#d4e6f6", "#a2c0dc", "#7a98ba"][i]));
+      dayG.setAttribute("opacity", n === "day" ? (dull ? 0.85 : 0.95) : n === "dawn" ? 0.25 : 0);
+      const lampLv = n === "day" ? (dull ? 0.5 : 0) : n === "dusk" ? 0 : n === "dawn" ? 0.55 : Math.min(1, 1 + (cozy ? 0.12 : 0));   // dusk is the picture as drawn; night and dawn add to it
+      gLight.setAttribute("opacity", lampLv);
+      const origGl = n === "day" ? (dull ? 0.35 : 0) : n === "dawn" ? 0.6 : 1;
+      glowGs.forEach(g => g.setAttribute("opacity", origGl));
+      wetG.setAttribute("opacity", kind === "rain" || kind === "storm" ? 0.3 + lampLv * 0.7 : 0);
+      fogStops.forEach(st => st.setAttribute("stop-color", FOGC[n]));
+      fogFar.setAttribute("opacity", kind === "fog" ? 0.6 : kind === "rain" || kind === "storm" ? 0.1 : 0);
+      fogNear.setAttribute("opacity", kind === "fog" ? 0.55 : kind === "rain" || kind === "storm" ? 0.08 : 0);
+      mistG.setAttribute("opacity", kind === "fog" ? 1 : n === "day" ? 0.3 : 1);
+      timeBtn.textContent = t.label; wxBtn.textContent = wxLabel();
+      amb.set(kind, n);
+      sub.textContent = "hawkins · the high school · " + n + " · " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
+      paintDyn();
+      if (announce) say(cozy ? COZY[n] : kind === "clear" || kind === "leaves" ? BY_SAY[n] : wxLine());
+    };
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather until you close the app)", () => { wxI = hkWxNext(wxI); hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
+    hkSoundPill(pill, amb);
+    // lightning, and thunder a moment later, when it storms
+    const sched = (fn, lo, hi) => later(() => { if (gone) return; fn(); sched(fn, lo, hi); }, lo + Math.random() * (hi - lo));
+    sched(() => {
+      if (!flashEl) return;
+      if (!reduce) { try { flashEl.animate([{ opacity: 0 }, { opacity: 0.55 }, { opacity: 0 }, { opacity: 0.35 }, { opacity: 0 }], { duration: 650 }); } catch {} }
+      later(() => { if (!gone && flashEl) hkThunder(); }, 700 + Math.random() * 900);
+    }, 5000, 14000);
+    // the live values roll over by themselves if you stay (a new hour, or an override running out)
+    hkEnvWatch(box, (t, w) => { if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); } });
+
     field.appendChild(svg);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    applyTime(true);
+    paintWeather();
     document.body.appendChild(sh.back);
   }
 
