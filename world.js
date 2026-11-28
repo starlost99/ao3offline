@@ -459,20 +459,18 @@
     } catch {}
   }
 
-  // a way through to the next room: a small pulsing arrow on an edge of the scene, with a tiny label
-  // (sh: the shell; side: "left" | "right" | "bottom" | "top"; label: where it leads; fn: what it does; o.at: where along the edge, e.g. "58%")
+  // a way through to the next room: a small, quiet pulsing arrow on an edge of the scene, like the Wheelers' kitchen's arrow to the dining room
+  // (sh: the shell; side: "left" | "right" | "bottom" | "top"; label: where it leads (a tooltip and screen-reader label only); fn: what it does; o.at: where along the edge, e.g. "58%")
   function hkArrow(sh, side, label, fn, o) {
     o = o || {};
     const at = o.at || (side === "left" || side === "right" ? "56%" : "50%");
     const glyph = { left: "\u2039", right: "\u203A", bottom: "\u2304", top: "\u2303" }[side] || "\u203A";
-    const edge = side === "left" ? "left:6px;" : side === "right" ? "right:6px;" : "";
-    const place = side === "left" || side === "right" ? `${edge}top:${at};transform:translateY(-50%);` : `${side}:8px;left:${at};transform:translateX(-50%);`;
-    const b = sh.kit.el("button", `position:absolute;${place}z-index:6;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;`);
+    const place = side === "left" || side === "right" ? `${side}:5px;top:${at};transform:translateY(-50%);` : `${side}:7px;left:${at};transform:translateX(-50%);`;
+    const b = sh.kit.el("button", `position:absolute;${place}z-index:6;display:flex;align-items:center;justify-content:center;width:34px;height:40px;background:none;border:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;`);
     b.type = "button"; b.title = o.title || label; b.setAttribute("aria-label", o.title || label);
-    const c = sh.kit.el("span", "display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.42);border:1px solid rgba(255,217,138,0.45);color:#ffd98a;font-size:24px;line-height:1;padding-bottom:3px;box-sizing:border-box;", glyph);
+    const c = sh.kit.el("span", "display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.35);color:#ffd98a;font-size:17px;line-height:1;padding-bottom:2px;box-sizing:border-box;pointer-events:none;", glyph);
     c.className = "hk-anim"; c.style.animation = "hkPulse 2.6s ease-in-out infinite";
-    const t = sh.kit.el("span", "font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:10px;line-height:1.1;color:#ffe9b8;text-shadow:0 1px 3px rgba(0,0,0,0.9);max-width:62px;text-align:center;", label);
-    b.appendChild(c); b.appendChild(t);
+    b.appendChild(c);
     b.addEventListener("click", e => { e.stopPropagation(); fn(); });
     sh.field.appendChild(b);
     return b;
@@ -17102,11 +17100,9 @@
     // the live values roll over by themselves if you stay (a new hour, or an override running out)
     hkEnvWatch(box, (t, w) => { if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); } });
 
-    // the front door: the first tap knocks (the lanterns flicker), the second lets you in to the living room, like the Wheelers' garage door
+    // the front door: invisible, like the Wheelers' garage door: the first tap knocks (the lanterns flicker), the second lets you in to the living room
     let nKnock = 0, entering = false;
     const goLiving = () => { if (entering) return; entering = true; say("The door opens before you can knock a third time. Warm air, and the smell of something on the stove\u2026"); bfFade(sh, () => openByersLivingRoom()); };
-    const ring = A("rect", { x: 426, y: 392, width: 60, height: 116, rx: 6, fill: "none", stroke: "#fff3c4", "stroke-width": 2.2, "stroke-dasharray": "6 5", "pointer-events": "none", opacity: 0.55 });
-    anim(ring, "animation:hkPulse 3.2s ease-in-out infinite;");
     const doorHit = R(424, 390, 64, 120, "transparent", { role: "button", "aria-label": "The front door, and the way in to the living room" });
     doorHit.style.cursor = "pointer";
     doorHit.addEventListener("click", () => {
@@ -17753,12 +17749,11 @@
     if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (finding) return; finding = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike to the sofa", () => { hkWhere.call("byers"); close(); openByersLivingRoom(); });
     else if (!empty) { pill("\u{1F4AC} next", "Hear the next line sooner", next); pill("\u{1F501} another", "A different moment", another); }
-    // ways through: down the hall to Will's room (left), the kitchen (right), the front door (bottom)
+    // ways through: a quiet arrow down the hall to Will's room (left) and one to the kitchen (right)
     let leaving = false;
     const go = (line, open) => { if (leaving) return; leaving = true; say(line); bfFade(sh, () => open()); };
     hkArrow(sh, "left", "Will\u2019s room", () => go("Down the short hall, to the door with the shark poster\u2026", openWillsRoom), { title: "Down the hall to Will\u2019s room" });
     hkArrow(sh, "right", "kitchen", () => go("Through the doorway to the kitchen, where the lamp is always on\u2026", openByersKitchen), { title: "Through to the kitchen" });
-    hkArrow(sh, "bottom", "outside", () => go("You open the front door and step out onto the porch\u2026", openWillsHouse), { title: "Out the front door" });
     pill("\u{1F373} kitchen", "Through to the kitchen", () => { close(); openByersKitchen(); });
     pill("\u{1F6CF}️ Will’s room", "Down the hall to Will’s room", () => { close(); openWillsRoom(); });
     pill("\u{1F3DA}️ outside", "Back out to the front of Will’s house", () => { close(); openWillsHouse(); });
@@ -18330,11 +18325,10 @@
     hits.slice().reverse().forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); hitRect[label] = r; r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
     R(VX, VY, VW, VH, "url(#ky-vig)", { "pointer-events": "none" });
     field.appendChild(svg); field.appendChild(ov);
-    // ways through: the living room (left), down the hall to Will's room (right), the front door (bottom)
+    // ways through: quiet arrows to the living room (left) and down the hall to Will's room (right)
     const goTo = (line, open) => { if (leaving) return; leaving = true; say(line); bfFade(sh, () => open()); };
     hkArrow(sh, "left", "living room", () => goTo("Through the doorway to the living room\u2026", openByersLivingRoom), { title: "Through to the living room", at: "60%" });
     hkArrow(sh, "right", "Will\u2019s room", () => goTo("Down the hall to Will\u2019s room\u2026", openWillsRoom), { title: "Down the hall to Will\u2019s room", at: "60%" });
-    hkArrow(sh, "bottom", "outside", () => goTo("Out through the front room and onto the porch\u2026", openWillsHouse), { title: "Out to the front of Will\u2019s house" });
     pill("\u{1F6CB}️ living room", "Through to the living room", () => { if (leaving) return; leaving = true; close(); openByersLivingRoom(); });
     pill("\u{1F6CF}️ Will’s room", "Down the hall to Will’s room", () => { if (leaving) return; leaving = true; close(); openWillsRoom(); });
     pill("\u{1F3DA}️ outside", "Out to the front of Will’s house", () => { if (leaving) return; leaving = true; close(); openWillsHouse(); });
