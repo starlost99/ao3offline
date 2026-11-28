@@ -1852,7 +1852,288 @@
     const values = Object.values(totals);
     return values.length ? Math.max(...values) : 0;
   }
-  return { WPM, MONTHLY_GOAL, isSameDay, isSameMonth, getBestCompletedMonthWords, getCycleDayTitle, getLog, getMoodForDate, getPeriodStats, getDayPrediction, getPhaseForStatsDay, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS };
+  // ── the one-line "how might today go" sentence, copied from v18.34 (buildTomorrowRecommendation and what it needs) ──
+  // recommendation sentences that name what's actually logged instead of
+  // falling back to a generic line whenever nothing hits a special-cased
+  // combo below.
+  const SYMPTOM_PHRASES = {
+    "Cramps": "cramps", "Pre-period cramps": "early cramping", "Ovulation pain": "ovulation pain",
+    "Spasms": "spasms", "Headache": "a headache", "Tender breasts": "breast tenderness",
+    "Bloating": "bloating", "Muscle aches": "muscle aches", "PMS flu": "PMS-flu symptoms", "Spotting": "spotting",
+    "Acne": "a breakout", "Oily hair": "oily hair", "Watery discharge": "watery discharge",
+    "Sweating": "extra sweating", "Hot flashes": "hot flashes", "Dry eyes": "dry eyes", "Eye strain": "eye strain",
+    "Fatigue": "fatigue", "Hungry": "a bigger appetite", "Small appetite": "a smaller appetite",
+    "Cravings": "cravings", "Craving chocolate": "chocolate cravings", "Vivid dreams": "vivid dreams", "Nesting": "nesting energy",
+    "Emotional": "heightened emotions", "Irritable": "irritability", "Anxiety": "anxiety", "Overthinking": "overthinking", "Self critical": "a self-critical streak",
+    "Hopelessness": "hopelessness", "PMDD": "PMDD symptoms", "Calm": "a sense of calm", "Confident": "confidence",
+    "Feeling okay": "feeling steady", "Hating men": "zero patience for men", "Taking it personally": "taking things personally", "Over it": "being over it", "Sad": "sadness",
+    "Sociable": "sociability", "Solitary": "a pull toward solitude", "Flirty": "flirtiness",
+    "High libido": "a higher libido", "Low libido": "a lower libido",
+  };
+  function symptomPhrase(name) { return SYMPTOM_PHRASES[name] || name.toLowerCase(); }
+  function capitalizeFirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+  // Joins phrases into "a" / "a and b" / "a, b, and c".
+  function joinPhrases(list) {
+    if (!list.length) return "";
+    if (list.length === 1) return list[0];
+    if (list.length === 2) return `${list[0]} and ${list[1]}`;
+    return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
+  }
+  function buildTomorrowRecommendation(prediction) {
+    if (!prediction || !prediction.ready) return null;
+    const symptomNames = new Set([
+      ...(prediction.repeatingSymptoms || []).map(s => s.name),
+      ...(prediction.otherSymptoms || []).map(s => s.name),
+    ]);
+    return buildDayRecommendation(prediction.avgMood, prediction.avgEnergy, symptomNames, prediction.avgSleep);
+  }
+  function buildDayRecommendation(avgMood, avgEnergy, symptomNames, avgSleepQuality) {
+    if (avgMood == null && avgEnergy == null && (!symptomNames || !symptomNames.size)) return null;
+
+    const names = symptomNames ? [...symptomNames] : [];
+    // Bucket every logged symptom by how strongly it tends to lift or drag
+    // the day. Used to decide which branch applies and, occasionally, to
+    // name the one or two symptoms actually driving that branch — not to
+    // recite everything that's logged.
+    const strongNeg = [], mildNeg = [], neutral = [], mildPos = [], strongPos = [];
+    names.forEach(name => {
+      const v = SYMPTOM_VALENCE[name] ?? 0;
+      if (v <= -0.6) strongNeg.push(name);
+      else if (v < 0) mildNeg.push(name);
+      else if (v === 0) neutral.push(name);
+      else if (v < 0.6) mildPos.push(name);
+      else strongPos.push(name);
+    });
+    const byImpact = (a, b) => Math.abs(SYMPTOM_VALENCE[b] ?? 0) - Math.abs(SYMPTOM_VALENCE[a] ?? 0);
+    [strongNeg, mildNeg, mildPos, strongPos].forEach(list => list.sort(byImpact));
+    // Most-impactful-first, for naming whichever symptom(s) belong to a
+    // given category (painList, emoList, etc.) below.
+    const ranked = [...strongNeg, ...strongPos, ...mildNeg, ...mildPos];
+    const nameFrom = (pool, n = 2) => joinPhrases(ranked.filter(x => pool.includes(x)).slice(0, n).map(symptomPhrase));
+
+    const lowEnergy = avgEnergy != null && avgEnergy <= 2.5;
+    const lowMood = avgMood != null && avgMood <= 2.5;
+    const highEnergy = avgEnergy != null && avgEnergy >= 4;
+    const goodMood = avgMood != null && avgMood >= 4;
+
+    const has = list => list.some(n => names.includes(n));
+    const painList = ["Cramps", "Pre-period cramps", "Headache", "Spasms", "Muscle aches", "Bloating", "Ovulation pain", "PMS flu", "Tender breasts", "Spotting", "Fatigue"];
+    const emoList  = ["Emotional", "Irritable", "Anxiety", "Self critical", "Hopelessness", "PMDD", "Taking it personally", "Hating men", "Over it", "Sad"];
+    const skinList = ["Acne", "Oily hair", "Watery discharge", "Sweating", "Hot flashes", "Dry eyes", "Eye strain"];
+
+    const painSymptoms = has(painList);
+    const emotionalSymptoms = has(emoList);
+    const skinBody = has(skinList);
+    const moodPosSymptom = has(["Calm", "Confident", "Feeling okay"]);
+    const social = has(["Sociable", "Flirty"]);
+    const solitary = names.includes("Solitary");
+    const appetiteLow = names.includes("Small appetite");
+    const appetiteHigh = has(["Hungry", "Cravings", "Craving chocolate"]);
+    const libidoHigh = names.includes("High libido");
+    const libidoLow = names.includes("Low libido");
+    const dreamy = has(["Vivid dreams", "Nesting"]);
+
+    // Deterministic pick: the wording stays the same all day for the same data
+    // (it used to reshuffle on every open), but varies from day to day.
+    let seed = 0;
+    {
+      let key = "";
+      try { key = getPragueTodayIso(); } catch (e) { key = ""; }
+      key += "|" + avgMood + "|" + avgEnergy + "|" + avgSleepQuality + "|" + [...names].sort().join(",");
+      for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+    }
+    let pickN = 0;
+    const pickRandom = list => {
+      pickN++;
+      const h = Math.imul(seed ^ Math.imul(pickN, 0x9E3779B1), 0x85EBCA6B) >>> 0;
+      return list[((h ^ (h >>> 15)) >>> 0) % list.length];
+    };
+    const verbFor = named => (named.includes(" and ") || named.includes(", ") ? "tend" : "tends");
+
+    // A plain-language read on mood and/or energy together, so the
+    // sentence can fold in the actual numbers rather than just the
+    // symptom chips. `skipMood`/`skipEnergy` let a branch that already
+    // spoke to one of these (in its own words) leave it out here.
+    function moodEnergyClause(skipMood, skipEnergy) {
+      const mVal = skipMood ? null : avgMood;
+      const eVal = skipEnergy ? null : avgEnergy;
+      if (mVal == null && eVal == null) return "";
+      const bucket = v => (v <= 2.5 ? "low" : v >= 4 ? "high" : "midrange");
+      const describe = (label, b) => pickRandom(
+        b === "high" ? [`${label} tends to run high`, `${label} usually runs strong here`, `${label}'s typically solid on this day`]
+        : b === "low" ? [`${label} tends to run low`, `${label} usually dips here`, `${label} typically takes a hit on this day`]
+        : [`${label} is more of a mixed bag`, `${label} tends to be hit or miss`, `${label} doesn't show a strong pattern either way`]
+      );
+      if (mVal != null && eVal != null) {
+        const mb = bucket(mVal), eb = bucket(eVal);
+        if (mb === eb && mb !== "midrange") {
+          return pickRandom(mb === "high"
+            ? ["mood and energy both tend to run high", "you're usually running high on both fronts here", "this combo of good energy and good mood tends to show up together"]
+            : ["mood and energy both tend to run low", "both energy and mood usually take a hit on this day", "this is typically a low-energy, low-mood combination"]);
+        }
+        if (mb === eb) return pickRandom(["mood and energy tend to sit in a pretty middle-of-the-road place", "neither mood nor energy swings hard either way here", "this is usually a pretty neutral day on both fronts"]);
+        return `${describe("energy", eb)}, and ${describe("mood", mb)}`;
+      }
+      return eVal != null ? describe("energy", bucket(eVal)) : describe("mood", bucket(mVal));
+    }
+
+    // The main sentence is a single vibe/suggestion, not a recap of every
+    // logged symptom — it names a symptom or two only where that's what's
+    // actually driving the advice. Each branch has several phrasing
+    // options so the same underlying data doesn't always read identically.
+    let core;
+    const spent = new Set(); // categories already covered, so texture doesn't repeat them
+    let moodCovered = false, energyCovered = false; // whether the branch already spoke to mood/energy in its own words
+    let toneNegative = false; // whether the core sentence is a "rough day" branch, for the counterpoint check below
+
+    if (painSymptoms && (lowEnergy || strongNeg.length)) {
+      const named = nameFrom(painList);
+      const v = verbFor(named);
+      core = pickRandom([
+        `${capitalizeFirst(named)} ${v} to hit hard today${lowEnergy ? ", energy included" : ""} — rest if you can.`,
+        `Your body may ask for a slow day: ${named}${lowEnergy ? " and low energy" : ""} ${v === "tend" ? "are" : "is"} likely to show up.`,
+        `A rough one physically (${named}${lowEnergy ? ", low energy too" : ""}) — keep the plans light and go easy on yourself.`,
+      ]);
+      spent.add("physical");
+      energyCovered = lowEnergy;
+      toneNegative = true;
+    } else if (emotionalSymptoms && (lowMood || has(["Anxiety", "Self critical", "Hopelessness", "PMDD", "Irritable"]))) {
+      const named = nameFrom(emoList);
+      const v = verbFor(named);
+      core = pickRandom([
+        `${capitalizeFirst(named)} ${v} to surface today${lowMood ? ", mood dips too" : ""} — be gentle with yourself.`,
+        `Feelings may run closer to the surface today (${named}${lowMood ? ", with a mood dip" : ""}) — give yourself some slack.`,
+        `An emotionally heavier day — ${named}${lowMood ? ", mood included" : ""} — so keep the demands on yourself small.`,
+      ]);
+      spent.add("emotional");
+      moodCovered = lowMood;
+      toneNegative = true;
+    } else if (painSymptoms) {
+      const named = nameFrom(painList);
+      const v = verbFor(named);
+      core = pickRandom([
+        `${capitalizeFirst(named)} ${v} to show up today — pace yourself.`,
+        `Some ${named} is likely today, so leave a little breathing room in your plans.`,
+      ]);
+      spent.add("physical");
+      toneNegative = true;
+    } else if (skinBody) {
+      const named = nameFrom(skinList);
+      const v = verbFor(named);
+      core = pickRandom([
+        `${capitalizeFirst(named)} ${v} to flare up today — annoying, not serious.`,
+        `A bit of ${named} may show up today; a little extra self-care goes a long way.`,
+      ]);
+      spent.add("skin");
+      toneNegative = true;
+    } else if (lowEnergy) {
+      core = pickRandom([
+        "Energy tends to dip today — a good day to rest.",
+        "A lower-energy day — take it slow and save your effort for what matters.",
+      ]);
+      energyCovered = true;
+      toneNegative = true;
+    } else if (emotionalSymptoms) {
+      const named = nameFrom(emoList);
+      const v = verbFor(named);
+      core = pickRandom([
+        `${capitalizeFirst(named)} ${v} to crop up today — be a little gentler with yourself.`,
+        `You may feel ${named} today, so go easy on yourself and don't over-read small things.`,
+      ]);
+      spent.add("emotional");
+      toneNegative = true;
+    } else if (moodPosSymptom && social) {
+      core = pickRandom([
+        "Confident and social today — a good one for plans.",
+        "You tend to feel good and want people around today, so make the most of it.",
+      ]);
+      spent.add("mood"); spent.add("social");
+    } else if (moodPosSymptom && solitary) {
+      core = pickRandom([
+        "Confident but inward-facing today — great for focused solo work.",
+        "You tend to feel solid, just not very social: protect some quiet time.",
+      ]);
+      spent.add("mood"); spent.add("social");
+    } else if (highEnergy && goodMood) {
+      core = pickRandom([
+        "A good day across the board — energy and mood both run high.",
+        "One of your better days — worth tackling something ambitious.",
+        "Energy and mood line up well today, so it's a good moment to start something.",
+      ]);
+      moodCovered = true; energyCovered = true;
+    } else if (highEnergy) {
+      core = pickRandom([
+        "Energy's usually good today, even if mood's a mixed bag — use it on something physical or practical.",
+        "A high-energy day regardless of mood.",
+      ]);
+      moodCovered = true; energyCovered = true;
+    } else if (goodMood || moodPosSymptom) {
+      core = pickRandom([
+        "Mood tends to be good today — enjoy it.",
+        "You tend to feel pretty solid today.",
+      ]);
+      spent.add("mood");
+      moodCovered = true;
+    } else if (social) {
+      core = pickRandom([
+        "A sociable day — good for plans with people.",
+        "There's usually a pull toward people today, so reach out.",
+      ]);
+      spent.add("social");
+    } else if (solitary) {
+      core = pickRandom([
+        "This day leans inward — good for a quiet night in.",
+        "A bit of a solitude day: it's fine to say no to extras.",
+      ]);
+      spent.add("social");
+    } else {
+      const mePhrase = moodEnergyClause(false, false);
+      if (mePhrase) {
+        core = `Nothing dramatic symptom-wise, but ${mePhrase}.`;
+        moodCovered = true; energyCovered = true;
+      } else if (appetiteLow || appetiteHigh || libidoHigh || libidoLow || dreamy) {
+        core = "Nothing strong mood- or energy-wise today.";
+      } else {
+        return pickRandom([
+          "Nothing strong shows up for this day — probably a fairly ordinary one.",
+          "Nothing stands out either way — likely just a regular day, so go with your own plans.",
+        ]);
+      }
+    }
+
+    // At most one add-on clause, picked in priority order, so the sentence
+    // stays short rather than stacking a counterpoint, a sleep note, a
+    // mood/energy read, and a texture detail all in one go.
+    let addon = "";
+    if (toneNegative && !spent.has("mood") && !spent.has("social") && (moodPosSymptom || social)) {
+      // Counterpoint: a positive signal logged alongside a rough day.
+      const posBits = [];
+      if (moodPosSymptom) posBits.push(nameFrom(["Calm", "Confident", "Feeling okay"], 1));
+      if (social) posBits.push(nameFrom(["Sociable", "Flirty"], 1));
+      const posNamed = joinPhrases(posBits);
+      const posVerb = verbFor(posNamed) === "tend" ? "show" : "shows";
+      addon = pickRandom([
+        `But ${posNamed} ${posVerb} up too — not a total wash.`,
+        `Though ${posNamed} usually ${posVerb === "show" ? "come" : "comes"} along too.`,
+      ]);
+    } else if (avgSleepQuality != null && ((toneNegative && avgSleepQuality <= 2.5) || (!toneNegative && avgSleepQuality >= 4))) {
+      addon = toneNegative
+        ? pickRandom(["Sleep's usually rough here too.", "Could partly be sleep — it tends to run low."])
+        : pickRandom(["Sleep tends to be good here too.", "Usually comes with decent sleep."]);
+    } else {
+      const mePhrase = moodEnergyClause(moodCovered, energyCovered);
+      if (mePhrase) {
+        addon = `${capitalizeFirst(mePhrase)}.`;
+      } else if (appetiteLow && !spent.has("appetite")) addon = "Appetite tends to run light too.";
+      else if (appetiteHigh && !spent.has("appetite")) addon = "Cravings tend to run high too.";
+      else if (libidoHigh) addon = "Libido tends to run higher here.";
+      else if (libidoLow) addon = "Libido tends to run lower here.";
+      else if (dreamy) addon = "Dreams can get vivid too.";
+    }
+
+    return addon ? `${core} ${addon}` : core;
+  }
+  return { getMoodStatsByCycleDay, buildTomorrowRecommendation, WPM, MONTHLY_GOAL, isSameDay, isSameMonth, getBestCompletedMonthWords, getCycleDayTitle, getLog, getMoodForDate, getPeriodStats, getDayPrediction, getPhaseForStatsDay, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS };
 };
 
 // ════════ lib/night-summary.js ════════
@@ -1886,7 +2167,7 @@
     const today = D.getPragueTodayIso();                                                  // the app's day: it turns over at 2 am, Prague time
     const next = D.getPragueNow(); next.setDate(next.getDate() + 1);
     const tomorrow = D.toLocalIso(next);
-    const out = [], part = (icon, title, fn) => { let r; try { r = fn(); } catch { r = ["Couldn’t read this tonight."]; } const o = Array.isArray(r) ? { lines: r } : r; out.push({ icon, title, lines: (o.lines || []).filter(Boolean), big: o.big, pips: o.pips, bar: o.bar, score: o.score, day: o.day }); };
+    const out = [], part = (icon, title, fn) => { let r; try { r = fn(); } catch { r = ["Couldn’t read this tonight."]; } const o = Array.isArray(r) ? { lines: r } : r; out.push({ icon, title, lines: (o.lines || []).filter(Boolean), big: o.big, pips: o.pips, bar: o.bar, score: o.score, day: o.day, chips: o.chips }); };
     const entry = () => D.getMoodForDate(today);
     let stats = null; try { stats = D.getPeriodStats(); } catch {}
 
@@ -1938,7 +2219,8 @@
       if (!stats || stats.currentCycleDay == null) return ["No period logged yet."];
       const day = stats.currentCycleDay + 1, p = D.getDayPrediction(day, stats), ds = p && p.ready ? p.dayScore : null;
       const gt = D.getCycleDayTitle(day, stats), phrase = [...(gt.tags || []), gt.custom ? gt.text : (gt.items || []).map(i => i.label).join(", ")].filter(Boolean).join(" · ") || gt.empty;
-      return { score: ds ? { n: ds.score, label: ds.label, color: ds.color } : null, day, lines: [phrase] };
+      const sy = p && p.ready && Array.isArray(p.repeatingSymptoms) ? p.repeatingSymptoms.map(x => x.name) : [];
+      return { score: ds ? { n: ds.score, label: ds.label, color: ds.color } : null, day, lines: [phrase], chips: p && p.ready ? { label: p.hasExactSymptomData ? "Common symptoms" : "Common symptoms (phase avg.)", items: sy } : null };
     });
     // the same number as the dashboard's "tomorrow" card: what you most often logged on that cycle day (or in that phase)
     part("😴", "Sleep tomorrow", () => {
@@ -1978,7 +2260,7 @@
     frame.appendChild(card);
     // a few twinkling stars drifting in the corners of the card
     [[14, 12, 2], [86, 8, 1.6], [92, 30, 1.2], [8, 40, 1.2], [70, 5, 1.2], [30, 6, 1.4]].forEach(([x, y, r], k) => {
-      frame.appendChild(el("div", "position:absolute;z-index:1;left:" + x + "%;top:" + y + "px;width:" + r + "px;height:" + r + "px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff;pointer-events:none;animation:nsTwinkle " + (2.6 + k * 0.7) + "s ease-in-out " + (k * 0.4) + "s infinite;"));
+      card.appendChild(el("div", "position:absolute;left:" + x + "%;top:" + y + "px;width:" + r + "px;height:" + r + "px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff;pointer-events:none;animation:nsTwinkle " + (2.6 + k * 0.7) + "s ease-in-out " + (k * 0.4) + "s infinite;"));
     });
     // header: a crescent moon over the title
     const head = el("div", "text-align:center;margin-bottom:14px;animation:nsRise .6s ease both;");
@@ -2029,6 +2311,15 @@
         r.appendChild(dots); box.appendChild(r);
       });
       s.lines.forEach(t => box.appendChild(el("div", "color:#e4def8;" + (s.big || s.pips || s.bar ? "font-size:12px;color:" + LILAC + ";margin-top:3px;" : s.score ? "font-style:italic;font-size:14px;color:#f3ecff;" : ""), t)));
+      if (s.chips) {
+        box.appendChild(el("div", "font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:" + LILAC + ";margin:10px 0 5px;", s.chips.label));
+        if (!s.chips.items.length) box.appendChild(el("div", "font-size:12px;color:" + LILAC + ";", "Nothing common logged here yet."));
+        else {
+          const row = el("div", "display:flex;flex-wrap:wrap;gap:6px;");
+          s.chips.items.forEach(n => row.appendChild(el("span", "font-size:12px;line-height:1.4;padding:3px 10px;border-radius:999px;background:rgba(255,226,168,0.1);border:1px solid rgba(255,226,168,0.22);color:#f6ecd4;max-width:100%;", n)));
+          box.appendChild(row);
+        }
+      }
       card.appendChild(box);
     });
 
@@ -2049,6 +2340,204 @@
   }
 
   return { nsShow };
+};
+
+// ════════ lib/morning-brief.js ════════
+// lib/morning-brief.js — the morning brief card that appears after Will and Mike wake and dress, just before they go down to breakfast (Mike's room and Will's room).
+// Part of the keepsake world: see world.js for how the files fit together. Read-only: it saves nothing.
+// The numbers and sentences come from lib/day-stats.js (copied from the dashboard's own morning brief); the layout is the world's own.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/morning-brief"] = function (ctx) {
+  'use strict';
+  const D = ctx.lib["day-stats"];
+
+  const PHASE_COLORS = { menstrual: "#ff6b8a", follicular: "#9ccfd8", ovulatory: "#f6c177", luteal: "#c4a7e7", pms: "#ff9f5a" };
+  const PHASE_ICONS = { menstrual: "🩸", follicular: "🌱", ovulatory: "🌕", luteal: "🌙", pms: "🌸" };
+  // what many people feel in each phase, with a tip for people and one for the body (general text from the dashboard, not from your logs)
+  const MB_GEN = {
+    menstrual: [
+      ["Energy is often lower and the body wants rest, so a quieter, slower pace feels natural.", "Tell the people close to you \"I'm low-energy today\" so they don't read it as distance.", "Try to stay warm today: a hot water bottle or warm drink often eases the achy, heavy feeling."],
+      ["Cramps, tiredness or a short fuse are common, and many people feel a pull to be alone.", "Keep replies short and warm: a heart or a quick \"thinking of you\" still counts as connecting.", "Gentle stretching or a slow walk can loosen cramps better than pushing through."],
+      ["Many people feel tender but also relieved as the cycle resets.", "Let someone do one small thing for you instead of saying you're fine.", "Iron-rich food (lentils, greens, red meat) and plenty of water can help you feel steadier."],
+      ["Lower back aches and a heavy, slow feeling are common, and resting isn't laziness.", "It's okay to cancel a plan: a simple 'rain check?' is enough.", "A heating pad on your lower belly or back can ease cramps more than you'd expect."],
+      ["Mood can wobble a little while hormones sit at their lowest, and it passes.", "If you feel snappy, a quick 'not you, just tired' smooths things over.", "Water or a warm herbal tea can ease headaches and bloating."],
+      ["Many people feel foggy and less sharp today, so go easy on your own to-do list.", "Ask for what you need in one sentence: 'can you handle dinner?' beats hinting.", "Pick one or two must-do tasks and let the rest wait: your brain has less spare capacity."],
+      ["Sleep can be lighter or more broken, and tiredness stacks up.", "Short check-ins with a friend can feel better than a long catch-up.", "A warm shower or bath before bed can help your muscles unclench and your sleep settle."],
+      ["Many people feel their energy start to creep back toward the end of the period.", "If you feel a bit more like yourself, reach out: people usually love hearing from you.", "A short, easy walk in daylight can lift your mood without costing much energy."],
+    ],
+    follicular: [
+      ["Energy and mood tend to climb, and starting things feels easier.", "Make that plan with a friend you've been putting off while the motivation is here.", "Good day for a new workout or a project you've been postponing: effort tends to feel lighter."],
+      ["Many people feel curious, sharper and more social than a week ago.", "Message someone you haven't talked to in a while: a short hello is enough.", "Try something new today (a recipe, a route, a topic): your brain is primed for novelty."],
+      ["Focus and optimism are often higher, and new ideas flow.", "Share one idea out loud with someone: you're likely to explain it well today.", "Jot your ideas down as they come: this is a good window for planning and brainstorming."],
+      ["Many people notice a brighter mood and a lighter feeling in the body.", "Suggest a small plan for later this week: a coffee, a walk, a movie night.", "Strength and stamina tend to respond well now, so it's a good week to push a little."],
+      ["Motivation often comes easier, and tasks you dreaded feel less heavy.", "Send the awkward message or make the ask you've been delaying: you're likely to word it well.", "Eat something fresh and colorful: appetite is often steadier at this point."],
+      ["Many people feel more playful and open to spontaneity.", "Say yes to one unplanned thing today.", "Try a longer or tougher workout than usual: recovery tends to be quicker in this phase."],
+      ["Mental energy is often high, and learning feels smoother.", "Explain something to someone: you're likely to be clear and patient.", "Good time to start a habit: it tends to stick better when energy is up."],
+      ["Many people feel upbeat and ready to take on a bit more.", "Check in on a friend who's been quiet: you likely have the bandwidth.", "Stretching or yoga often feels especially good now: the body tends to feel more flexible."],
+    ],
+    ovulatory: [
+      ["Many people feel confident, talkative and outgoing around now.", "It's a good day for the conversation you've been avoiding: the words tend to come.", "Energy runs high, so a bit of cardio or a long walk outside is a good use of it."],
+      ["Energy and mood often peak, and social settings feel easier.", "Say yes to an invite, or be the one who sends it.", "Drink more water than usual: you may run warmer and sweat more around now."],
+      ["Communication tends to feel smooth, and people often feel warm and open.", "Give someone a specific compliment: it's likely to come out naturally.", "Do the task that needs presenting or speaking up: you're likely at your most articulate."],
+      ["Many people feel attractive, expressive and a bit more adventurous.", "Plan something social and a little ambitious: a dinner, a day out, a call you've postponed.", "Warm up properly before intense exercise: joints can feel looser around now."],
+      ["Energy is often at its highest, though some people notice a brief twinge or bloating mid-cycle.", "Be generous with your time today: you likely have it to spare.", "A mild, brief twinge on one side is common for some people: rest and warmth usually help."],
+      ["Many people feel sociable and find it easy to read a room.", "Introduce two people who'd get along: you're likely to do it well.", "Balanced meals and water keep this high-energy stretch from tipping into a crash."],
+      ["Confidence and verbal fluency are often high, so speaking up feels easier.", "Ask for what you want today, whether it's a favor, a raise or a plan.", "Use the extra energy on a favorite active thing: dancing, hiking, cycling or swimming."],
+      ["Many people feel open and emotionally warm toward others.", "Tell someone what they mean to you: it's likely to land well.", "Enjoy the energy, but still sleep enough: it can tempt you to stay up late."],
+    ],
+    luteal: [
+      ["Energy often settles down, and many people prefer calmer, smaller settings.", "Choose one-on-one over a crowd and let that be enough.", "Steady meals with some protein and complex carbs help keep your energy and mood even."],
+      ["Attention to detail is often strong, while patience for noise or chaos can be shorter.", "If a message bothers you, wait ten minutes before replying.", "Good day for tidying, admin or finishing tasks: detail work tends to feel satisfying."],
+      ["Many people feel more inward and want things done properly and quietly.", "Say what you need (\"I need a quiet evening\") instead of hoping people guess.", "Wind down earlier tonight: sleep can get lighter in this phase, so protect it."],
+      ["Appetite can creep up as the body asks for a bit more fuel.", "Keep plans small and predictable, and tell people early if you need to dial back.", "A snack with protein and fiber in the afternoon can even out energy dips."],
+      ["Many people feel more focused on getting things properly finished.", "Do one nagging chore alongside someone else so it feels lighter.", "Moderate exercise like pilates, swimming or a brisk walk often feels better than all-out effort."],
+      ["Social battery often drains faster, and quiet evenings feel restorative.", "It's fine to leave early: a warm goodbye keeps things easy.", "A magnesium-rich snack (nuts, seeds, dark chocolate) is a gentle option for steadier mood."],
+      ["Many people are more sensitive to criticism or tone right now.", "If you feel stung, ask a question before assuming the worst.", "Cut back on caffeine later in the day: sleep tends to be lighter in this phase."],
+      ["Energy is steady but lower than last week, and that's normal.", "Share your plan for the week so people know when you'll be less available.", "Slow stretching or a gentle evening walk can help you unwind."],
+    ],
+    pms: [
+      ["Mood can be more sensitive, and small things may feel bigger than they are.", "Before reading a message as cold, try the kinder meaning first.", "Go easy on caffeine and sugar today: they can make jitters and mood dips feel sharper."],
+      ["Irritability, tiredness and feeling easily overwhelmed are common just before a period.", "Save any serious talk for a calmer day unless it's urgent.", "Magnesium-rich snacks (nuts, dark chocolate, bananas) and a warm shower can take the edge off."],
+      ["Many people feel more emotional, crave comfort and have less social battery.", "Tell one person you're running low so they go gently, rather than cancelling on everyone.", "Comfort is allowed: cozy clothes, a favorite show, and keeping your body warm and fed."],
+      ["Bloating, tender breasts and a heavier mood often show up together.", "Give yourself and others a little extra patience today.", "Loose clothes and a warm drink can make the physical side feel gentler."],
+      ["Many people feel more tearful or easily moved, and it's usually temporary.", "If you want comfort, say so: 'can I have a hug?' is easier than hoping.", "Gentle movement like a short walk or stretching can ease tension and lift your mood a bit."],
+      ["Sleep can get restless and cravings stronger as the period gets close.", "Keep today's social load light and tell people you're recharging.", "Eat regular meals so blood sugar swings don't add to the mood dips."],
+      ["Thoughts can feel louder and more critical, so don't trust every harsh one.", "Skip the long, heated text: draft it and sleep on it.", "A warm bath or a heat pack can calm both cramps and nerves."],
+      ["Many people feel tired but wired: wanting rest and finding it harder to get.", "Choose low-effort company: a show, a game, or just sharing a room.", "Switch screens off earlier tonight and aim for a calm, dark room."],
+    ],
+  };
+
+  const rgba = (hex, a) => { const h = String(hex).replace("#", ""), n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; };
+
+  // everything on the card, each part on its own so one bad record never blanks it
+  function mbData() {
+    const out = { day: null, phase: null, pred: null, title: "", symptoms: null, sentence: null, feel: null };
+    let stats = null; try { stats = D.getPeriodStats(); } catch {}
+    if (!stats || stats.currentCycleDay == null) return out;
+    const day = out.day = stats.currentCycleDay;
+    try { const key = D.getPhaseForStatsDay(day, stats); out.phase = { key, label: (D.PHASE_DEFS.find(p => p.key === key) || {}).label || "" }; } catch {}
+    try { out.pred = D.getDayPrediction(day, stats); } catch {}
+    try { const gt = D.getCycleDayTitle(day, stats); out.title = [...(gt.tags || []), gt.custom ? gt.text : (gt.items || []).map(i => i.label).join(", ")].filter(Boolean).join(" · ") || gt.empty || ""; } catch {}
+    try {   // symptoms that repeated (2+ times) on this exact cycle day, most repeated first
+      const b = D.getMoodStatsByCycleDay()[day] || null;
+      const rep = b ? Object.entries(b.symptoms || {}).filter(([, n]) => n >= 2).sort((a, c) => c[1] - a[1] || a[0].localeCompare(c[0])) : [];
+      out.symptoms = { rep, entries: b ? b.entryCount : 0 };
+    } catch {}
+    try { out.sentence = out.pred && out.pred.ready ? D.buildTomorrowRecommendation(out.pred) : null; } catch {}
+    try {   // one of the phase's quotes, picked by calendar date so it changes every day
+      const set = out.phase && MB_GEN[out.phase.key];
+      if (set) { const p = String(D.getPragueTodayIso()).split("-").map(Number), ed = Math.floor(Date.UTC(p[0], (p[1] || 1) - 1, p[2] || 1) / 86400000); out.feel = set[((ed % set.length) + set.length) % set.length]; }
+    } catch {}
+    return out;
+  }
+
+  // lays the card over the scene (inside its shell, so closing the scene takes it along); the button, or a tap outside the card, closes it and calls onClose once
+  function mbShow(sh, onClose) {
+    if (!sh.back.isConnected || sh.back.querySelector("[data-morning-brief]")) return;
+    const el = sh.kit.el, data = mbData();
+    const SERIF = "Georgia,'Times New Roman',serif", GOLD = "#ffd9a0", SOFT = "rgba(255,226,214,0.72)", TEXT = "#fff1ea";
+    const hc = data.pred && data.pred.ready && data.pred.dayScore ? data.pred.dayScore.color : (data.phase && PHASE_COLORS[data.phase.key]) || "#ffb8dc";
+    const veil = el("div", "position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);background:radial-gradient(ellipse at 50% 25%,rgba(90,46,60,0.7),rgba(14,8,16,0.88));-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);box-sizing:border-box;overflow:hidden;animation:mbVeil .6s ease both;");
+    veil.setAttribute("data-morning-brief", "");
+    const css = document.createElement("style");
+    css.textContent = "@keyframes mbVeil{from{opacity:0}to{opacity:1}}@keyframes mbRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes mbGlow{0%,100%{opacity:.7}50%{opacity:1}}" +
+      "@media (prefers-reduced-motion:reduce){[data-morning-brief],[data-morning-brief] *{animation:none!important;transition:none!important}}" +
+      "[data-morning-brief] ::-webkit-scrollbar{display:none}";
+    veil.appendChild(css);
+    const frame = el("div", "position:relative;width:100%;max-width:350px;max-height:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;border-radius:26px;" +
+      "background:radial-gradient(circle at 50% -10%,rgba(255,196,140,0.38),transparent 55%),radial-gradient(circle at 100% 100%,rgba(190,110,150,0.22),transparent 55%),linear-gradient(170deg,#4a2a3c,#2a1824 55%,#1c1019);" +
+      "border:1px solid " + rgba(hc, 0.4) + ";box-shadow:0 18px 60px rgba(0,0,0,0.65),0 0 50px rgba(255,170,120,0.14);color:" + TEXT + ";font:13px/1.45 " + SERIF + ";");
+    frame.setAttribute("role", "dialog"); frame.setAttribute("aria-label", "Morning brief");
+    const card = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;box-sizing:border-box;padding:20px 14px 14px;overflow-wrap:anywhere;");
+    frame.appendChild(card);
+    const label = (t, extra) => el("div", "font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:" + SOFT + ";" + (extra || ""), t);
+    const tile = (k, kids) => { const b = el("div", "margin-top:8px;padding:11px 13px;border-radius:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,214,196,0.14);animation:mbRise .55s ease " + (0.12 + k * 0.09) + "s both;"); kids.forEach(x => b.appendChild(x)); return b; };
+
+    // header: a rising sun over the title
+    const head = el("div", "text-align:center;margin-bottom:12px;animation:mbRise .6s ease both;");
+    head.appendChild(el("div", "width:30px;height:30px;margin:0 auto 8px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff3c8," + GOLD + " 60%,#ffb069);box-shadow:0 0 0 6px rgba(255,200,140,0.14),0 0 26px rgba(255,190,120,0.7);animation:mbGlow 4s ease-in-out infinite;"));
+    head.appendChild(el("div", "font-size:19px;letter-spacing:0.14em;color:" + GOLD + ";", "good morning"));
+    let dateText = ""; try { dateText = D.getPragueNow().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }); } catch {}
+    head.appendChild(label("morning brief" + (dateText ? " · " + dateText : ""), "margin-top:3px;letter-spacing:0.12em;"));
+    card.appendChild(head);
+
+    let k = 0;
+    if (data.day == null) {
+      card.appendChild(tile(k++, [el("div", "text-align:center;color:" + SOFT + ";", "Log a period first so today can be placed in your cycle. The brief works from that.")]));
+    } else {
+      // hero: day, phase, score ring, mood/energy/sleep against your usual, the day's phrase
+      const pr = data.pred && data.pred.ready ? data.pred : null, ds = pr ? pr.dayScore : null;
+      const hero = [];
+      hero.push(el("div", "text-align:center;font-size:30px;line-height:1.05;color:#fff3ea;text-shadow:0 0 20px " + rgba(hc, 0.55) + ";", "Day " + data.day));
+      if (data.phase && data.phase.label) hero.push(el("div", "text-align:center;margin-top:6px;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:" + hc + ";", (PHASE_ICONS[data.phase.key] || "") + " " + data.phase.label));
+      if (ds) {
+        const wrap = el("div", "display:flex;justify-content:center;margin-top:12px;");
+        const ring = el("div", "width:96px;height:96px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(34,20,30,0.95) 63%,transparent 65%),conic-gradient(" + hc + " " + (ds.score * 3.6) + "deg," + rgba(hc, 0.16) + " 0);box-shadow:0 0 22px " + rgba(hc, 0.3) + ";");
+        ring.appendChild(el("div", "font-size:32px;line-height:1;color:" + hc + ";", String(ds.score)));
+        ring.appendChild(el("div", "font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:" + SOFT + ";margin-top:3px;", "out of 100"));
+        wrap.appendChild(ring); hero.push(wrap);
+        hero.push(el("div", "text-align:center;margin-top:8px;font-size:14px;color:" + hc + ";", ds.label || ""));
+        const metrics = [["😊", pr.avgMood, pr.moodDiff], ["⚡", pr.avgEnergy, pr.energyDiff], ["😴", pr.avgSleep, pr.sleepDiff]].filter(m => m[1] != null);
+        if (metrics.length) {
+          const g = el("div", "display:flex;gap:8px;margin-top:12px;");
+          metrics.forEach(([ic, v, d]) => {
+            const up = d != null && d >= 0.15, down = d != null && d <= -0.15;
+            const t = el("div", "flex:1 1 0;min-width:0;text-align:center;padding:8px 2px;border-radius:14px;background:rgba(255,255,255,0.05);border:1px solid " + rgba(hc, 0.18) + ";");
+            t.appendChild(el("div", "font-size:15px;line-height:1;", ic));
+            t.appendChild(el("div", "font-size:15px;margin-top:3px;color:" + TEXT + ";", Number(v).toFixed(1)));
+            t.appendChild(el("div", "font-size:10.5px;margin-top:1px;color:" + (up ? "#8fd9c4" : down ? "#ff9ecf" : SOFT) + ";", up ? "▲ " + d.toFixed(1) : down ? "▼ " + Math.abs(d).toFixed(1) : "usual"));
+            g.appendChild(t);
+          });
+          hero.push(g);
+        }
+      }
+      if (data.title) hero.push(el("div", "margin-top:12px;padding-top:10px;border-top:1px solid " + rgba(hc, 0.2) + ";text-align:center;font-style:italic;font-size:14px;color:" + GOLD + ";", data.title));
+      card.appendChild(tile(k++, hero));
+
+      // likely symptoms: repeated 2+ times on this exact cycle day
+      if (data.symptoms) {
+        const kids = [label("Likely symptoms", "margin-bottom:6px;")], rep = data.symptoms.rep;
+        if (!rep.length) kids.push(el("div", "font-size:12px;color:" + SOFT + ";", data.symptoms.entries ? "Nothing has shown up more than once on this day." : "No history for this cycle day yet."));
+        else {
+          const max = rep[0][1];
+          rep.forEach(([name, n]) => {
+            const r = el("div", "display:flex;align-items:center;gap:8px;margin:4px 0;min-width:0;");
+            r.appendChild(el("span", "flex:0 1 auto;min-width:0;font-size:12.5px;", name));
+            const bar = el("span", "flex:1 1 20px;min-width:20px;height:5px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.1);");
+            bar.appendChild(el("span", "display:block;height:100%;width:" + Math.round(n / max * 100) + "%;border-radius:999px;background:linear-gradient(90deg," + rgba(hc, 0.6) + "," + hc + ");"));
+            r.appendChild(bar); r.appendChild(el("span", "flex:none;font-size:11px;color:" + hc + ";", "×" + n)); kids.push(r);
+          });
+          if (data.symptoms.entries) kids.push(el("div", "font-size:10px;color:" + SOFT + ";margin-top:4px;", "out of " + data.symptoms.entries + " logged day" + (data.symptoms.entries === 1 ? "" : "s")));
+        }
+        card.appendChild(tile(k++, kids));
+      }
+      // today in one sentence
+      if (data.sentence) card.appendChild(tile(k++, [label("Today summarized", "margin-bottom:5px;"), el("div", "font-style:italic;font-size:13.5px;line-height:1.5;color:" + TEXT + ";", data.sentence)]));
+      // what many people feel in this phase, plus two small tips
+      if (data.feel && data.phase) {
+        const col = PHASE_COLORS[data.phase.key] || hc, g = data.feel, kids = [label("What people tend to feel today", "margin-bottom:6px;")];
+        kids.push(el("div", "font-style:italic;font-size:14px;line-height:1.5;color:" + TEXT + ";", "“" + g[0] + "”"));
+        kids.push(el("div", "height:1px;margin:10px 0 2px;background:linear-gradient(90deg," + col + ",transparent);"));
+        [["Tip for interactions", g[1], "→"], ["Tip for your body", g[2], "✦"]].filter(x => x[1]).forEach(([l, t, ic]) => {
+          const tip = el("div", "display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:8px 10px;border-radius:12px;border:1px dashed " + rgba(col, 0.55) + ";background:rgba(255,255,255,0.03);");
+          tip.appendChild(el("div", "flex:none;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;background:" + col + ";color:#1b1b1b;", ic));
+          const body = el("div", "min-width:0;"); body.appendChild(el("div", "font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:" + col + ";", l)); body.appendChild(el("div", "font-size:12.5px;line-height:1.45;color:" + TEXT + ";", t));
+          tip.appendChild(body); kids.push(tip);
+        });
+        card.appendChild(tile(k++, kids));
+      }
+    }
+
+    const btn = el("button", "display:block;margin:0 auto;padding:10px 24px;border-radius:999px;border:1px solid rgba(255,217,160,0.45);background:linear-gradient(180deg,rgba(255,217,160,0.24),rgba(255,217,160,0.08));color:" + GOLD + ";font:inherit;letter-spacing:0.06em;cursor:pointer;box-shadow:0 0 18px rgba(255,190,120,0.16);", "🍳 off to breakfast");
+    btn.type = "button";
+    const foot = el("div", "flex:none;position:relative;padding:12px 14px;background:linear-gradient(180deg,rgba(28,16,25,0),rgba(28,16,25,0.92) 38%);margin-top:-14px;");
+    foot.appendChild(btn); frame.appendChild(foot);
+    veil.appendChild(frame);
+    let done = false;
+    veil.addEventListener("click", ev => { ev.stopPropagation(); if (done || (ev.target !== veil && ev.target !== btn)) return; done = true; veil.remove(); try { onClose && onClose(); } catch {} });
+    sh.back.appendChild(veil);
+  }
+
+  return { mbShow };
 };
 
 // ════════ graveyard.js ════════
@@ -11577,6 +12066,7 @@
   const openHawkins = (...args) => world.openHawkins(...args);
   const openKitchen = (...args) => world.openKitchen(...args);
   const { nsShow } = ctx.lib["night-summary"];
+  const { mbShow } = ctx.lib["morning-brief"];
   const openWheelersDining = (...args) => world.openWheelersDining(...args);
 
   // ── Mike's room (reached through his window from the front lawn, or up the stairs from the basement) ──
@@ -12363,9 +12853,11 @@
         ["n", "Not asleep any more, not getting up either. The whole house wakes up around them.", { ms: 2600 }],
         ["n", "Five minutes later, the comforter starts to heave. Yesterday’s clothes get fished off the floor.", { heave: true, jig: true, ms: 2200, a: { dy: 22, mood: "o", L: "lap", R: "lap" }, b: { dy: 22, mood: "o", L: "lap", R: "lap" } }],
         ["n", "Two rumpled heads surface, dressed for the day.", { pj: false, unpile: true, ms: 1800, a: { dy: 0, mood: "smile", look: 1 }, b: { dy: 0, mood: "smile", look: -1 } }]
-      ], () => { headingDown = true; tid = setTimeout(goBreakfast, reduce ? 400 : 1600); });
+      ], () => { headingDown = true; tid = setTimeout(briefThenBreakfast, reduce ? 400 : 1200); });
     };
     // after they wake and dress they go down to the dining room for breakfast, and you go with them (the dining room plays its breakfast scene once)
+    // dressed and awake: the morning brief pops up first, and breakfast follows when it is closed
+    const briefThenBreakfast = () => { if (leaving) return; try { mbShow(sh, goBreakfast); } catch { goBreakfast(); } };
     const goBreakfast = () => {
       if (leaving) return; leaving = true;
       hkWhere.set("dining", 25, 45); world.dnBreakfast = Date.now();
@@ -15655,6 +16147,7 @@
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const { nsShow } = ctx.lib["night-summary"];
+  const { mbShow } = ctx.lib["morning-brief"];
   const openHawkins = (...args) => world.openHawkins(...args);
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
   const openByersLivingRoom = (...args) => world.openByersLivingRoom(...args);
@@ -16294,6 +16787,8 @@
       ], () => later(() => { if (asleep && !scene) nsShow(sh); }, 1500), true);   // once they're asleep: the "today" card
     };
     // after they wake and dress they go down the hall to the Byers' kitchen for breakfast, and you go with them (the kitchen plays its breakfast scene once)
+    // dressed and awake: the morning brief pops up first, and breakfast follows when it is closed
+    const briefThenBreakfast = () => { if (leaving) return; try { mbShow(sh, goBreakfast); } catch { goBreakfast(); } };
     const goBreakfast = () => {
       if (leaving) return; leaving = true;
       hkWhere.set("byerskitchen", 25, 45); world.byBreakfast = Date.now();
@@ -16312,7 +16807,7 @@
         ["n", "Not asleep any more, not getting up either. The whole house wakes up around them: a pan, a radio, the smell of toast.", { ms: 2600 }],
         ["n", "Five minutes later, the comforter starts to heave. Yesterday’s clothes get fished off the floor.", { heave: true, jig: true, ms: 2200, a: { dy: 22, mood: "o", L: "lap", R: "lap" }, b: { dy: 22, mood: "o", L: "lap", R: "lap" } }],
         ["n", "Two rumpled heads surface, dressed for the day.", { pj: false, unpile: true, ms: 1800, a: { dy: 0, mood: "smile", look: 1 }, b: { dy: 0, mood: "smile", look: -1 } }]
-      ], () => { tid = setTimeout(goBreakfast, reduce ? 400 : 1600); });
+      ], () => { tid = setTimeout(briefThenBreakfast, reduce ? 400 : 1200); });
     };
     const tapLamp = () => {
       if (scene) { advanceScene(); return; }
