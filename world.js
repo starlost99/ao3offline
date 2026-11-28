@@ -789,11 +789,11 @@
     set: on => { try { if (on) localStorage.setItem(SLEEP_KEY, "1"); else localStorage.removeItem(SLEEP_KEY); } catch {} }
   };
 
-  // Where Will and Mike are while they are awake: ONE place at a time (Mike's room, the table in the basement, inside the blanket fort, or the kitchen; plus the split place "mom": Mike is in the kitchen with his mother and Will is alone in Mike's room; and "byers": the sofa in the Byers' living room), and every other
+  // Where Will and Mike are while they are awake: ONE place at a time (Mike's room, the table in the basement, inside the blanket fort, or the kitchen; plus the split place "mom": Mike is in the kitchen with his mother and Will is alone in Mike's room; "byers": the sofa in the Byers' living room; and "byerskitchen": the Byers' kitchen across town), and every other
   // scene is empty until you find them or call them over (the "call them here" pills). They move on by themselves every 12 to 40 minutes, never to the place
   // they just left (saved under "ao3-hk-where"). Asleep, they are always in Mike's room. A scene asks once, when it opens: hkWhere.here("basement").
-  const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort", "kitchen", "mom", "byers"];
-  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket.", kitchen: "Somewhere in the house, a cupboard bangs and the fridge door sighs open.", mom: "Somewhere in the house, Mrs. Wheeler is asking a question in her Very Calm Voice, and a boy is answering far too quickly.", byers: "Somewhere in the house, an afghan rustles and somebody says, “Stop pulling.”" };
+  const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort", "kitchen", "mom", "byers", "byerskitchen"];
+  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket.", kitchen: "Somewhere in the house, a cupboard bangs and the fridge door sighs open.", mom: "Somewhere in the house, Mrs. Wheeler is asking a question in her Very Calm Voice, and a boy is answering far too quickly.", byers: "Somewhere in the house, an afghan rustles and somebody says, “Stop pulling.”", byerskitchen: "Across town, in a kitchen under a stained-glass lamp, two voices are arguing happily about pancakes." };
   const hkWhere = {
     set(p, lo, hi) { try { const a = lo || 12, b = hi || 40; localStorage.setItem(WHERE_KEY, JSON.stringify({ p, until: Date.now() + (a + Math.random() * (b - a)) * 60000 })); } catch {} },
     get() {
@@ -816,7 +816,8 @@
     fort: ["openFortInside", "Giggling, from under a blanket. You follow it\u2026", true],
     kitchen: ["openKitchen", "A cupboard bangs. You follow the noise\u2026"],
     mom: ["openKitchen", "Mrs. Wheeler\u2019s Very Calm Voice, and a boy answering far too quickly. You follow it\u2026"],
-    byers: ["openByersLivingRoom", "An afghan rustles. You follow the sound\u2026"]
+    byers: ["openByersLivingRoom", "An afghan rustles. You follow the sound\u2026"],
+    byerskitchen: ["openByersKitchen", "Across town, two voices arguing happily about pancakes. You follow them\u2026"]
   };
   function hkFindThem(sh, say) {
     const p = hkWhere.get(), t = HK_FIND[p] || HK_FIND.room;
@@ -1118,6 +1119,50 @@
       }
       if (H.mole && turn !== 1) sv("circle", { cx: H.mole[0], cy: H.mole[1], r: 0.65, fill: "#5a3226" }, h);
     };
+    // ── FACING AWAY: the same two boys seen from behind (used at a counter or a stove, with their backs to you) ──
+    // torsoBackA/B: the same sweaters from the back (a plain ribbed collar, no V), then trousers and shoes down to the floor (legs, in the figure's own units,
+    // end at y = legsTo). headBackA/B: the back of the head, all hair, with the ears at the sides and the nape below; p.turn (+1 / -1) turns the head
+    // enough to show a sliver of cheek on that side. Arms are the usual drawArm, drawn before the torso so the forearms vanish behind it (hands busy in front).
+    const BACK_LEGS = { a: { pants: "#3f5878", pantsD: "#2c4058", shoe: "#e9e4d6", shoeD: "#a89f8a" }, b: { pants: "#2c3140", pantsD: "#1c2030", shoe: "#2a2a30", shoeD: "#101014" } };
+    const BACK_EXT = 18;                                                                                   // the back-view sweaters hang this much longer (to the hips), so the legs start lower
+    const legsBack = (g, who, legsTo) => {
+      const C = BACK_LEGS[who], hw = who === "a" ? 25 : 28, top = (who === "a" ? 56 : 60) + BACK_EXT, mid = hw * 0.04;
+      [-1, 1].forEach(sd => {
+        const x0 = sd < 0 ? -hw + 2 : mid + 1, x1 = sd < 0 ? -mid - 1 : hw - 2;
+        sv("path", { d: `M${x0} ${top} L${x1} ${top} L${x1 - sd * 1.5} ${legsTo - 7} L${x0 + sd * 1.5} ${legsTo - 7} Z`, fill: C.pants, stroke: C.pantsD, "stroke-width": 0.6 }, g);
+        sv("path", { d: `M${(x0 + x1) / 2} ${top + 14} V${legsTo - 12}`, stroke: C.pantsD, "stroke-width": 0.6, opacity: 0.55 }, g);
+        sv("path", { d: `M${x0 + sd * 1.5 - 1} ${legsTo - 7} L${x1 - sd * 1.5 + 1} ${legsTo - 7} L${x1 - sd * 1.5 + 1.6} ${legsTo} L${x0 + sd * 1.5 - 1.6} ${legsTo} Z`, fill: C.shoe, stroke: C.shoeD, "stroke-width": 0.7, "stroke-linejoin": "round" }, g);
+      });
+      sv("rect", { x: -hw, y: top - 4, width: hw * 2, height: 6, fill: C.pantsD, opacity: 0.9 }, g);
+    };
+    const torsoBackA = (g, legsTo) => {
+      if (legsTo) legsBack(g, "a", legsTo);
+      sv("path", { d: `M-24 9 Q-24 -3 -12 -5 L12 -5 Q24 -3 24 9 L25 ${58 + BACK_EXT} L-25 ${58 + BACK_EXT} Z`, fill: "url(#bs-plaid)", stroke: "#5a2e3c", "stroke-width": 0.8 }, g).setAttribute("stroke-opacity", 0.55);
+      sv("path", { d: "M-9 -6 Q0 -2 9 -6 L8.6 -9.4 Q0 -6.4 -8.6 -9.4 Z", fill: "#2b3862" }, g);
+      sv("path", { d: `M-17 12 Q-19.4 ${34 + BACK_EXT / 2} -17.6 ${58 + BACK_EXT} M17 12 Q19.4 ${34 + BACK_EXT / 2} 17.6 ${58 + BACK_EXT} M0 -1 V${57 + BACK_EXT}`, stroke: "#7a6a5e", "stroke-width": 0.7, fill: "none", opacity: 0.4 }, g);
+    };
+    const torsoBackB = (g, legsTo) => {
+      if (legsTo) legsBack(g, "b", legsTo);
+      sv("path", { d: `M-27 9 Q-27 -3 -14 -6 L14 -6 Q27 -3 27 9 L28 ${62 + BACK_EXT} L-28 ${62 + BACK_EXT} Z`, fill: "url(#bs-knit)", stroke: "#171b28", "stroke-width": 0.8 }, g);
+      sv("path", { d: "M-10 -7 Q0 -2 10 -7 L9.4 -10.4 Q0 -7 -9.4 -10.4 Z", fill: "#1f2331" }, g);
+      sv("path", { d: `M-19 14 Q-22 ${36 + BACK_EXT / 2} -20 ${60 + BACK_EXT} M19 14 Q22 ${36 + BACK_EXT / 2} 20 ${60 + BACK_EXT}`, stroke: "#131622", "stroke-width": 0.8, fill: "none", opacity: 0.55 }, g);
+      sv("rect", { x: -28, y: 55 + BACK_EXT, width: 56, height: 7, fill: "#1f2331" }, g);
+    };
+    // The hair from behind is a cut-out of the reference picture (BACK_HAIR: a small PNG each, placed in the figure's own units so the nape
+    // sits just above the collar, exactly as in the picture). It moves with the head; p.turn nudges it a little to that side.
+    const BACK_HAIR = {
+      a: { x: -30.49, y: -52.16, w: 58.32, h: 55.67, href: "data:image/png;base64,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" },
+      b: { x: -27.94, y: -53.56, w: 56.91, h: 54.32, href: "data:image/png;base64,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" }
+    };
+    const headBack = (g, p, who) => {
+      const H = HEADS[who], [dx, dy] = headShift(p), tf = `translate(${dx} ${dy}) rotate(${p.head[2]} 0 ${PIVOT_Y})`, turn = p.turn || 0;
+      neckTo(g, p, H);
+      const h = sv("g", { transform: tf }, g), B = BACK_HAIR[who];
+      const im = sv("image", { x: B.x + turn * 1.2, y: B.y, width: B.w, height: B.h, preserveAspectRatio: "none" }, h);
+      im.setAttribute("href", B.href);
+    };
+    const headBackA = (g, p) => headBack(g, p, "a");
+    const headBackB = (g, p) => headBack(g, p, "b");
     const headA = (g, p) => drawHead(g, p, "a");
     const headB = (g, p) => drawHead(g, p, "b");
     const headC = (g, p) => drawHead(g, p, "c");
@@ -1139,7 +1184,7 @@
       ["base", "mid", "light"].forEach(tone => sv("path", { d: H.hair[tone], "fill-rule": "evenodd", stroke: fill, "stroke-width": 0.25, "stroke-linejoin": "round" }, hair));
       return { root, head };
     };
-    return { solveArm, drawArm, face, torsoA, torsoB, torsoC, headA, headB, headC, headShift, silhouette, setPj: v => { pj = !!v; } };
+    return { solveArm, drawArm, face, torsoA, torsoB, torsoC, headA, headB, headC, torsoBackA, torsoBackB, headBackA, headBackB, headShift, silhouette, setPj: v => { pj = !!v; } };
   }
 
   return { bsKit };
@@ -13471,27 +13516,124 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["byers-kitchen"] = function (ctx) {
   'use strict';
-  const { hkShell } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSleep, hkWhere, bfFade, hkFindThem } = ctx.lib["hawkins-kit"];
+  const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
   const openByersLivingRoom = (...args) => world.openByersLivingRoom(...args);
 
-  // ── THE BYERS' KITCHEN: THE ROOM ONLY ──
+  // ── Will and Mike at the Byers' round table (the hkWhere place "byerskitchen") ──
+  // Each moment: props on the table (the place settings are always there), then beats [who, text, patch?]. who: "w" Will, "m" Mike, "n" the caption only.
+  // A patch changes the pose from that beat on: { a: Will's, b: Mike's } (mood, eyes, look, lookY, head [dx, dy, tilt], blush, lean, dy, L / R hands: a point
+  // on the picture (at the table only; "stage": "counter" moments show them from behind at the worktop and stove, where hands are hidden), with a held thing as a third entry: "mug", "cookie", "plate", "glass", "pad", "spoon", "egg", "toast"), plus hearts: n, jig: true.
+  // Table props: jam, jug, toast, pie, bowl, eggs, cups, napkin; "pan" is a pan with steam on the stove behind them. Hands reach about 33 px from the shoulder.
+  const BK_KEY = "ao3-bk-moment";
+  const BK_BASE = { a: { sx: 0, head: [1, 1, 3], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: 0, head: [-1, 1, -3], mood: "smile", look: -1, L: "lap", R: "lap" } };
+  const BK_MOMENTS = [
+    { name: "morning, slowly", props: ["jam", "jug", "toast"], beats: [
+      ["n", "Morning at the Byers’ round table: toast, a jar of jam and a jug of juice. Neither of them is entirely awake, and both are pretending otherwise."],
+      ["w", "Pass the jam?", { a: { mood: "calm", R: [178, 288] } }],
+      ["m", "There’s only one jam. You say it like there are options.", { b: { mood: "smirk" } }],
+      ["w", "There could have been options. I’m an optimist.", { a: { mood: "smirk" } }],
+      ["m", "You put jam on toast that already had butter and peanut butter.", { b: { mood: "grin" } }],
+      ["w", "It’s called layering.", { a: { mood: "grin" } }],
+      ["m", "It’s called a crime.", { b: { mood: "cheer" }, jig: true }],
+      ["n", "Will slides the jar over anyway. Their fingers meet on the lid, and both of them suddenly find the toast fascinating.", { hearts: 2, a: { blush: true, R: [200, 288] }, b: { blush: true, L: [222, 288] } }]] },
+    { name: "the good cup", props: ["jug", "cups"], beats: [
+      ["n", "Joyce has one rule about the flowery cup: nobody uses it. Will is holding the flowery cup.", { a: { R: [174, 284, "mug"], mood: "smirk" } }],
+      ["m", "Will. That’s Mom’s cup. Your mom’s cup.", { b: { mood: "o" } }],
+      ["w", "She’s at work. It’s only a cup. A slightly more important cup.", { a: { mood: "grin" } }],
+      ["m", "Pour me some juice. In a regular cup. I’m not brave.", { b: { mood: "smirk", L: [236, 288] } }],
+      ["w", "Coward.", { a: { mood: "smirk" } }],
+      ["m", "Strategically cautious.", { b: { mood: "grin" }, jig: true }],
+      ["n", "The juice goes bright orange under the lamp, almost honey. Nobody spills a drop, which feels like a small miracle.", { hearts: 1, a: { eyes: "happy", mood: "smile" } }]] },
+    { name: "pie for breakfast", props: ["pie"], beats: [
+      ["n", "There is a pie on the table. Nobody remembers whose pie it is. It has been a pie for two days."],
+      ["m", "Technically, it’s fruit.", { b: { mood: "smirk", L: [226, 288] } }],
+      ["w", "Technically, it’s also sugar, butter and a lot of regret.", { a: { mood: "smirk" } }],
+      ["m", "Fruit is the main ingredient, Will.", { b: { mood: "grin" } }],
+      ["w", "…If Mom asks, it was a science experiment.", { a: { mood: "grin", R: [186, 288] } }],
+      ["m", "What are we testing?", { b: { mood: "o" } }],
+      ["w", "Whether it’s still good.", { a: { mood: "cheer" }, jig: true }],
+      ["n", "They cut two slivers. The slivers become four slivers, then a quarter of the pie. Science demands it.", { hearts: 2, b: { mood: "cheer" } }]] },
+    { name: "pancakes, round one", stage: "counter", props: ["cbowl", "pan"], beats: [
+      ["n", "Will at the worktop with the bowl, Mike at the stove with the pan, both with their backs to the room. Joyce’s recipe is on a napkin, in handwriting that is mostly arrows."],
+      ["w", "‘Mix until combined.’ Combined with what?", { a: { mood: "o" } }],
+      ["m", "With itself, probably? Mix it until it’s sure.", { b: { mood: "smirk" } }],
+      ["w", "That’s the least helpful recipe I’ve ever heard.", { a: { mood: "smirk" } }],
+      ["m", "It’s your mom’s napkin!", { b: { mood: "grin" } }],
+      ["w", "My mom writes for people who already know how.", { a: { mood: "grin" } }],
+      ["n", "The first pancake goes in the pan. It comes out shaped like a continent nobody has discovered.", { b: { mood: "o" } }],
+      ["m", "I’ll eat the continent.", { b: { mood: "cheer" }, jig: true }],
+      ["w", "You’ll eat the continent and you’ll like it.", { hearts: 2, a: { eyes: "happy", mood: "cheer", blush: true } }]] },
+    { name: "the egg incident", stage: "counter", props: ["cbowl", "pan"], beats: [
+      ["n", "Scrambled eggs, with their backs to the room: a bowl on the worktop, a pan heating at the stove, and a very large amount of confidence from Mike."],
+      ["m", "Watch this. One hand.", { b: { L: [238, 284, "egg"], mood: "smirk" } }],
+      ["w", "Mike—", { a: { mood: "o" } }],
+      ["n", "There is a crunch. There is shell in the bowl. There is a pause.", { b: { mood: "o", look: 0 }, a: { look: 0 } }],
+      ["m", "…Extra calcium.", { b: { mood: "calm", blush: true } }],
+      ["w", "I’ll get the spoon.", { a: { R: [188, 286, "spoon"], mood: "calm" } }],
+      ["m", "You’re not even mad.", { b: { mood: "smirk" } }],
+      ["w", "I’m a little mad. Mostly I’m fishing.", { a: { mood: "grin" } }],
+      ["n", "Will picks out shell after shell, patient as a saint. Mike hovers like a nervous assistant and says “left a bit” at all the wrong moments.", { hearts: 2, a: { eyes: "happy" }, b: { mood: "grin" } }]] },
+    { name: "grilled cheese diplomacy", stage: "counter", props: ["cplate", "pan"], beats: [
+      ["n", "Mike at the stove, Will at the worktop with the plate and the knife, backs to the room. Two grilled cheeses, golden and slightly too hot to touch. One serious disagreement."],
+      ["m", "Triangles.", { b: { mood: "calm", L: [232, 288] } }],
+      ["w", "Rectangles.", { a: { mood: "calm", R: [184, 288] } }],
+      ["m", "It’s not a debate. Triangles are objectively better.", { b: { mood: "smirk" } }],
+      ["w", "Triangles have points. Nobody wants to be stabbed by lunch.", { a: { mood: "smirk" } }],
+      ["m", "That is the most dramatic thing I’ve ever heard, and I’m a dramatic person.", { b: { mood: "cheer" }, jig: true }],
+      ["n", "They compromise: one of each. Will gets the triangle. Mike secretly wanted the triangle too, and says nothing.", { hearts: 2, a: { eyes: "happy", mood: "smile", R: [196, 285, "toast"] }, b: { mood: "calm", blush: true } }]] },
+    { name: "the lamp", props: ["cups"], beats: [
+      ["n", "The stained-glass lamp is on, even in daylight. It makes everything look like honey."],
+      ["w", "Mom got this lamp at a yard sale. The man said it was ‘a little haunted.’", { a: { mood: "smile", lookY: -0.6 } }],
+      ["m", "…Is it?", { b: { mood: "o", lookY: -0.6 } }],
+      ["w", "She says it hums right before a storm.", { a: { mood: "calm" } }],
+      ["m", "That’s just old wiring.", { b: { mood: "smirk", lookY: 0 } }],
+      ["w", "That’s exactly what a haunted lamp would say.", { a: { mood: "smirk", lookY: 0 } }],
+      ["m", "…I’m sitting a bit closer to the window now.", { b: { mood: "calm", blush: true } }],
+      ["n", "The lamp hums, very faintly. Mike pretends he didn’t hear it. Will pretends he didn’t see Mike pretend.", { hearts: 1, a: { eyes: "happy" } }]] },
+    { name: "napkin drawings", props: ["napkin", "cups"], beats: [
+      ["n", "Will draws on a napkin while the toast is toasting. Mike has stopped talking, in order to watch.", { a: { R: [176, 286, "pad"], mood: "calm", look: 0, lookY: 1 } }],
+      ["m", "Is that me?", { b: { mood: "o" } }],
+      ["w", "It’s a wizard.", { a: { mood: "smirk" } }],
+      ["m", "…It has my hair.", { b: { mood: "smirk" } }],
+      ["w", "It’s a wizard with excellent hair.", { a: { mood: "grin", blush: true } }],
+      ["m", "Give it to me. I’m putting it on the fridge.", { b: { mood: "cheer", blush: true }, jig: true }],
+      ["w", "It’s a napkin, Mike!", { a: { mood: "o" } }],
+      ["m", "Art on a napkin. The best kind.", { b: { mood: "smile" } }],
+      ["n", "Will folds the napkin very carefully and passes it across. Neither of them looks directly at the other for almost a minute.", { hearts: 3, a: { eyes: "happy", R: [210, 288], look: 1, lookY: 0 }, b: { L: [232, 288], blush: true } }]] },
+    { name: "the house is ours", props: ["cups"], beats: [
+      ["n", "The kitchen is quiet. Somewhere a clock is ticking, and the lamp glows over two cups of cocoa that have gone lukewarm."],
+      ["w", "Mom’s at work until six. Jonathan’s out. The whole house is ours.", { a: { mood: "smile" } }],
+      ["m", "That’s a lot of responsibility.", { b: { mood: "smirk" } }],
+      ["w", "We could do anything.", { a: { mood: "grin" } }],
+      ["m", "…What do you want to do?", { b: { mood: "calm", blush: true } }],
+      ["w", "Honestly? This. Just this.", { a: { mood: "smile", blush: true, eyes: "happy" } }],
+      ["m", "Okay. Same.", { b: { mood: "smile", eyes: "happy" } }],
+      ["n", "They don’t say anything else for a while. The lamp hums, the house creaks, and nobody minds.", { hearts: 3 }]] }
+  ];
+
+  // ── THE BYERS' KITCHEN ──
   // Drawn after the reference photo (399 x 501): a flat ceiling with a dark beam and a cream crown, olive-green walls, a brick
   // chimney on the left, dark upper cupboards, two windows with gathered curtains, oak lower cupboards, a white stove and hood on
   // the right, a round wooden table on a chrome pedestal under a stained-glass pendant lamp, four chrome chairs with dark flowery
   // seats, and a braided oval rug. On the table: a jar of jam, plates and cutlery, a flowery cup, a pie, a bowl and a jug of orange juice.
-  // Nothing is tappable and nothing moves yet: it is a still picture, lamp on (no time of day, weather or sound).
+  // Lamp always on (no time of day, weather or sound yet). When Will and Mike are here (hkWhere place "byerskitchen") they sit at the rear chairs and play BK_MOMENTS; otherwise the table keeps its still life.
   // Every number below is in the photo's own pixels, so to move something, measure it on the photo. The picture is drawn on a
   // slightly taller canvas (extra ceiling above and rug below) so it fills a phone screen.
   function openByersKitchen() {
     const sh = hkShell("ao3-byers-kitchen", "\u{1F373} The Byers’ kitchen");
-    const { sv, rnd } = sh.kit;
-    const { box, sub, field, caption, pill, close } = sh;
+    const { sv, rnd, anim, el } = sh.kit;
+    const { box, sub, field, caption, pill, close, later } = sh;
     sub.textContent = "the byers’ · lamp on";
-    caption.textContent = "The Byers’ kitchen. The lamp over the table is on.";
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const asleep = hkSleep.get(), away = !asleep && !hkWhere.here("byerskitchen"), empty = asleep || away;      // asleep or elsewhere: the table is empty
+    const say = t => { caption.textContent = t; };
+    let leaving = false, tid = 0;
+    say("The Byers’ kitchen. The lamp over the table is on.");
     box.style.background = "#120d06";
 
     const VX = 0, VY = -40, VW = 399, VH = 591;
@@ -13532,6 +13674,11 @@
     rad("ky-vig", [["0%", "#000", 0], ["62%", "#000", 0.08], ["100%", "#000", 0.6]]);
     rad("ky-lampwarm", [["0%", "#fff8d0", 1], ["45%", "#ffe08a", 0.75], ["100%", "#ffc050", 0]]);
     rad("ky-lamp", [["0%", "#fff", 1], ["50%", "#fff2c0", 0.8], ["100%", "#ffd070", 0]]);
+    const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);   // Will's striped sweater (bsKit asks for this id)
+    sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
+    const knit = sv("pattern", { id: "bs-knit", width: 30, height: 30, patternUnits: "userSpaceOnUse" }, defs);   // Mike's chunky patterned sweater
+    sv("rect", { width: 30, height: 30, fill: "#272d41" }, knit); sv("rect", { x: 2, y: 3, width: 13, height: 10, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 15, width: 11, height: 12, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 2, width: 9, height: 9, fill: "#1c2030" }, knit); sv("rect", { x: 3, y: 18, width: 10, height: 8, fill: "#1c2030" }, knit);
+    sv("path", { d: "M0 14.5 H30 M15.5 0 V30", stroke: "#74703f", "stroke-width": 0.7, "stroke-dasharray": "2 1.2", opacity: 0.5 }, knit);
     const vin = sv("pattern", { id: "ky-vinyl", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);
     R(0, 0, 16, 16, "#181a0a", {}, vin);
     [[4, 4, "#5a6a2c"], [12, 11, "#9a6a2a"], [10, 3, "#4a5a26"], [3, 12, "#7a5028"]].forEach(([x, y, c]) => { C(x, y, 2.2, c, { opacity: 0.85 }, vin); });
@@ -13663,7 +13810,9 @@
       tube(`M${cx - 36} 354 V398 M${cx + 36} 354 V398`, 3.4);
       tube(`M${cx - 36} 398 L${cx - 28} 388 M${cx + 36} 398 L${cx + 28} 388`, 3);
     };
+    const standL = G();                                                                                  // Will and Mike standing at the counter with their backs to you: behind the table and the chairs
     rearChair(128); rearChair(292);
+    const bodyL = G();                                                                                   // Will and Mike's bodies: behind the table
     // the table: a chrome pedestal with three curved feet
     chrome("M207 430 Q176 436 146 464", 4.6); chrome("M207 430 Q238 436 268 464", 4.6); chrome("M207 430 V470", 4.6);
     R(199, 316, 16, 114, "url(#ky-chrome)"); E(207, 430, 13, 4, "#8a867a"); R(199, 316, 16, 3, "#000", { opacity: 0.3 });
@@ -13676,6 +13825,7 @@
     L("M80 292 Q207 282 335 292", "#c8a070", 1, { opacity: 0.25 });
     E(207, 298, 138, 19, "none", { stroke: "#a8a490", "stroke-width": 1.2 });
 
+    const tStart = svg.childNodes.length;
     // on the table: a jar of jam, a plate with cutlery, a flowery cup, a pie, a bowl and a jug of orange juice
     R(128, 262, 16, 24, "#7a1c14", { rx: 3 }); R(128, 262, 16, 5, "#c8c0a8"); R(131, 270, 4, 12, "#e0705a", { opacity: 0.6 });
     E(128, 296, 26, 6, "#d8d0b8"); E(128, 294, 22, 4.6, "#e8e0c8"); E(128, 292, 16, 3, "#c8b88a");
@@ -13688,6 +13838,8 @@
     P("M284 250 L310 250 L313 292 Q298 298 281 292 Z", "none", { stroke: "#fadf9a", "stroke-width": 1.2 });
     R(287, 256, 4, 32, "#fff3c0", { opacity: 0.5, rx: 2 }); R(283, 247, 28, 4, "#f4e8c8", { rx: 2 });
     L("M311 258 Q326 262 312 280", "#f0961c", 3.4);
+    const tableStatic = G(); Array.from(svg.childNodes).slice(tStart, svg.childNodes.length - 1).forEach(n => tableStatic.appendChild(n));   // the still life, hidden while they sit here
+    const propG = G(), armL = G(), heartsG = G({ "pointer-events": "none" }), stoveG = G();
 
     // ── the two chairs in front, seen from behind: a padded back, a seat slab, tube legs with skids ──
     const frontChair = (x, y, w, h, rot, floorY) => {
@@ -13748,13 +13900,162 @@
 
     // ── light, shade ──
     E(205, 300, 190, 120, "url(#ky-glow)", { opacity: 0.45 });
-    R(VX, VY, VW, VH, "url(#ky-vig)", { "pointer-events": "none" });
+    // ── Will and Mike at the table: bodies behind it (hidden at the hips by its far edge), arms and held things over it ──
+    const FIG = { a: { cx: 128, sy: 257, s: 0.8, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: 292, sy: 256, s: 0.82, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } };
+    const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
+    ["a", "b"].forEach(key => {
+      const F = FIG[key], br = key === "a" ? 4.2 : 4.8;
+      F.g1 = sv("g", {}, bodyL); F.g2 = sv("g", {}, armL); F.r1 = sv("g", {}, F.g1); F.r2 = sv("g", {}, F.g2);
+      F.b1 = anim(sv("g", {}, F.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`); F.b2 = anim(sv("g", {}, F.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`);
+    });
+    const { drawArm, torsoA, torsoB, headA, headB, headShift, torsoBackA, torsoBackB, headBackA, headBackB } = bsKit(sv, anim, FIG);
+    const SEAT = { a: { cx: 128, sy: 257, s: 0.8 }, b: { cx: 292, sy: 256, s: 0.82 } }, COUNTER = { a: { cx: 190, sy: 214, s: 0.95 }, b: { cx: 330, sy: 213, s: 0.98 } }, FLOOR_Y = 352;   // where each stands: at the table, or at the counter and stove (back view)
+    let counter = false;
+    // table props (the place settings are always there)
+    const cupShape = (g, x, y, k) => { E(x, y, 9 * k, 2.6 * k, "#d8d0b8", {}, g); R(x - 6 * k, y - 11 * k, 12 * k, 11 * k, "#efe6cc", { rx: 2 * k, stroke: "#b8ad92", "stroke-width": 0.6 }, g); C(x - 1 * k, y - 6 * k, 2 * k, "#d8634a", {}, g); C(x + 2.5 * k, y - 7 * k, 1.5 * k, "#5a8a3a", {}, g); L(`M${x + 6 * k} ${y - 8 * k} q${5 * k} 0 0 ${5 * k}`, "#efe6cc", 1.6 * k, {}, g); E(x, y - 11 * k, 5.4 * k, 1.4 * k, "#6a3a1a", {}, g); };
+    const steam = (g, x, y, n) => { if (reduce) return; for (let i = 0; i < n; i++) anim(L(`M${x - 2 + i * 4} ${y} q-3 -5 0 -9 q3 -4 0 -8`, "#fff", 1.1, { opacity: 0.5 }, g), `animation:hkSmoke 2.8s ease-out ${i * 0.9}s infinite;`); };
+    const drawProps = list => {
+      clear(propG); clear(stoveG);
+      [[142, 297], [274, 297]].forEach(([x, y]) => { E(x, y, 24, 5.6, "#d8d0b8", {}, propG); E(x, y - 1.5, 19, 3.8, "#ece4cc", {}, propG); L(`M${x - 34} ${y - 3} l8 -6 M${x + 30} ${y - 3} l8 -6`, "#c8c8c0", 1.3, {}, propG); });
+      list.forEach(k => {
+        if (k === "jam") { R(172, 268, 15, 22, "#7a1c14", { rx: 3 }, propG); R(172, 268, 15, 5, "#c8c0a8", {}, propG); R(175, 276, 4, 11, "#e0705a", { opacity: 0.6 }, propG); }
+        else if (k === "jug") { const g = G({ transform: "translate(-52 4)" }, propG); P("M284 250 L310 250 L313 292 Q298 298 281 292 Z", "#f0961c", { stroke: "#fadf9a", "stroke-width": 1.2 }, g); R(287, 256, 4, 32, "#fff3c0", { opacity: 0.5, rx: 2 }, g); R(283, 247, 28, 4, "#f4e8c8", { rx: 2 }, g); L("M311 258 Q326 262 312 280", "#f0961c", 3.4, {}, g); }
+        else if (k === "toast") { E(207, 293, 22, 5.4, "#d8d0b8", {}, propG); [[-9, -4, -8], [3, -6, 6], [-2, -9, 0]].forEach(([dx, dy, r]) => { const t = G({ transform: `translate(${207 + dx} ${293 + dy}) rotate(${r})` }, propG); R(-8, -9, 16, 12, "#d8a550", { rx: 4, stroke: "#8a5a22", "stroke-width": 0.7 }, t); R(-5.5, -7, 11, 8, "#ecc16c", { rx: 3 }, t); }); }
+        else if (k === "pie") { E(207, 293, 26, 6, "#d8d0b8", {}, propG); E(207, 289, 21, 8, "#d8a040", {}, propG); E(207, 287, 16, 5.6, "#e8b858", {}, propG); L("M197 287 H217 M207 282 V292", "#a8702a", 1, { opacity: 0.7 }, propG); P("M207 289 L222 297 L214 299 Z", "#c0482e", { opacity: 0.9 }, propG); }
+        else if (k === "bowl") { E(207, 288, 21, 5.6, "#7a8a96", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); P("M186 288 Q207 308 228 288 Z", "#8a9aa6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); E(207, 287, 17.5, 3.8, "#f4efe2", {}, propG); [[-14, 296], [12, 298], [20, 294]].forEach(([dx, y]) => C(207 + dx, y, 0.9, "#fffaf0", { opacity: 0.8 }, propG)); }
+        else if (k === "eggs") { R(214, 284, 30, 10, "#cfc6a8", { rx: 2, stroke: "#8a7a58", "stroke-width": 0.6 }, propG); [220, 229, 238].forEach(x => E(x, 283, 3.6, 4.6, "#f4efe2", { stroke: "#b8ad92", "stroke-width": 0.5 }, propG)); E(190, 291, 17, 4.6, "#8a9aa6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); P("M173 291 Q190 306 207 291 Z", "#9aaab6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); E(190, 290, 14, 3.2, "#f0d050", {}, propG); }
+        else if (k === "cups") { cupShape(propG, 190, 292, 1); cupShape(propG, 226, 292, 1); steam(propG, 188, 280, 2); steam(propG, 224, 280, 2); }
+        else if (k === "napkin") { PG("186,284 214,282 218,300 182,302", "#f4efe2", { stroke: "#cfc6ad", "stroke-width": 0.7 }, propG); L("M193 292 l3 -5 l3 5 M205 291 q3 -4 6 0", "#6a5a4a", 0.9, { opacity: 0.8 }, propG); }
+        else if (k === "cbowl") { E(256, 238, 17, 4.4, "#7a8a96", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); P("M239 238 Q256 254 273 238 Z", "#8a9aa6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); E(256, 237.5, 14, 3, "#f4efe2", {}, propG); L("M258 236 L270 224", "#c8c8c0", 1.8, {}, propG); }
+        else if (k === "cplate") { E(256, 238, 16, 3.8, "#d8d0b8", {}, propG); [[-6, -4, -8], [4, -5, 6]].forEach(([dx, dy, r]) => { const t = G({ transform: `translate(${256 + dx} ${238 + dy}) rotate(${r})` }, propG); R(-7, -8, 14, 10, "#d8a550", { rx: 3.5, stroke: "#8a5a22", "stroke-width": 0.7 }, t); }); }
+        else if (k === "pan") { E(380, 240, 15, 3, "#1a1a1a", {}, stoveG); P("M366 238 H394 L391 232 H369 Z", "#2a2a2a", {}, stoveG); R(394, 234, 14, 3, "#2a2a2a", { rx: 1.5 }, stoveG); E(380, 233, 12, 1.8, "#8a6a34", {}, stoveG); steam(stoveG, 374, 228, 3); }
+      });
+    };
+    const mugShape = (g, x, y, col, k) => { R(x - 5.5 * k, y - 10 * k, 11 * k, 10 * k, col, { rx: 2 * k, stroke: "#1a0c14", "stroke-width": 0.6 }, g); L(`M${x + 5.5 * k} ${y - 7.5 * k} q${5 * k} ${1 * k} 0 ${5 * k}`, col, 1.6 * k, {}, g); E(x, y - 10 * k, 5 * k, 1.4 * k, "#5a3420", {}, g); steam(g, x, y - 12 * k, 2); };
+    const prop = (g, kind, x, y) => {
+      if (kind === "mug") cupShape(g, x, y + 4, 0.8);
+      else if (kind === "cookie") { C(x, y, 4, "#c98a4a", { stroke: "#8a5a2a", "stroke-width": 0.5 }, g); }
+      else if (kind === "toast") { R(x - 6, y - 8, 12, 10, "#d8a550", { rx: 3.5, stroke: "#8a5a22", "stroke-width": 0.6 }, g); R(x - 4, y - 6, 8, 6, "#ecc16c", { rx: 2.5 }, g); }
+      else if (kind === "spoon") { L(`M${x - 9} ${y - 9} L${x} ${y + 1}`, "#c8c8c0", 1.8, {}, g); E(x - 10, y - 10, 3, 4.2, "#c8c8c0", { transform: `rotate(-40 ${x - 10} ${y - 10})` }, g); }
+      else if (kind === "egg") E(x, y - 3, 3.6, 4.6, "#f4efe2", { stroke: "#b8ad92", "stroke-width": 0.5 }, g);
+      else if (kind === "glass") R(x - 4.5, y - 9, 9, 11, "#fff", { rx: 1.5, opacity: 0.7, stroke: "#9a968a", "stroke-width": 0.6 }, g);
+      else if (kind === "pad") { const Pp = G({ transform: `translate(${x} ${y}) rotate(-8)` }, g); R(-11, -16, 22, 16, "#efe8d6", { rx: 1.2, stroke: "#b8ad92", "stroke-width": 0.6 }, Pp); L("M-8 -12 h16 M-8 -8.5 h14 M-8 -5 h12", "#8a7a5a", 0.7, {}, Pp); }
+    };
+    const trans = (key, sx, dy) => { const F = FIG[key], tr = `translate(${(F.cx + (sx || 0)).toFixed(1)} ${(F.sy + (dy || 0)).toFixed(1)}) scale(${F.s})`; F.g1.setAttribute("transform", tr); F.g2.setAttribute("transform", tr); };
+    const drawFig = (key, p) => {
+      const F = FIG[key], isA = key === "a";
+      clear(F.b1); clear(F.b2);
+      trans(key, p.sx, p.dy);
+      if (counter) {                                                                                               // facing away: arms first (so the forearms vanish behind the body), then body and legs, then the back of the head
+        const ag = sv("g", {}, F.b1), tg2 = sv("g", {}, F.b1), S = left => left ? F.sl : F.sr;
+        drawArm(ag, key, false, [(isA ? 7 : 8), 40], 0, 0, 0, S(false)); drawArm(ag, key, true, [-(isA ? 7 : 8), 40], 0, 0, 0, S(true));
+        if (p.busy && !reduce) { try { ag.animate([{ transform: "translate(0,0)" }, { transform: "translate(2.2px,-1px)" }, { transform: "translate(-1px,0.6px)" }, { transform: "translate(0,0)" }], { duration: key === "a" ? 760 : 940, iterations: Infinity }); } catch {} }
+        (isA ? torsoBackA : torsoBackB)(tg2, (FLOOR_Y - F.sy) / F.s);
+        (isA ? headBackA : headBackB)(tg2, p);
+        return;
+      }
+      const lean = p.lean || 0, la = lean * Math.PI / 180, lc = Math.cos(la), ls = Math.sin(la);
+      const tg = sv("g", lean ? { transform: `rotate(${lean} 0 58)` } : {}, F.b1);
+      const shoulder = left => { const S = left ? F.sl : F.sr, rx = S[0], ry = S[1] - 58; return [rx * lc - ry * ls, rx * ls + ry * lc + 58]; };
+      ({ a: torsoA, b: torsoB })[key](tg);
+      const cx = F.cx + (p.sx || 0), cy = F.sy + (p.dy || 0), toLocal = t => [(t[0] - cx) / F.s, (t[1] - cy) / F.s];
+      const mouth = () => { const [hx, hy] = headShift(p); return [cx + hx * F.s, cy + ((isA ? -13.6 : -17.4) + hy + 3) * F.s]; };
+      const hand = (left, t) => {
+        if (t === "lap") { drawArm(F.b1, key, left, [left ? -17 : 17, 50], 0, 0, 0, shoulder(left)); return; }
+        if (t === "mouth") t = mouth();
+        const Hd = drawArm(F.b2, key, left, toLocal(t), 0, 0, 0, shoulder(left));
+        if (t[2]) prop(F.b2, t[2], Hd[0], Hd[1]);
+      };
+      hand(false, p.R || "lap"); hand(true, p.L || "lap");
+      ({ a: headA, b: headB })[key](tg, p);
+    };
+    // ── hearts, the speech bubble and the director ──
+    const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z", HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
+    if (!document.getElementById("ao3-bf-css")) { const s = document.createElement("style"); s.id = "ao3-bf-css"; s.textContent = "@keyframes bfHeart{0%{opacity:0;transform:translate(0,0) scale(.4)}15%{opacity:.95}70%{opacity:.8}100%{opacity:0;transform:translate(var(--dx,0px),-92px) scale(1.15)}}@keyframes bfPop{0%{opacity:0;transform:translate(-50%,-100%) scale(.85)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}"; (document.head || document.documentElement).appendChild(s); }
+    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = G({ transform: `translate(${((counter ? 270 : 210) + (Math.random() - 0.5) * 60).toFixed(1)} ${((counter ? 176 : 236) + Math.random() * 14).toFixed(1)}) scale(${(1.2 + Math.random() * 0.7).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 40).toFixed(0)}px;animation:bfHeart 2.2s ease-out forwards;`); later(() => w.remove(), 2400); }, i * 260); };
+    const ov = el("div", "position:absolute;inset:0;pointer-events:none;overflow:hidden;");
+    let bub = null;
+    const hideBubble = () => { if (bub) { bub.remove(); bub = null; } };
+    const speak = (who, text) => {                                                                                  // the bubble sits over whoever speaks; the picture is cropped to fill the phone, so ask the browser where the head is on screen
+      hideBubble();
+      const pt = svg.createSVGPoint(); pt.x = who === "m" ? FIG.b.cx : FIG.a.cx; pt.y = counter ? 160 : 206;
+      const m = svg.getScreenCTM(), r = ov.getBoundingClientRect(), s = m ? pt.matrixTransform(m) : { x: r.left + r.width / 2, y: r.top + r.height * 0.4 };
+      const rawX = s.x - r.left, w = r.width || 360, lo = w * 0.3, hi = w * 0.7, ax = Math.max(lo, Math.min(hi, rawX));
+      bub = el("div", `position:absolute;left:${ax.toFixed(0)}px;top:${Math.max(40, s.y - r.top).toFixed(0)}px;transform:translate(-50%,-100%);max-width:56%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.35);pointer-events:none;z-index:5;`, text);
+      bub.appendChild(el("div", `position:absolute;bottom:-5px;left:calc(50% + ${(rawX - ax).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`));
+      ov.appendChild(bub);
+    };
+    const PS = { a: null, b: null }, KEYS = ["a", "b"];
+    const setPose = patch => {
+      KEYS.forEach(k => { if (patch[k] && PS[k]) { PS[k] = Object.assign({}, PS[k], patch[k]); drawFig(k, PS[k]); } });
+      if (patch.jig && !reduce) KEYS.forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-4px)" }, { transform: "translateY(0)" }, { transform: "translateY(-2px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
+      if (patch.hearts) puff(patch.hearts);
+    };
+    const start = () => {
+      counter = BK_MOMENTS[mi].stage === "counter";
+      KEYS.forEach(k => { const Pz = (counter ? COUNTER : SEAT)[k]; FIG[k].cx = Pz.cx; FIG[k].sy = Pz.sy; FIG[k].s = Pz.s; (counter ? standL : bodyL).appendChild(FIG[k].g1); (counter ? standL : armL).appendChild(counter ? FIG[k].g2 : FIG[k].g2); });
+      PS.a = Object.assign({}, BK_BASE.a, counter ? { busy: true, head: [0, 1, 0], turn: 0 } : {}); PS.b = Object.assign({}, BK_BASE.b, counter ? { busy: true, head: [0, 1, 0], turn: 0 } : {});
+      if (hitRect.Will) { hitRect.Will.setAttribute("x", counter ? COUNTER.a.cx - 31 : 98); hitRect.Will.setAttribute("y", counter ? 160 : 206); hitRect.Will.setAttribute("height", counter ? 130 : 78); hitRect.Mike.setAttribute("height", counter ? 130 : 78); hitRect.Mike.setAttribute("x", counter ? COUNTER.b.cx - 31 : 262); hitRect.Mike.setAttribute("y", counter ? 160 : 206); }
+      drawProps(BK_MOMENTS[mi].props || []); drawFig("a", PS.a); drawFig("b", PS.b);
+    };
+    let mi = 0, bi = 0, playing = false;
+    const readTime = t => 2600 + t.length * 48;
+    const step = () => {
+      clearTimeout(tid);
+      const M = BK_MOMENTS[mi];
+      if (bi >= M.beats.length) { playing = false; hideBubble(); say("The moment settles. Tap either of them for another."); return; }
+      const [who, text, patch0] = M.beats[bi++];
+      let patch = patch0 || {};
+      if (counter && (who === "w" || who === "m")) patch = Object.assign({}, patch, { a: Object.assign({ turn: who === "w" ? 1 : 0 }, patch.a || {}), b: Object.assign({ turn: who === "m" ? -1 : 0 }, patch.b || {}) });   // seen from behind, the speaker turns their head a little towards the other
+      setPose(patch);
+      if (who === "n") { hideBubble(); say(text); } else speak(who, text);
+      tid = setTimeout(step, readTime(text));
+    };
+    const AWAY_SAY = ["Nobody at the table. A plate of toast sits there going cold, and the lamp hums to itself.", "The Byers’ kitchen, empty: two chairs pushed out, as if somebody left in the middle of a joke.", "No one here. The pie is down a slice, and the evidence is on a fork."];
+    const ASLEEP_SAY = ["The kitchen is quiet, the lamp on low. Will and Mike are fast asleep across town.", "Nobody is up. The chairs are tucked in, and the house is holding its breath."];
+    const NOBODY = asleep ? ASLEEP_SAY : AWAY_SAY;
+    let nEmpty = 0;
+    const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(BK_KEY, String(mi)); } catch {} say(BK_MOMENTS[mi].intro || "The Byers’ kitchen: Will and Mike at the round table, with the whole house to themselves."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } let n = Math.floor(Math.random() * (BK_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
+    const next = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } if (playing) step(); else another(); };
+    sh.onClose = () => { clearTimeout(tid); hideBubble(); };
+    let first = Math.floor(Math.random() * BK_MOMENTS.length);
+    try { const last = parseInt(localStorage.getItem(BK_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < BK_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (BK_MOMENTS.length - 1))) % BK_MOMENTS.length; } catch {}
 
-    field.appendChild(svg);
-    pill("\u{1F6CB}️ living room", "Through to the living room", () => { close(); openByersLivingRoom(); });
-    pill("\u{1F3DA}️ outside", "Out to the front of Will’s house", () => { close(); openWillsHouse(); });
-    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    // ── what you can tap ──
+    const SAY = {
+      lamp: ["The stained-glass lamp, amber and cream, with a bulb that hums if you listen closely.", "A yard-sale lamp. The man who sold it said it was ‘a little haunted’."],
+      window: ["Curtains tied back at the waist, and a sky doing whatever it likes.", "The window over the worktop. Joyce keeps the sill clear for no reason anybody can explain."],
+      stove: ["A white stove under a hood. Something is always about to be cooked on it.", "The stove: four rings, an oven with a window, and a burn mark nobody talks about."],
+      table: ["A round table on a chrome pedestal. Everything important in this house gets said here.", "The table has a ring from every cup that was ever put down in a hurry."],
+      chimney: ["The old brick chimney, with a crock on the mantel and a plant that refuses to die.", "Bricks, a ledge and a crock. The warmest corner of the kitchen."]
+    };
+    const cnt = {}; const tap = k => () => { cnt[k] = (cnt[k] || 0) + 1; say(SAY[k][(cnt[k] - 1) % SAY[k].length]); };
+    const hits = [];
+    const hit = (x, y, w, h, label, fn) => hits.push([x, y, w, h, label, fn]);
+    hit(98, 206, 62, 78, "Will", next);
+    hit(262, 206, 62, 78, "Mike", next);
+    hit(160, 14, 106, 80, "The lamp", tap("lamp"));
+    hit(104, 126, 64, 104, "The window", tap("window"));
+    hit(260, 136, 64, 94, "The window", tap("window"));
+    hit(332, 238, 67, 106, "The stove", tap("stove"));
+    hit(0, 130, 40, 216, "The chimney", tap("chimney"));
+    hit(69, 282, 276, 36, "The table", tap("table"));
+    const hitG = G(), hitRect = {};
+    hits.slice().reverse().forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); hitRect[label] = r; r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
+    R(VX, VY, VW, VH, "url(#ky-vig)", { "pointer-events": "none" });
+    field.appendChild(svg); field.appendChild(ov);
+    pill("\u{1F6CB}️ living room", "Through to the living room", () => { if (leaving) return; leaving = true; close(); openByersLivingRoom(); });
+    pill("\u{1F3DA}️ outside", "Out to the front of Will’s house", () => { if (leaving) return; leaving = true; close(); openWillsHouse(); });
+    if (!empty) { pill("\u{1F4AC} next", "Hear the next line sooner", next); pill("\u{1F501} another", "A different moment", another); }
+    if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
+    if (away) pill("✦ call them here", "Call Will and Mike over to the Byers’ kitchen", () => { if (leaving) return; leaving = true; hkWhere.call("byerskitchen"); say("You knock on the door. Two voices: “It’s open!”"); bfFade(sh, () => ctx.world.openByersKitchen()); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { if (leaving) return; leaving = true; close(); openHawkins(); });
     document.body.appendChild(sh.back);
+    if (empty) {
+      bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none");
+      say(asleep ? "The Byers’ kitchen. The lamp over the table is on, and Will and Mike are fast asleep across town." : "The Byers’ kitchen. The lamp over the table is on, and nobody is home just now." + hkWhere.hint());
+    } else { tableStatic.setAttribute("display", "none"); play(first); }
   }
 
   return { openByersKitchen };
