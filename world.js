@@ -11800,6 +11800,7 @@
   const openHawkins = (...args) => world.openHawkins(...args);
   const openBasement = (...args) => world.openBasement(...args);
   const openWheelers = (...args) => world.openWheelers(...args);
+  const openWheelersDining = (...args) => world.openWheelersDining(...args);
 
   // The moments in the kitchen. Each moment: props lying on the island, then beats [who, text, patch?]. who: "w" Will, "m" Mike, "n" the caption only.
   // A patch changes the pose from that beat on: { a: Will's, b: Mike's } (mood, eyes, head [dx, dy, tilt], sx, blush, lean, L / R hands: a point [x, y] on the
@@ -12351,6 +12352,11 @@
     hit(120, 300, 250, 150, "The island", tap("island"));
     hit(mom ? 150 : 150, mom ? 170 : 150, mom ? 52 : 60, mom ? 86 : 100, mom ? "Mrs. Wheeler" : "Will", next);
     hit(218, 142, 62, 108, "Mike", next);
+    // the way to the dining room: a small pulsing arrow on the left edge, like the basement's arrow to the fort
+    const goDining = () => { if (leaving) return; leaving = true; say("Through the doorway on the left, where the chandelier is already on\u2026"); bfFade(sh, () => openWheelersDining()); };
+    hit(-4, 300, 66, 124, "The doorway to the dining room", goDining);
+    sv("circle", { cx: 14, cy: 366, r: 11, fill: "#000", opacity: 0.35, "pointer-events": "none" }, svg);
+    anim(sv("path", { d: "M18 358 L10 366 L18 374", stroke: "#ffd98a", "stroke-width": 2, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round", "pointer-events": "none" }, svg), "animation:hkPulse 2.6s ease-in-out infinite;");
     const hitG = sv("g", {}, svg), hitRect = {};
     const moveHits = () => { if (hitRect["Mike"]) hitRect["Mike"].setAttribute("x", 218 + ((PS.b && PS.b.sx) || 0)); if (mom && hitRect["Mrs. Wheeler"]) hitRect["Mrs. Wheeler"].setAttribute("x", 150 + ((PS.c && PS.c.sx) || 0)); };   // the two of them can step together
     hits.slice().reverse().forEach(([x, y, w, h, label, fn]) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); hitRect[label] = r; r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); });
@@ -12367,6 +12373,7 @@
     sub.textContent = "hawkins · the kitchen";
     pill("▲ upstairs", "Back up the stairs to Mike’s room", () => { if (leaving) return; leaving = true; close(); openMikesRoom(); });
     pill("\u{1FA9C} basement", "Down the basement stairs", () => { if (leaving) return; leaving = true; close(); openBasement(); });
+    pill("\u{1F37D}️ dining room", "Through to the dining room", goDining);
     pill("\u{1F3E1} outside", "Out through the garage to the front lawn", () => { if (leaving) return; leaving = true; close(); openWheelers(); });
     if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
     if (away) pill("✦ call them here", "Call Will and Mike into the kitchen", () => { if (leaving) return; leaving = true; hkWhere.call("kitchen"); say("You shout down the hall. Two sets of footsteps come thundering in…"); bfFade(sh, () => ctx.world.openKitchen()); });
@@ -12384,6 +12391,425 @@
   }
 
   return { openKitchen };
+};
+
+// ════════ wheelers-dining.js ════════
+// wheelers-dining.js — 🍽️ the Wheelers' dining room (openWheelersDining).
+// Part of the keepsake world: see world.js for how the files fit together.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["wheelers-dining"] = function (ctx) {
+  'use strict';
+  const { hkShell } = ctx.lib["hawkins-kit"];
+  // Other scenes are reached through the router, at call time.
+  const world = ctx.world;
+  const openKitchen = (...args) => world.openKitchen(...args);
+  const openWheelers = (...args) => world.openWheelers(...args);
+  const openHawkins = (...args) => world.openHawkins(...args);
+
+  // ── THE WHEELERS' DINING ROOM: THE ROOM ONLY ──
+  // Styled after the reference photo (a set photo of a family breakfast, without the family): orange-and-cream lattice wallpaper with small
+  // pink roses, a dark cherry china hutch on the back wall with glass doors and good china, a brass chandelier with white shades, brass wall
+  // sconces, a window with wooden shutters and a brown curtain on the left, a white spindle balustrade and a blue-and-white jar on the right,
+  // a deep orange-red carpet, a big oval cherry table laid for breakfast (pancakes, bacon, scrambled eggs, a hash-brown casserole, orange juice,
+  // coffee, syrup, jam, salt and pepper mills) and six cane-back chairs with navy paisley cushions, pulled out a little.
+  // Adjusted for a phone: the photo is a wide oblique shot, so here it is seen from the table's end, looking down its length at the hutch.
+  // Nothing is tappable and nobody is in it yet: a still picture, chandelier on (no time of day, weather or sound).
+  // Built in real measurements (metres) and projected with one camera (`P(x, h, z)` below; x runs left to right, h is the height above the floor, z the distance from
+  // the camera), so to move or add something, give it metres, not pixels. Ceiling 2.4 m, a table 2.4 m x 1.1 m with its top at 0.76 m.
+  function openWheelersDining() {
+    const sh = hkShell("ao3-wheelers-dining", "\u{1F37D}️ The dining room");
+    const { sv, rnd } = sh.kit;
+    const { sub, field, caption, pill, close } = sh;
+    sub.textContent = "the wheelers’ · chandelier on";
+    caption.textContent = "The Wheelers’ dining room. Breakfast is laid out, the chairs are pulled back, and nobody has sat down yet.";
+    sh.box.style.background = "#1a0f08";
+    field.style.background = "linear-gradient(180deg,#1a0804 0%,#5a2314 100%)";
+
+    const W = 360, H = 540;
+    const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMin meet" });
+    svg.style.cssText = "width:100%;height:auto;display:block;";
+    const defs = sv("defs", {}, svg);
+    const grad = (id, stops, x2, y2) => {
+      const g = sv("linearGradient", { id, x1: 0, y1: 0, x2: x2 || 0, y2: y2 == null ? 1 : y2 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const rad = (id, stops) => {
+      const g = sv("radialGradient", { id, cx: 0.5, cy: 0.5, r: 0.5 }, defs);
+      stops.forEach(([o, c, op]) => sv("stop", { offset: o, "stop-color": c, "stop-opacity": op == null ? 1 : op }, g));
+    };
+    const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
+    const PG = (points, fill, o, parent) => A("polygon", Object.assign({ points, fill }, o || {}), parent);
+    const C = (cx, cy, r, fill, o, parent) => A("circle", Object.assign({ cx, cy, r, fill }, o || {}), parent);
+    const PA = (d, fill, o, parent) => A("path", Object.assign({ d, fill }, o || {}), parent);
+    const G = (o, parent) => sv("g", o || {}, parent || svg);
+
+    // ── the camera ──
+    // It stands at the table's near end, 1.55 m up, tipped 16 degrees down. P() gives screen x, screen y and the scale (pixels per metre).
+    const F = 240, PITCH = 16 * Math.PI / 180, SN = Math.sin(PITCH), CS = Math.cos(PITCH), CAM = 1.55, CX = 180, CY = 300;
+    const D = 3.95, HW = 2.3, CEIL = 2.4;                                 // the back wall's distance, half the room's width, the ceiling
+    const P = (x, h, z) => { const Y = h - CAM, Zp = Math.max(0.05, -Y * SN + z * CS), Yp = Y * CS + z * SN; return [CX + x * F / Zp, CY - F * Yp / Zp, F / Zp]; };
+    const pts = a => a.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+    const poly3 = (a, fill, o, parent) => PG(pts(a.map(q => P(q[0], q[1], q[2]))), fill, o, parent);
+    const front = (x0, x1, h0, h1, z, fill, o, parent) => poly3([[x0, h1, z], [x1, h1, z], [x1, h0, z], [x0, h0, z]], fill, o, parent);   // a face looking at you
+    const line3 = (a, b, stroke, wM, o, parent) => {
+      const p = P(a[0], a[1], a[2]), q = P(b[0], b[1], b[2]);
+      return A("path", Object.assign({ d: `M${p[0].toFixed(1)} ${p[1].toFixed(1)} L${q[0].toFixed(1)} ${q[1].toFixed(1)}`, stroke, "stroke-width": Math.max(0.5, wM * (p[2] + q[2]) / 2).toFixed(2), fill: "none", "stroke-linecap": "round" }, o || {}), parent);
+    };
+    const path3 = (list, stroke, wM, o, parent) => {
+      const q = list.map(a => P(a[0], a[1], a[2]));
+      const k = q.reduce((s, p) => s + p[2], 0) / q.length;
+      return A("path", Object.assign({ d: "M" + q.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L"), stroke, "stroke-width": Math.max(0.5, wM * k).toFixed(2), fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, o || {}), parent);
+    };
+    const ring3 = (cx, h, cz, rx, rz, fill, o, parent) => {                 // a flat ellipse lying on a horizontal surface
+      const a = []; for (let i = 0; i < 28; i++) { const t = i / 28 * 6.2832; a.push(P(cx + rx * Math.cos(t), h, cz + rz * Math.sin(t))); }
+      return PG(pts(a), fill, o, parent);
+    };
+    const disk3 = (cx, h, z, r, fill, o, parent) => {                       // a round thing standing on edge, facing you (a plate in a cabinet)
+      const a = []; for (let i = 0; i < 22; i++) { const t = i / 22 * 6.2832; a.push(P(cx + r * Math.cos(t), h + r * Math.sin(t), z)); }
+      return PG(pts(a), fill, o, parent);
+    };
+    // an upright cylinder or cone (radius r0 at h0, r1 at h1) seen from above: its base, its body, its top
+    const cyl = (cx, cz, r0, r1, h0, h1, side, topFill, o, parent) => {
+      const g = G({}, parent), ringAt = (h, r) => { const a = []; for (let i = 0; i < 24; i++) { const t = i / 24 * 6.2832; a.push(P(cx + r * Math.cos(t), h, cz + r * Math.sin(t))); } return a; };
+      const ext = a => { let l = a[0], r = a[0]; a.forEach(p => { if (p[0] < l[0]) l = p; if (p[0] > r[0]) r = p; }); return [l, r]; };
+      const b = ringAt(h0, r0), t = ringAt(h1, r1), [bl, br] = ext(b), [tl, tr] = ext(t);
+      PG(pts(b), side, o, g); PG(pts([tl, tr, br, bl]), side, o, g);
+      PG(pts([tl, [tl[0] + (tr[0] - tl[0]) * 0.3, tl[1]], [bl[0] + (br[0] - bl[0]) * 0.3, bl[1]], bl]), "#fff", { opacity: 0.13 }, g);
+      PG(pts(t), topFill || side, o, g);
+      return g;
+    };
+    // a block: its top, the side facing the middle of the room, and its near face
+    const box = (x0, x1, h0, h1, z0, z1, fr, tp, sd, parent) => {
+      const g = G({}, parent);
+      if (x1 < 0) poly3([[x1, h1, z0], [x1, h1, z1], [x1, h0, z1], [x1, h0, z0]], sd || fr, {}, g);
+      else if (x0 > 0) poly3([[x0, h1, z0], [x0, h1, z1], [x0, h0, z1], [x0, h0, z0]], sd || fr, {}, g);
+      if (CAM > h1) poly3([[x0, h1, z0], [x1, h1, z0], [x1, h1, z1], [x0, h1, z1]], tp || fr, {}, g);
+      front(x0, x1, h0, h1, z0, fr, {}, g);
+      return g;
+    };
+
+    // ── gradients and patterns ──
+    grad("dn-ceil", [["0%", "#e9d9b4"], ["100%", "#cdb98c"]]);
+    grad("dn-carpet", [["0%", "#7a3320"], ["100%", "#9a4a28"]]);
+    grad("dn-cherry", [["0%", "#8a4a2c"], ["50%", "#6e3a22"], ["100%", "#4a2414"]], 1, 0);
+    grad("dn-table", [["0%", "#8a4426"], ["55%", "#6a3220"], ["100%", "#4c2214"]]);
+    grad("dn-hall", [["0%", "#6a4a30"], ["100%", "#2a1a10"]]);
+    grad("dn-day", [["0%", "#fff6d6"], ["55%", "#fdf0c2"], ["100%", "#dcecf0"]]);
+    grad("dn-cabin", [["0%", "#fdf2c4"], ["100%", "#e8c987"]]);
+    rad("dn-glow", [["0%", "#fff0b4", 0.9], ["35%", "#ffd88a", 0.4], ["100%", "#ffc060", 0]]);
+    rad("dn-glow2", [["0%", "#fff6cc", 0.7], ["100%", "#ffd070", 0]]);
+    rad("dn-vig", [["0%", "#1a0804", 0], ["60%", "#1a0804", 0.08], ["100%", "#1a0804", 0.6]]);
+    rad("dn-sheen", [["0%", "#ffe9b0", 0.5], ["100%", "#ffe9b0", 0]]);
+    const pais = sv("pattern", { id: "dn-paisley", width: 12, height: 12, patternUnits: "userSpaceOnUse" }, defs);
+    A("rect", { width: 12, height: 12, fill: "#26304e" }, pais);
+    [[3, 3, "#a8452e"], [9, 8, "#c89a3c"], [9, 2, "#4a6a8a"], [2, 9, "#7a2c3c"]].forEach(([x, y, c]) => A("ellipse", { cx: x, cy: y, rx: 2.4, ry: 1.7, fill: c, opacity: 0.85, transform: `rotate(35 ${x} ${y})` }, pais));
+    const cane = sv("pattern", { id: "dn-cane", width: 5, height: 5, patternUnits: "userSpaceOnUse" }, defs);
+    A("rect", { width: 5, height: 5, fill: "#c9a063" }, cane); A("path", { d: "M0 0 L5 5 M5 0 L0 5", stroke: "#7a5428", "stroke-width": 0.7, opacity: 0.8 }, cane);
+
+    // ── the walls: lattice wallpaper with small roses (back wall, left wall and right wall all use the same function) ──
+    const wallpaper = (map, u0, u1, v1, base, shade) => {
+      const a = 0.24, mp = (u, v) => P(...map(u, v));
+      const edge = [mp(u0, 0), mp(u1, 0), mp(u1, v1), mp(u0, v1)];
+      PG(pts(edge), base);
+      let lat = "", petals = "", leaves = "", hearts = "", kSum = 0, kN = 0;
+      for (let i = Math.floor(u0 / a); i * a < u1; i++) for (let j = 0; j * a < v1; j++) {
+        const u = i * a, v = j * a;
+        if (u < u0 - 1e-6 || u + a > u1 + 1e-6 || v + a > v1 + 1e-6) continue;
+        const p00 = mp(u, v), p11 = mp(u + a, v + a), p10 = mp(u + a, v), p01 = mp(u, v + a);
+        lat += `M${p00[0].toFixed(1)} ${p00[1].toFixed(1)}L${p11[0].toFixed(1)} ${p11[1].toFixed(1)}M${p10[0].toFixed(1)} ${p10[1].toFixed(1)}L${p01[0].toFixed(1)} ${p01[1].toFixed(1)}`;
+        kSum += p00[2]; kN++;
+        const f = mp(u, v + a / 2), r = 0.03 * f[2];
+        if (f[1] > -5 && f[1] < 545 && f[0] > -5 && f[0] < 365 && u >= u0 + 0.03) {
+          for (let k = 0; k < 5; k++) { const t = k * 1.2566; const px = f[0] + Math.cos(t) * r * 1.25, py = f[1] + Math.sin(t) * r * 1.25; petals += `M${(px - r).toFixed(1)} ${py.toFixed(1)}a${r.toFixed(2)} ${r.toFixed(2)} 0 1 0 ${(2 * r).toFixed(2)} 0a${r.toFixed(2)} ${r.toFixed(2)} 0 1 0 ${(-2 * r).toFixed(2)} 0`; }
+          hearts += `M${(f[0] - r * 0.5).toFixed(1)} ${f[1].toFixed(1)}a${(r * 0.5).toFixed(2)} ${(r * 0.5).toFixed(2)} 0 1 0 ${r.toFixed(2)} 0a${(r * 0.5).toFixed(2)} ${(r * 0.5).toFixed(2)} 0 1 0 ${(-r).toFixed(2)} 0`;
+        }
+        const l = mp(u + a / 2, v), ll = 0.05 * l[2];
+        if (l[1] > -5 && l[1] < 545 && l[0] > -5 && l[0] < 365) leaves += `M${(l[0] - ll).toFixed(1)} ${l[1].toFixed(1)}Q${l[0].toFixed(1)} ${(l[1] - ll * 0.55).toFixed(1)} ${(l[0] + ll).toFixed(1)} ${l[1].toFixed(1)}Q${l[0].toFixed(1)} ${(l[1] + ll * 0.55).toFixed(1)} ${(l[0] - ll).toFixed(1)} ${l[1].toFixed(1)}`;
+      }
+      const kAvg = kN ? kSum / kN : 50;
+      PA(lat, "none", { stroke: "#d9a64e", "stroke-width": (0.04 * kAvg).toFixed(2), "stroke-linecap": "round", opacity: 0.9 });
+      PA(lat, "none", { stroke: "#f4dfa4", "stroke-width": (0.012 * kAvg).toFixed(2), "stroke-linecap": "round", opacity: 0.8 });
+      PA(leaves, "#6f8a3c", { opacity: 0.9 });
+      PA(petals, "#d9566a", { opacity: 0.95 });
+      PA(hearts, "#f6d37a");
+      if (shade) PG(pts(edge), "#2a0e04", { opacity: shade });
+    };
+
+    // the ceiling, the floor
+    poly3([[-HW, CEIL, D], [HW, CEIL, D], [HW, CEIL, 1.1], [-HW, CEIL, 1.1]], "url(#dn-ceil)");
+    poly3([[-HW, 0, D], [HW, 0, D], [HW, 0, 0.3], [-HW, 0, 0.3]], "url(#dn-carpet)");
+    // walls
+    wallpaper((u, v) => [u, v, D], -HW, HW, CEIL, "#f1d9a4", 0);
+    wallpaper((u, v) => [-HW, v, D - u], 0, D - 1.1, CEIL, "#ecd09a", 0.16);
+    wallpaper((u, v) => [HW, v, D - u], 0, D - 1.1, CEIL, "#ecd09a", 0.2);
+    // crown moulding and skirting
+    front(-HW, HW, CEIL - 0.13, CEIL, D, "#ead9b0"); front(-HW, HW, CEIL - 0.145, CEIL - 0.13, D, "#8a6a40", { opacity: 0.7 });
+    poly3([[-HW, CEIL, D], [-HW, CEIL, 1.1], [-HW, CEIL - 0.13, 1.1], [-HW, CEIL - 0.13, D]], "#d9c69c");
+    poly3([[HW, CEIL, D], [HW, CEIL, 1.1], [HW, CEIL - 0.13, 1.1], [HW, CEIL - 0.13, D]], "#cdb98c");
+    front(-HW, HW, 0, 0.15, D, "#3a2012"); front(-HW, HW, 0.15, 0.165, D, "#a07040", { opacity: 0.7 });
+    poly3([[-HW, 0.15, D], [-HW, 0.15, 0.45], [-HW, 0, 0.45], [-HW, 0, D]], "#33190c");
+    poly3([[HW, 0.15, D], [HW, 0.15, 0.45], [HW, 0, 0.45], [HW, 0, D]], "#2a140a");
+
+    // ── carpet texture and soft shadows under the furniture ──
+    { let dk = "", lt = "";
+      for (let i = 0; i < 330; i++) {
+        const x = -2.2 + rnd("cx" + i) * 4.4, z = 0.55 + rnd("cz" + i) * (D - 0.6), p = P(x, 0, z), l = 0.03 * p[2], ang = rnd("ca" + i) * 3.14;
+        const d = `M${p[0].toFixed(1)} ${p[1].toFixed(1)}l${(Math.cos(ang) * l * 1.6).toFixed(1)} ${(Math.sin(ang) * l * 0.5).toFixed(1)}`;
+        if (rnd("cc" + i) > 0.5) dk += d; else lt += d;
+      }
+      PA(dk, "none", { stroke: "#4a1c0e", "stroke-width": 0.9, opacity: 0.55, "stroke-linecap": "round" });
+      PA(lt, "none", { stroke: "#c86a3c", "stroke-width": 0.9, opacity: 0.45, "stroke-linecap": "round" }); }
+    ring3(0, 0, 2.2, 0.3, 0.55, "#1a0804", { opacity: 0.25 });             // under the table
+    ring3(0, 0, 2.0, 1.75, 2.5, "url(#dn-glow2)", { opacity: 0.35 });       // the chandelier's light pooling on the carpet
+
+    // ── the left wall: a window with folding wooden shutters and a dark brown curtain ──
+    { const L = (u, v) => [-HW, v, D - u];
+      poly3([L(0.34, 0.86), L(1.3, 0.86), L(1.3, 2.1), L(0.34, 2.1)], "#e8dcc0");                                            // the frame
+      poly3([L(0.42, 0.95), L(1.22, 0.95), L(1.22, 2.02), L(0.42, 2.02)], "url(#dn-day)");                                      // the daylight
+      path3([L(0.82, 0.95), L(0.82, 2.02)], "#f2ead4", 0.03); path3([L(0.42, 1.48), L(1.22, 1.48)], "#f2ead4", 0.03);
+      poly3([L(0.3, 0.82), L(1.34, 0.82), L(1.34, 0.87), L(0.3, 0.87)], "#f4ecd8");                                              // the sill
+      poly3([L(0.02, 0.9), L(0.34, 0.9), L(0.34, 2.1), L(0.02, 2.1)], "#a8763e");                                                // the shutter, folded back
+      for (let v = 0.94; v < 2.08; v += 0.055) path3([L(0.04, v), L(0.32, v)], "#6a4220", 0.012, { opacity: 0.8 });
+      path3([L(0.18, 0.92), L(0.18, 2.08)], "#5a3416", 0.012);
+      poly3([L(1.3, 2.18), L(1.9, 2.18), L(1.9, 0.02), L(1.3, 0.02)], "#4a2a1a");                                                // the curtain
+      for (let u = 1.34; u < 1.9; u += 0.07) path3([L(u, 2.16), L(u + 0.02, 0.04)], u % 0.14 < 0.07 ? "#2a140a" : "#6a4430", 0.02, { opacity: 0.75 });
+      path3([L(1.25, 2.22), L(1.95, 2.22)], "#2a1608", 0.025); }
+
+    // ── the right wall: a cream half wall with a blue-and-white jar, white spindles, a dark handrail, the stair hall behind ──
+    { const R = (u, v) => [HW, v, D - u];
+      poly3([R(0.2, 0), R(1.6, 0), R(1.6, 2.4), R(0.2, 2.4)], "url(#dn-hall)");
+      poly3([R(0.9, 0), R(1.5, 0), R(1.5, 2.0), R(0.9, 2.0)], "#e8c98a", { opacity: 0.13 });
+      poly3([R(0.2, 0.02), R(0.62, 0.02), R(0.62, 0.95), R(0.2, 0.95)], "#e4d6b6");                                              // the half wall
+      poly3([R(0.2, 0.95), R(0.62, 0.95), R(0.62, 1.0), R(0.2, 1.0)], "#5a3418");
+      poly3([R(0.2, 0.02), R(1.6, 0.02), R(1.6, 0.3), R(0.2, 0.3)], "#e4d6b6", { opacity: 0.95 });
+      for (let i = 0; i < 6; i++) { const u = 0.7 + i * 0.16;                                                                    // the spindles: round base, long neck, round top
+        const a = P(HW - 0.02, 0.3, D - u), b = P(HW - 0.02, 1.25, D - u), w = 0.03 * a[2];
+        PA(`M${a[0] - w} ${a[1]}L${a[0] - w * 0.45} ${(a[1] + b[1]) / 2 + 20}L${b[0] - w * 0.4} ${b[1]}L${b[0] + w * 0.4} ${b[1]}L${a[0] + w * 0.45} ${(a[1] + b[1]) / 2 + 20}L${a[0] + w} ${a[1]}Z`, "#f6f0e2");
+        const m = P(HW - 0.02, 0.78, D - u); C(m[0], m[1], 0.035 * m[2], "#f6f0e2"); }
+      poly3([R(0.62, 1.25), R(1.6, 1.25), R(1.6, 1.32), R(0.62, 1.32)], "#4a2812");
+      poly3([R(0.62, 0.3), R(1.6, 0.3), R(1.6, 0.36), R(0.62, 0.36)], "#4a2812");
+      const j = P(HW - 0.1, 1.0, D - 0.4);                                                                                       // the blue-and-white jar on the half wall
+      A("ellipse", { cx: j[0], cy: j[1] - 0.17 * j[2], rx: 0.1 * j[2], ry: 0.15 * j[2], fill: "#eef0f2" });
+      A("ellipse", { cx: j[0], cy: j[1] - 0.17 * j[2], rx: 0.1 * j[2], ry: 0.15 * j[2], fill: "none", stroke: "#3a5a9a", "stroke-width": 1.2 });
+      PA(`M${j[0] - 0.06 * j[2]} ${j[1] - 0.2 * j[2]}q${0.06 * j[2]} ${-0.08 * j[2]} ${0.12 * j[2]} 0M${j[0] - 0.07 * j[2]} ${j[1] - 0.13 * j[2]}q${0.07 * j[2]} ${0.06 * j[2]} ${0.14 * j[2]} 0`, "none", { stroke: "#3a5a9a", "stroke-width": 1.3 });
+      A("ellipse", { cx: j[0], cy: j[1] - 0.33 * j[2], rx: 0.05 * j[2], ry: 0.018 * j[2], fill: "#d8dce0", stroke: "#3a5a9a", "stroke-width": 0.8 }); }
+
+    // ── the china hutch: dark cherry, glass doors over a lit shelf of good china, drawers and doors below ──
+    { const zF = D - 0.42, zU = D - 0.26, X = 0.68;
+      front(-X + 0.04, X - 0.04, 0, 0.09, zF, "#2a140a");                                                                        // plinth
+      front(-X, X, 0.09, 0.92, zF, "url(#dn-cherry)", {});
+      front(-X, X, 0.09, 0.92, zF, "#000", { opacity: 0.12 });
+      [[-X + 0.05, -0.02], [0.02, X - 0.05]].forEach(([x0, x1]) => {
+        front(x0, x1, 0.7, 0.88, zF, "#7a4126"); front(x0 + 0.02, x1 - 0.02, 0.72, 0.86, zF, "#8a4c2c");                          // the drawers
+        front(x0, x1, 0.14, 0.66, zF, "#7a4126"); front(x0 + 0.03, x1 - 0.03, 0.18, 0.62, zF, "#6a3620"); front(x0 + 0.06, x1 - 0.06, 0.21, 0.59, zF, "#8a4c2c"); // the doors with a raised panel
+        const cx = (x0 + x1) / 2, kp = P(cx, 0.8, zF), kd = P(x1 > 0 ? x0 + 0.05 : x1 - 0.05, 0.4, zF);
+        C(kp[0], kp[1], 0.012 * kp[2], "#d8b062"); C(kd[0], kd[1], 0.012 * kd[2], "#d8b062");
+      });
+      // the counter with a lace runner, and things on it
+      poly3([[-X - 0.04, 0.92, zF - 0.02], [X + 0.04, 0.92, zF - 0.02], [X + 0.04, 0.92, D - 0.1], [-X - 0.04, 0.92, D - 0.1]], "#5a2c18");
+      front(-X - 0.04, X + 0.04, 0.89, 0.93, zF - 0.02, "#8a4c2c");
+      poly3([[-0.5, 0.925, zF + 0.02], [0.5, 0.925, zF + 0.02], [0.5, 0.925, D - 0.15], [-0.5, 0.925, D - 0.15]], "#efe4cc", { opacity: 0.9 });
+      cyl(-0.46, D - 0.28, 0.1, 0.1, 0.925, 0.945, "#f0ead8"); cyl(-0.46, D - 0.28, 0.085, 0.085, 0.945, 0.965, "#e4ddc8");   // a stack of plates
+      cyl(-0.46, D - 0.28, 0.07, 0.07, 0.965, 0.985, "#f0ead8", "#c8d4e4");
+      cyl(0.42, D - 0.3, 0.07, 0.085, 0.925, 1.07, "#3a5a9a", "#e8eef4");                                                        // a blue vase with a plant
+      for (let i = 0; i < 7; i++) { const a = -0.9 + i * 0.3, p = P(0.42 + Math.sin(a) * 0.1, 1.1 + Math.cos(a) * 0.08, D - 0.3), p0 = P(0.42, 1.07, D - 0.3);
+        PA(`M${p0[0]} ${p0[1]}Q${(p0[0] + p[0]) / 2} ${p[1] - 5} ${p[0]} ${p[1]}Q${(p0[0] + p[0]) / 2 + 3} ${p[1] + 5} ${p0[0]} ${p0[1]}`, i % 2 ? "#4f7a34" : "#3d6a2a"); }
+      // the glass cabinet above
+      front(-X + 0.04, X - 0.04, 0.96, 1.96, zU, "#3a1c0e");
+      [[-X + 0.09, -0.015], [0.015, X - 0.09]].forEach(([x0, x1]) => {
+        front(x0, x1, 1.01, 1.9, zU, "url(#dn-cabin)");
+        [1.28, 1.56].forEach(h => { front(x0, x1, h - 0.014, h, zU, "#8a4c2c"); });                                                // the shelves
+        // plates on edge on each shelf, then cups
+        [[1.014, 0.1], [1.294, 0.1], [1.574, 0.1]].forEach(([h0, r], row) => {
+          for (let i = 0; i < 3; i++) { const cx = x0 + (x1 - x0) * (0.2 + i * 0.3), pr = row === 2 ? 0.075 : r;
+            disk3(cx, h0 + pr, zU, pr, row === 1 ? "#f1ecdc" : "#eef0f0"); disk3(cx, h0 + pr, zU, pr * 0.72, "none", { stroke: row === 1 ? "#c4503a" : "#4a6aa8", "stroke-width": 1 });
+            disk3(cx, h0 + pr, zU, pr * 0.3, row === 1 ? "#e8c068" : "#9ab4d8", { opacity: 0.85 }); }
+        });
+        // a pale sheen across the glass
+        poly3([[x0 + 0.04, 1.88, zU], [x0 + 0.14, 1.88, zU], [x1 - 0.05, 1.04, zU], [x1 - 0.15, 1.04, zU]], "#fff", { opacity: 0.13 });
+        [1, 2].forEach(i => { const x = x0 + (x1 - x0) * i / 3; path3([[x, 1.01, zU], [x, 1.9, zU]], "#5a2c18", 0.016); });       // muntins
+        [1, 2].forEach(i => { const h = 1.01 + 0.89 * i / 3; path3([[x0, h, zU], [x1, h, zU]], "#5a2c18", 0.016); });
+        path3([[x0, 1.01, zU], [x1, 1.01, zU], [x1, 1.9, zU], [x0, 1.9, zU], [x0, 1.01, zU]], "#4a2412", 0.03);
+        const kn = P(x0 < 0 ? x1 - 0.04 : x0 + 0.04, 1.4, zU); C(kn[0], kn[1], 0.012 * kn[2], "#d8b062");
+      });
+      front(-X, X, 1.96, 2.04, zU - 0.04, "url(#dn-cherry)"); front(-X - 0.04, X + 0.04, 2.04, 2.1, zU - 0.06, "#4a2414");     // the cornice
+      front(-X, X, 1.96, 1.975, zU - 0.04, "#d8a870", { opacity: 0.5 });
+      const sh2 = P(0, 1.0, D - 0.3); A("ellipse", { cx: sh2[0], cy: sh2[1] + 6, rx: 0.8 * sh2[2], ry: 0.12 * sh2[2], fill: "#1a0804", opacity: 0.18 }); }
+
+    // ── the wall sconces: brass backplate, a curved arm and a white shade, glowing ──
+    const shade = (x, h, z, rb, rt, hh, glow) => {
+      const g = G(), ringAt = (hhh, r) => { const a = []; for (let i = 0; i < 20; i++) { const t = i / 20 * 6.2832; a.push(P(x + r * Math.cos(t), hhh, z + r * Math.sin(t))); } return a; };
+      const b = ringAt(h, rb), t = ringAt(h + hh, rt), ext = a => { let l = a[0], r = a[0]; a.forEach(p => { if (p[0] < l[0]) l = p; if (p[0] > r[0]) r = p; }); return [l, r]; };
+      const [bl, br] = ext(b), [tl, tr] = ext(t), k = P(x, h, z)[2];
+      if (glow) C(...(() => { const p = P(x, h, z); return [p[0], p[1] - 4, 0.42 * p[2]]; })(), "url(#dn-glow)", {}, g);
+      PG(pts([tl, tr, br, bl]), "#f6efdc", {}, g);
+      for (let i = 1; i < 6; i++) { const f = i / 6; A("path", { d: `M${(tl[0] + (tr[0] - tl[0]) * f).toFixed(1)} ${(tl[1] + (tr[1] - tl[1]) * f).toFixed(1)}L${(bl[0] + (br[0] - bl[0]) * f).toFixed(1)} ${(bl[1] + (br[1] - bl[1]) * f).toFixed(1)}`, stroke: "#cdbf9c", "stroke-width": 0.6, opacity: 0.7 }, g); }
+      PG(pts(t), "#e8dcc0", {}, g);
+      PG(pts(b), "#fff0b8", { opacity: 0.95 }, g);
+      A("polyline", { points: pts(b), fill: "none", stroke: "#d8b060", "stroke-width": Math.max(0.6, 0.008 * k) }, g);
+      return g;
+    };
+    [-1, 1].forEach(s => {
+      const x = s * 1.5, bp = P(x, 1.7, D);
+      A("ellipse", { cx: bp[0], cy: bp[1], rx: 0.05 * bp[2], ry: 0.075 * bp[2], fill: "#b88a3c" });
+      path3([[x, 1.7, D - 0.01], [x, 1.7, D - 0.13], [x, 1.66, D - 0.2]], "#b88a3c", 0.018);
+      shade(x, 1.7, D - 0.2, 0.075, 0.045, 0.16, true);
+    });
+
+    // ── the plant in the corner: a blue-and-white jardiniere with a big leafy plant ──
+    { const px = -1.85, pz = 3.75;
+      ring3(px, 0, pz, 0.3, 0.28, "#1a0804", { opacity: 0.3 });
+      cyl(px, pz, 0.15, 0.2, 0, 0.36, "#e8ecf0", "#c8d0dc");
+      const bt = P(px, 0.2, pz - 0.18); A("ellipse", { cx: bt[0], cy: bt[1], rx: 0.1 * bt[2], ry: 0.06 * bt[2], fill: "none", stroke: "#3a5a9a", "stroke-width": 1.2 });
+      for (let i = 0; i < 14; i++) { const a = rnd("pl" + i) * 6.28, r = 0.05 + rnd("pr" + i) * 0.28, hh = 0.5 + rnd("ph" + i) * 0.85, p = P(px + Math.cos(a) * r, 0.36 + hh * 0.7, pz + Math.sin(a) * r * 0.5), b = P(px, 0.36, pz);
+        PA(`M${b[0].toFixed(1)} ${b[1].toFixed(1)}Q${((b[0] + p[0]) / 2 - 8).toFixed(1)} ${((b[1] + p[1]) / 2).toFixed(1)} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`, "none", { stroke: "#2c5a24", "stroke-width": 0.7 });
+        A("ellipse", { cx: p[0], cy: p[1], rx: 0.13 * p[2], ry: 0.065 * p[2], fill: i % 3 ? "#3f7a34" : "#52923c", transform: `rotate(${(-40 + rnd("pa" + i) * 80).toFixed(0)} ${p[0].toFixed(1)} ${p[1].toFixed(1)})` }); } }
+
+    // ── six cane-back chairs, pulled out a little (three each side) ──
+    const chair = (side, zs) => {
+      const g = G(), xin = side * 0.7, xb = side * 1.12, z0 = zs - 0.21, z1 = zs + 0.21;
+      const xBack = h => side * (1.12 + (h - 0.46) * 0.1);
+      ring3(side * 0.92, 0, zs, 0.34, 0.3, "#1a0804", { opacity: 0.3 }, g);                                                      // shadow
+      [z0, z1].forEach(z => path3([[xb, 0, z], [xb, 0.46, z]], "#3a1c0c", 0.04, {}, g));                                          // back legs
+      [z0, z1].forEach(z => path3([[xBack(0.46), 0.46, z], [xBack(1.0), 1.0, z]], "#5a2c16", 0.04, {}, g));                        // back posts
+      poly3([[xBack(0.58), 0.58, z0 + 0.03], [xBack(0.58), 0.58, z1 - 0.03], [xBack(0.92), 0.92, z1 - 0.03], [xBack(0.92), 0.92, z0 + 0.03]], "url(#dn-cane)", {}, g);   // the cane panel
+      path3([[xBack(0.58), 0.58, z0 + 0.03], [xBack(0.58), 0.58, z1 - 0.03], [xBack(0.92), 0.92, z1 - 0.03], [xBack(0.92), 0.92, z0 + 0.03], [xBack(0.58), 0.58, z0 + 0.03]], "#5a2c16", 0.03, {}, g);
+      poly3([[xBack(0.95), 0.95, z0], [xBack(0.95), 0.95, z1], [xBack(1.02), 1.02, z1 - 0.02], [xBack(1.02), 1.02, z0 + 0.02]], "#6a3620", {}, g);   // the top rail
+      poly3([[xin, 0.38, z0], [xin, 0.46, z0], [xin, 0.46, z1], [xin, 0.38, z1]], "#5a2c16", {}, g);                              // the seat frame
+      poly3([[xin, 0.38, z0], [xb, 0.38, z0], [xb, 0.46, z0], [xin, 0.46, z0]], "#4a2412", {}, g);
+      poly3([[xin, 0.46, z0 - 0.01], [xb, 0.46, z0 - 0.01], [xb, 0.46, z1 + 0.01], [xin, 0.46, z1 + 0.01]], "url(#dn-paisley)", {}, g);   // the paisley cushion
+      poly3([[xin + side * 0.01, 0.46, z0 - 0.01], [xin + side * 0.01, 0.5, z0 - 0.01], [xin + side * 0.01, 0.5, z1 + 0.01], [xin + side * 0.01, 0.46, z1 + 0.01]], "#1a2238", {}, g);
+      poly3([[xin, 0.5, z0 - 0.01], [xb, 0.5, z0 - 0.01], [xb, 0.5, z1 + 0.01], [xin, 0.5, z1 + 0.01]], "url(#dn-paisley)", {}, g);
+      poly3([[xin, 0.5, z0 - 0.01], [xb, 0.5, z0 - 0.01], [xb, 0.5, z1 + 0.01], [xin, 0.5, z1 + 0.01]], "#fff", { opacity: 0.07 }, g);
+      [z0, z1].forEach(z => path3([[xin, 0, z], [xin, 0.4, z]], "#4a2412", 0.04, {}, g));                                          // front legs
+    };
+    [[-1, 2.75], [1, 2.75], [-1, 2.0], [1, 2.0], [-1, 1.25], [1, 1.25]].forEach(([s, z]) => chair(s, z));
+
+    // the table's four turned legs on the carpet (the near ones show below the near end of the top), with a soft shadow at each foot
+    [[-0.34, 1.35], [0.34, 1.35], [-0.34, 2.65], [0.34, 2.65]].forEach(([x, z]) => {
+      ring3(x, 0, z, 0.14, 0.12, "#1a0804", { opacity: 0.4 });
+      path3([[x, 0, z], [x, 0.72, z]], "#2e150a", 0.075);
+      path3([[x - 0.012, 0.04, z], [x - 0.012, 0.7, z]], "#8a4a2a", 0.018, { opacity: 0.7 });
+      path3([[x, 0.0, z], [x, 0.05, z]], "#1a0a04", 0.1);
+      path3([[x, 0.28, z], [x, 0.33, z]], "#1a0a04", 0.095);
+    });
+    // ── the oval table, a dark cherry top with a pale reflection of the chandelier ──
+    const TZ = 2.0, TA = 1.2, TB = 0.55, TH = 0.76;
+    const oval = (h, sc) => { const a = []; for (let i = 0; i < 60; i++) { const t = i / 60 * 6.2832; a.push([sc * TB * Math.sin(t), h, TZ + sc * TA * Math.cos(t)]); } return a; };
+    poly3(oval(TH - 0.1, 0.93), "#2a120a");
+    poly3(oval(TH - 0.04, 1), "#4a2214");
+    poly3(oval(TH, 1), "url(#dn-table)");
+    poly3(oval(TH, 1), "none", { stroke: "#b87a4c", "stroke-width": 0.8, opacity: 0.5 });
+    { const s = P(0, TH, TZ - 0.15); A("ellipse", { cx: s[0], cy: s[1], rx: 0.44 * s[2], ry: 0.7 * s[2] * 0.42, fill: "url(#dn-sheen)" }); }
+
+    // ── the flat things on the table: wicker mats, napkins, forks and knives ──
+    const SEAT = [[-0.28, 1.25], [0.28, 1.25], [-0.28, 2.0], [0.28, 2.0], [-0.28, 2.75], [0.28, 2.75], [0, 1.12], [0, 2.95]];
+    SEAT.forEach(([x, z], i) => {
+      const mat = ring3(x, TH, z, 0.15, 0.15, "#caa468");
+      ring3(x, TH + 0.001, z, 0.15, 0.15, "none", { stroke: "#7a5424", "stroke-width": 1.1, opacity: 0.8 });
+      ring3(x, TH + 0.001, z, 0.115, 0.115, "none", { stroke: "#a07a3c", "stroke-width": 0.8, opacity: 0.7 });
+      const sd = x < 0 ? -1 : x > 0 ? 1 : 0, nx = sd * 0.19, nz = z, along = sd === 0 ? 0 : sd;
+      if (i < 6) {
+        poly3([[x - sd * 0.17, TH + 0.002, z - 0.2], [x - sd * 0.17 - sd * 0.09, TH + 0.002, z - 0.2], [x - sd * 0.17 - sd * 0.09, TH + 0.002, z - 0.1], [x - sd * 0.17, TH + 0.002, z - 0.1]], "#f6efe0", { opacity: 0 });
+        poly3([[x - 0.07, TH + 0.002, z - 0.22], [x + 0.07, TH + 0.002, z - 0.22], [x + 0.07, TH + 0.002, z - 0.165], [x - 0.07, TH + 0.002, z - 0.165]], "#f6efe0");   // a napkin
+        path3([[x - 0.09, TH + 0.003, z - 0.25], [x + 0.09, TH + 0.003, z - 0.25]], "#c8c8c2", 0.011);                                // a fork on the near side
+        path3([[x - 0.09, TH + 0.003, z + 0.2], [x + 0.09, TH + 0.003, z + 0.2]], "#c8c8c2", 0.011);                                  // a knife on the far side
+      } else {
+        poly3([[x - 0.07, TH + 0.002, z - 0.22], [x + 0.07, TH + 0.002, z - 0.22], [x + 0.07, TH + 0.002, z - 0.165], [x - 0.07, TH + 0.002, z - 0.165]], "#f6efe0");
+        path3([[x - 0.18, TH + 0.003, z - 0.1], [x - 0.18, TH + 0.003, z + 0.1]], "#c8c8c2", 0.011); path3([[x + 0.18, TH + 0.003, z - 0.1], [x + 0.18, TH + 0.003, z + 0.1]], "#c8c8c2", 0.011);
+      }
+    });
+
+    // ── everything standing on the table, far to near ──
+    const things = [], add = (z, fn) => things.push([z, fn]);
+    const PLATE = "#f4eee0";
+    const plate = (x, z, kind) => {
+      cyl(x, z, 0.125, 0.12, TH, TH + 0.012, PLATE, PLATE);
+      ring3(x, TH + 0.0125, z, 0.1, 0.1, "none", { stroke: "#8a5a34", "stroke-width": 1.2 });
+      ring3(x, TH + 0.0126, z, 0.088, 0.088, "#faf5ea");
+      if (kind === 0) { cyl(x, z, 0.075, 0.07, TH + 0.012, TH + 0.036, "#cf913e", "#e3ae5e"); cyl(x + 0.004, z - 0.003, 0.07, 0.065, TH + 0.036, TH + 0.058, "#cf913e", "#e8b868");
+        ring3(x, TH + 0.059, z, 0.04, 0.04, "#8a4a14", { opacity: 0.65 }); ring3(x, TH + 0.06, z, 0.018, 0.018, "#f6dc7c"); }
+      else if (kind === 1) { ring3(x - 0.025, TH + 0.014, z + 0.01, 0.05, 0.045, "#f1cf45"); ring3(x - 0.01, TH + 0.02, z + 0.02, 0.03, 0.026, "#f8dd68", { opacity: 0.8 });
+        for (let k = 0; k < 2; k++) path3([[x + 0.03 + k * 0.024, TH + 0.016, z - 0.07], [x + 0.045 + k * 0.024, TH + 0.02, z - 0.03], [x + 0.03 + k * 0.024, TH + 0.02, z + 0.01], [x + 0.045 + k * 0.024, TH + 0.02, z + 0.06]], k ? "#9a3a22" : "#b54a2c", 0.02); }
+      else if (kind === 2) { cyl(x, z, 0.06, 0.056, TH + 0.012, TH + 0.036, "#cf913e", "#e3ae5e"); cyl(x + 0.05, z + 0.04, 0.034, 0.034, TH + 0.012, TH + 0.026, "#7a4226", "#92522e"); ring3(x - 0.05, TH + 0.015, z - 0.05, 0.026, 0.026, "#e08a30"); ring3(x - 0.03, TH + 0.015, z - 0.07, 0.02, 0.02, "#e8a040"); }
+      else { cyl(x - 0.02, z, 0.058, 0.054, TH + 0.012, TH + 0.036, "#cf913e", "#e3ae5e"); ring3(x + 0.045, TH + 0.015, z + 0.02, 0.03, 0.03, "#f1cf45"); path3([[x + 0.02, TH + 0.017, z - 0.07], [x + 0.06, TH + 0.02, z - 0.04], [x + 0.03, TH + 0.02, z]], "#b54a2c", 0.02); }
+    };
+    const glass = (x, z) => {                                              // a tumbler of orange juice
+      cyl(x, z, 0.03, 0.04, TH, TH + 0.1, "#fbe8c4", "#f9d98a", { opacity: 0.92 });
+      cyl(x, z, 0.029, 0.037, TH + 0.002, TH + 0.082, "#f4a21e", "#fbbe48");
+      const t = P(x, TH + 0.1, z); A("ellipse", { cx: t[0], cy: t[1], rx: 0.04 * t[2], ry: 0.013 * t[2], fill: "none", stroke: "#fff", "stroke-width": 0.7, opacity: 0.8 });
+    };
+    const mug = (x, z) => {                                                // a white coffee cup with a blue band
+      cyl(x, z, 0.036, 0.042, TH, TH + 0.07, "#f4f2ec", "#3a2214");
+      const b = P(x, TH + 0.055, z); A("ellipse", { cx: b[0], cy: b[1], rx: 0.04 * b[2], ry: 0.012 * b[2], fill: "none", stroke: "#4a6aa8", "stroke-width": 1.1 });
+      const h = P(x + 0.05, TH + 0.04, z); A("circle", { cx: h[0], cy: h[1], r: 0.014 * h[2], fill: "none", stroke: "#f4f2ec", "stroke-width": 1.5 });
+    };
+    // settings: each seat gets a plate, a glass and a cup
+    SEAT.forEach(([x, z], i) => {
+      add(z, () => plate(x, z, [0, 1, 2, 1, 3, 0, 0, 2][i]));
+      if (i < 6) { const inw = x < 0 ? 1 : -1; add(z + 0.2, () => glass(x + inw * 0.11, z + 0.2)); add(z + 0.2, () => mug(x - inw * 0.07, z + 0.2)); }
+    });
+    // the middle of the table
+    add(1.62, () => {                                                      // a glass baking dish of hash browns with a white spatula
+      box(-0.17, 0.17, TH, TH + 0.05, 1.5, 1.74, "#d8e4e0", "#ead7a0", "#c4d2cc");
+      ring3(0, TH + 0.051, 1.62, 0.14, 0.1, "#dba84a"); ring3(0.01, TH + 0.053, 1.62, 0.1, 0.07, "#e8c067", { opacity: 0.9 });
+      path3([[0.02, TH + 0.06, 1.58], [0.2, TH + 0.07, 1.7]], "#f4f2ec", 0.03);
+    });
+    add(1.9, () => {                                                       // an oval platter of bacon
+      ring3(0, TH, 1.9, 0.19, 0.11, "#f4eee0"); ring3(0, TH + 0.012, 1.9, 0.17, 0.095, "#faf5ea", { stroke: "#a8744a", "stroke-width": 0.9 });
+      for (let k = 0; k < 7; k++) path3([[-0.12 + k * 0.04, TH + 0.02, 1.84], [-0.1 + k * 0.04, TH + 0.024, 1.88], [-0.12 + k * 0.04, TH + 0.024, 1.92], [-0.1 + k * 0.04, TH + 0.02, 1.96]], k % 2 ? "#8a2c1c" : "#b04a2c", 0.026);
+    });
+    add(2.16, () => {                                                      // a bowl of scrambled eggs, and the syrup
+      cyl(-0.07, 2.16, 0.1, 0.12, TH, TH + 0.07, "#f4eee0", "#f1cf45");
+      ring3(-0.07, TH + 0.072, 2.16, 0.085, 0.085, "#f4d457"); ring3(-0.09, TH + 0.078, 2.14, 0.04, 0.035, "#fbe480", { opacity: 0.8 });
+      cyl(0.13, 2.14, 0.04, 0.03, TH, TH + 0.2, "#a8501c", "#a8501c");                                                         // a brown syrup bottle with a red cap and a cream label
+      cyl(0.13, 2.14, 0.031, 0.031, TH + 0.2, TH + 0.235, "#c8362a", "#d84a3a");
+      const lb = P(0.13, TH + 0.1, 2.1); A("ellipse", { cx: lb[0], cy: lb[1], rx: 0.03 * lb[2], ry: 0.04 * lb[2], fill: "#f0dcae" });
+    });
+    add(2.42, () => {                                                      // the orange juice jug and the coffee carafe on a red trivet
+      cyl(-0.06, 2.42, 0.075, 0.075, TH, TH + 0.26, "#f08a1c", "#f6a23a"); cyl(-0.06, 2.42, 0.045, 0.045, TH + 0.26, TH + 0.31, "#f08a1c", "#f6a23a"); cyl(-0.06, 2.42, 0.052, 0.052, TH + 0.31, TH + 0.335, "#f4f0e4", "#fff");
+      const t = P(-0.06, TH + 0.13, 2.38); A("ellipse", { cx: t[0], cy: t[1], rx: 0.05 * t[2], ry: 0.07 * t[2], fill: "#fbe6a0" }); C(t[0], t[1], 0.022 * t[2], "#f08a1c");
+      ring3(0.14, TH + 0.001, 2.42, 0.1, 0.1, "#b4382a"); ring3(0.14, TH + 0.002, 2.42, 0.075, 0.075, "none", { stroke: "#7a1e14", "stroke-width": 0.9 });
+      cyl(0.14, 2.42, 0.062, 0.058, TH + 0.003, TH + 0.2, "#d8d2c0", "#1c0e08", { opacity: 0.92 });                                // the carafe, full of black coffee
+      cyl(0.14, 2.42, 0.058, 0.054, TH + 0.005, TH + 0.16, "#2a1608", "#2a1608");
+      cyl(0.14, 2.42, 0.05, 0.036, TH + 0.2, TH + 0.25, "#26221e", "#3a342c");
+      const hd = P(0.205, TH + 0.12, 2.42); A("path", { d: `M${hd[0]} ${hd[1] - 0.07 * hd[2]}q${0.07 * hd[2]} ${0.03 * hd[2]} 0 ${0.14 * hd[2]}`, fill: "none", stroke: "#26221e", "stroke-width": 0.012 * hd[2] });
+    });
+    add(2.68, () => {                                                      // a red strawberry jam jar, the pepper and salt mills and the butter dish
+      cyl(0.12, 2.68, 0.045, 0.05, TH, TH + 0.075, "#c8302c", "#e04a3c"); cyl(0.12, 2.68, 0.03, 0.03, TH + 0.075, TH + 0.095, "#3f7a2c", "#4f8f36");
+      cyl(-0.12, 2.64, 0.022, 0.025, TH, TH + 0.14, "#4a2616", "#6a3a22"); cyl(-0.05, 2.7, 0.022, 0.025, TH, TH + 0.14, "#4a2616", "#6a3a22");
+      box(-0.09, 0.0, TH, TH + 0.04, 2.8, 2.9, "#f0ead8", "#f8f3e4", "#dcd4c0");
+    });
+    add(1.4, () => { /* the near end of the table is left clear for the camera */ });
+    things.sort((a, b) => b[0] - a[0]).forEach(([, fn]) => fn());
+
+    // ── the chandelier: a brass baluster, six curved arms, six white pleated shades, every bulb lit ──
+    const CZ = 1.75, CH = 2.0;
+    { const cp = P(0, CH + 0.1, CZ);
+      C(cp[0], cp[1], 170, "url(#dn-glow)", { opacity: 0.85 });
+      ring3(0, CEIL, CZ, 0.4, 0.4, "#e2d0a6"); ring3(0, CEIL - 0.002, CZ, 0.28, 0.28, "none", { stroke: "#b09a6a", "stroke-width": 0.9 }); ring3(0, CEIL - 0.003, CZ, 0.16, 0.16, "#f0e2bc");
+      path3([[0, CEIL, CZ], [0, CH + 0.42, CZ]], "#a07c34", 0.014);                                                              // the chain
+      const ball = (h, r) => { const p = P(0, h, CZ); C(p[0], p[1], r * p[2], "#c9a04a"); C(p[0] - r * p[2] * 0.3, p[1] - r * p[2] * 0.3, r * p[2] * 0.35, "#f4dc92", { opacity: 0.8 }); };
+      path3([[0, CH + 0.4, CZ], [0, CH - 0.1, CZ]], "#b88a3c", 0.036); ball(CH + 0.3, 0.05); ball(CH + 0.12, 0.06); ball(CH - 0.1, 0.045);
+      const arms = []; for (let i = 0; i < 6; i++) { const t = i * Math.PI / 3 + 0.5; arms.push([Math.sin(t) * 0.34, CZ + Math.cos(t) * 0.34, t]); }
+      arms.sort((a, b) => b[1] - a[1]).forEach(([x, z]) => {
+        path3([[0, CH + 0.1, CZ], [x * 0.35, CH - 0.04, CZ + (z - CZ) * 0.35], [x * 0.75, CH - 0.07, CZ + (z - CZ) * 0.75], [x, CH, z]], "#b88a3c", 0.018);
+        path3([[0, CH + 0.1, CZ], [x * 0.35, CH - 0.04, CZ + (z - CZ) * 0.35], [x * 0.75, CH - 0.07, CZ + (z - CZ) * 0.75], [x, CH, z]], "#f0d58a", 0.005, { opacity: 0.75 });
+        cyl(x, z, 0.03, 0.022, CH, CH + 0.05, "#b88a3c", "#d8b25a"); cyl(x, z, 0.014, 0.014, CH + 0.05, CH + 0.12, "#f4ecd6", "#fff6d8");
+        shade(x, CH + 0.06, z, 0.085, 0.045, 0.17, true);
+      }); }
+
+    // ── light and shade over everything ──
+    { const cp = P(0, 0.9, CZ); A("ellipse", { cx: cp[0], cy: cp[1], rx: 200, ry: 170, fill: "url(#dn-glow2)", opacity: 0.32, "pointer-events": "none" }); }
+    A("rect", { x: 0, y: 0, width: W, height: H, fill: "url(#dn-vig)", "pointer-events": "none" });
+
+    field.appendChild(svg);
+    pill("\u{1F373} kitchen", "Back through to the kitchen", () => { close(); openKitchen(); });
+    pill("\u{1F3E1} outside", "Out to the front lawn", () => { close(); openWheelers(); });
+    pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
+    document.body.appendChild(sh.back);
+  }
+
+  return { openWheelersDining };
 };
 
 // ════════ willshouse.js ════════
