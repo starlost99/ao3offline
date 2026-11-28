@@ -2133,7 +2133,13 @@
 
     return addon ? `${core} ${addon}` : core;
   }
-  return { getMoodStatsByCycleDay, buildTomorrowRecommendation, WPM, MONTHLY_GOAL, isSameDay, isSameMonth, getBestCompletedMonthWords, getCycleDayTitle, getLog, getMoodForDate, getPeriodStats, getDayPrediction, getPhaseForStatsDay, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS };
+  function setCycleDayTitle(day, text) {
+    const all = getCycleDayTitles();
+    const t = String(text || "").trim();
+    if (t) all[day] = t; else delete all[day];
+    localStorage.setItem(TITLES_KEY, JSON.stringify(all));
+  }
+  return { setCycleDayTitle, getOverallMoodBaseline, getCycleDayTitles, TITLE_MIN_COUNT, buildDayRecommendation, moodEntryWeight, getPeriodLog, getMoodLog, getCycleMarkers, getPhaseForCycleDay, getMoodStatsByCycleDay, buildTomorrowRecommendation, WPM, MONTHLY_GOAL, isSameDay, isSameMonth, getBestCompletedMonthWords, getCycleDayTitle, getLog, getMoodForDate, getPeriodStats, getDayPrediction, getPhaseForStatsDay, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS };
 };
 
 // ════════ lib/night-summary.js ════════
@@ -2344,200 +2350,2333 @@
 
 // ════════ lib/morning-brief.js ════════
 // lib/morning-brief.js — the morning brief card that appears after Will and Mike wake and dress, just before they go down to breakfast (Mike's room and Will's room).
-// Part of the keepsake world: see world.js for how the files fit together. Read-only: it saves nothing.
-// The numbers and sentences come from lib/day-stats.js (copied from the dashboard's own morning brief); the layout is the world's own.
+// Part of the keepsake world: see world.js for how the files fit together.
+// A FAITHFUL COPY of the dashboard's own morning brief (userscript v18.34, `showMorningBrief` and every helper it uses), same sections, same look, same wording.
+// The quick log under "Today so far" writes to the same mood log as the dashboard (`ao3_mood_log_v1`): sick day, sleep quality, hours slept, symptoms.
+// Not copied: the taps that open the dashboard's other popups (cycle overview, cycle-day history, day overview, the outlook card). Everything else is as in the script.
+// If the brief changes in the dashboard, copy it here again. Do not tune it here. The numbers come from lib/day-stats.js (also a copy).
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/morning-brief"] = function (ctx) {
   'use strict';
   const D = ctx.lib["day-stats"];
+  const { setCycleDayTitle, getOverallMoodBaseline, getCycleDayTitles, TITLE_MIN_COUNT, buildDayRecommendation, getPeriodStats, getMoodStatsByCycleDay, getPeriodLog, getMoodLog, getMoodForDate, getCycleMarkers, getPhaseForCycleDay, getPhaseForStatsDay, getDayPrediction, getCycleDayTitle, buildTomorrowRecommendation, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS } = D;
+  const MOOD_KEY = "ao3_mood_log_v1";
+  const LETTER_KEY = "ao3_cycle_letters_v1"; // [{date:"YYYY-MM-DD", text}]
+  const PERIOD_CYCLE_LOOKBACK = 6;
 
-  const PHASE_COLORS = { menstrual: "#ff6b8a", follicular: "#9ccfd8", ovulatory: "#f6c177", luteal: "#c4a7e7", pms: "#ff9f5a" };
-  const PHASE_ICONS = { menstrual: "🩸", follicular: "🌱", ovulatory: "🌕", luteal: "🌙", pms: "🌸" };
-  // what many people feel in each phase, with a tip for people and one for the body (general text from the dashboard, not from your logs)
-  const MB_GEN = {
-    menstrual: [
-      ["Energy is often lower and the body wants rest, so a quieter, slower pace feels natural.", "Tell the people close to you \"I'm low-energy today\" so they don't read it as distance.", "Try to stay warm today: a hot water bottle or warm drink often eases the achy, heavy feeling."],
-      ["Cramps, tiredness or a short fuse are common, and many people feel a pull to be alone.", "Keep replies short and warm: a heart or a quick \"thinking of you\" still counts as connecting.", "Gentle stretching or a slow walk can loosen cramps better than pushing through."],
-      ["Many people feel tender but also relieved as the cycle resets.", "Let someone do one small thing for you instead of saying you're fine.", "Iron-rich food (lentils, greens, red meat) and plenty of water can help you feel steadier."],
-      ["Lower back aches and a heavy, slow feeling are common, and resting isn't laziness.", "It's okay to cancel a plan: a simple 'rain check?' is enough.", "A heating pad on your lower belly or back can ease cramps more than you'd expect."],
-      ["Mood can wobble a little while hormones sit at their lowest, and it passes.", "If you feel snappy, a quick 'not you, just tired' smooths things over.", "Water or a warm herbal tea can ease headaches and bloating."],
-      ["Many people feel foggy and less sharp today, so go easy on your own to-do list.", "Ask for what you need in one sentence: 'can you handle dinner?' beats hinting.", "Pick one or two must-do tasks and let the rest wait: your brain has less spare capacity."],
-      ["Sleep can be lighter or more broken, and tiredness stacks up.", "Short check-ins with a friend can feel better than a long catch-up.", "A warm shower or bath before bed can help your muscles unclench and your sleep settle."],
-      ["Many people feel their energy start to creep back toward the end of the period.", "If you feel a bit more like yourself, reach out: people usually love hearing from you.", "A short, easy walk in daylight can lift your mood without costing much energy."],
-    ],
-    follicular: [
-      ["Energy and mood tend to climb, and starting things feels easier.", "Make that plan with a friend you've been putting off while the motivation is here.", "Good day for a new workout or a project you've been postponing: effort tends to feel lighter."],
-      ["Many people feel curious, sharper and more social than a week ago.", "Message someone you haven't talked to in a while: a short hello is enough.", "Try something new today (a recipe, a route, a topic): your brain is primed for novelty."],
-      ["Focus and optimism are often higher, and new ideas flow.", "Share one idea out loud with someone: you're likely to explain it well today.", "Jot your ideas down as they come: this is a good window for planning and brainstorming."],
-      ["Many people notice a brighter mood and a lighter feeling in the body.", "Suggest a small plan for later this week: a coffee, a walk, a movie night.", "Strength and stamina tend to respond well now, so it's a good week to push a little."],
-      ["Motivation often comes easier, and tasks you dreaded feel less heavy.", "Send the awkward message or make the ask you've been delaying: you're likely to word it well.", "Eat something fresh and colorful: appetite is often steadier at this point."],
-      ["Many people feel more playful and open to spontaneity.", "Say yes to one unplanned thing today.", "Try a longer or tougher workout than usual: recovery tends to be quicker in this phase."],
-      ["Mental energy is often high, and learning feels smoother.", "Explain something to someone: you're likely to be clear and patient.", "Good time to start a habit: it tends to stick better when energy is up."],
-      ["Many people feel upbeat and ready to take on a bit more.", "Check in on a friend who's been quiet: you likely have the bandwidth.", "Stretching or yoga often feels especially good now: the body tends to feel more flexible."],
-    ],
-    ovulatory: [
-      ["Many people feel confident, talkative and outgoing around now.", "It's a good day for the conversation you've been avoiding: the words tend to come.", "Energy runs high, so a bit of cardio or a long walk outside is a good use of it."],
-      ["Energy and mood often peak, and social settings feel easier.", "Say yes to an invite, or be the one who sends it.", "Drink more water than usual: you may run warmer and sweat more around now."],
-      ["Communication tends to feel smooth, and people often feel warm and open.", "Give someone a specific compliment: it's likely to come out naturally.", "Do the task that needs presenting or speaking up: you're likely at your most articulate."],
-      ["Many people feel attractive, expressive and a bit more adventurous.", "Plan something social and a little ambitious: a dinner, a day out, a call you've postponed.", "Warm up properly before intense exercise: joints can feel looser around now."],
-      ["Energy is often at its highest, though some people notice a brief twinge or bloating mid-cycle.", "Be generous with your time today: you likely have it to spare.", "A mild, brief twinge on one side is common for some people: rest and warmth usually help."],
-      ["Many people feel sociable and find it easy to read a room.", "Introduce two people who'd get along: you're likely to do it well.", "Balanced meals and water keep this high-energy stretch from tipping into a crash."],
-      ["Confidence and verbal fluency are often high, so speaking up feels easier.", "Ask for what you want today, whether it's a favor, a raise or a plan.", "Use the extra energy on a favorite active thing: dancing, hiking, cycling or swimming."],
-      ["Many people feel open and emotionally warm toward others.", "Tell someone what they mean to you: it's likely to land well.", "Enjoy the energy, but still sleep enough: it can tempt you to stay up late."],
-    ],
-    luteal: [
-      ["Energy often settles down, and many people prefer calmer, smaller settings.", "Choose one-on-one over a crowd and let that be enough.", "Steady meals with some protein and complex carbs help keep your energy and mood even."],
-      ["Attention to detail is often strong, while patience for noise or chaos can be shorter.", "If a message bothers you, wait ten minutes before replying.", "Good day for tidying, admin or finishing tasks: detail work tends to feel satisfying."],
-      ["Many people feel more inward and want things done properly and quietly.", "Say what you need (\"I need a quiet evening\") instead of hoping people guess.", "Wind down earlier tonight: sleep can get lighter in this phase, so protect it."],
-      ["Appetite can creep up as the body asks for a bit more fuel.", "Keep plans small and predictable, and tell people early if you need to dial back.", "A snack with protein and fiber in the afternoon can even out energy dips."],
-      ["Many people feel more focused on getting things properly finished.", "Do one nagging chore alongside someone else so it feels lighter.", "Moderate exercise like pilates, swimming or a brisk walk often feels better than all-out effort."],
-      ["Social battery often drains faster, and quiet evenings feel restorative.", "It's fine to leave early: a warm goodbye keeps things easy.", "A magnesium-rich snack (nuts, seeds, dark chocolate) is a gentle option for steadier mood."],
-      ["Many people are more sensitive to criticism or tone right now.", "If you feel stung, ask a question before assuming the worst.", "Cut back on caffeine later in the day: sleep tends to be lighter in this phase."],
-      ["Energy is steady but lower than last week, and that's normal.", "Share your plan for the week so people know when you'll be less available.", "Slow stretching or a gentle evening walk can help you unwind."],
-    ],
-    pms: [
-      ["Mood can be more sensitive, and small things may feel bigger than they are.", "Before reading a message as cold, try the kinder meaning first.", "Go easy on caffeine and sugar today: they can make jitters and mood dips feel sharper."],
-      ["Irritability, tiredness and feeling easily overwhelmed are common just before a period.", "Save any serious talk for a calmer day unless it's urgent.", "Magnesium-rich snacks (nuts, dark chocolate, bananas) and a warm shower can take the edge off."],
-      ["Many people feel more emotional, crave comfort and have less social battery.", "Tell one person you're running low so they go gently, rather than cancelling on everyone.", "Comfort is allowed: cozy clothes, a favorite show, and keeping your body warm and fed."],
-      ["Bloating, tender breasts and a heavier mood often show up together.", "Give yourself and others a little extra patience today.", "Loose clothes and a warm drink can make the physical side feel gentler."],
-      ["Many people feel more tearful or easily moved, and it's usually temporary.", "If you want comfort, say so: 'can I have a hug?' is easier than hoping.", "Gentle movement like a short walk or stretching can ease tension and lift your mood a bit."],
-      ["Sleep can get restless and cravings stronger as the period gets close.", "Keep today's social load light and tell people you're recharging.", "Eat regular meals so blood sugar swings don't add to the mood dips."],
-      ["Thoughts can feel louder and more critical, so don't trust every harsh one.", "Skip the long, heated text: draft it and sleep on it.", "A warm bath or a heat pack can calm both cramps and nerves."],
-      ["Many people feel tired but wired: wanting rest and finding it harder to get.", "Choose low-effort company: a show, a game, or just sharing a room.", "Switch screens off earlier tonight and aim for a calm, dark room."],
-    ],
+  // ── small helpers copied from the script ──
+  function hexToRgba(hex, alpha) {
+    // Also accept rgb()/rgba() input (re-alpha'd) and 3-digit hex, so a
+    // non-hex color can't silently produce an invalid CSS value.
+    const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(String(hex).trim());
+    if (m) return `rgba(${m[1]},${m[2]},${m[3]},${alpha})`;
+    let h = String(hex).trim().replace("#", "");
+    if (h.length === 3) h = h.split("").map(c => c + c).join("");
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  function parseLocalIso(str) {
+    const [y, m, day] = str.split("-").map(Number);
+    return new Date(y, m - 1, day);
+  }
+  function getPragueDaysAgoIso(n) {
+    const d = getPragueNow();
+    d.setDate(d.getDate() - n);
+    return toLocalIso(d);
+  }
+  function formatPrettyDate(isoDateOnly) {
+    if (!isoDateOnly) return "—";
+    const d = new Date(isoDateOnly + "T00:00:00");
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function formatPrettyDateNoYear(isoDateOnly) {
+    if (!isoDateOnly) return "—";
+    const d = new Date(isoDateOnly + "T00:00:00");
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  const PHASE_COLORS = {
+    menstrual:  "#ff6b8a",
+    follicular: "#9ccfd8",
+    ovulatory:  "#f6c177",
+    luteal:     "#c4a7e7",
+    pms:        "#ff9f5a",
   };
+  const PHASE_ICONS = {
+    menstrual:  "🩸",
+    follicular: "🌱",
+    ovulatory:  "🌕",
+    luteal:     "🌙",
+    pms:        "🌸",
+  };
+  // ── mood log: same key and entry shape as the dashboard ──
+  function saveMoodLog(log) { localStorage.setItem(MOOD_KEY, JSON.stringify(log)); }
+  function setMoodEntry(date, changes) {
+    const log = getMoodLog();
+    const idx = log.findIndex(e => e.date === date);
+    if (idx === -1) log.push({ date, ...changes });
+    else log[idx] = { ...log[idx], ...changes };
+    saveMoodLog(log);
+  }
+  const SYMPTOM_GROUPS = [
+    { name: "Pain & physical", symptoms: ["Cramps", "Pre-period cramps", "Ovulation pain", "Spasms", "Headache", "Tender breasts", "Bloating", "Muscle aches", "PMS flu", "Spotting"] },
+    { name: "Skin & body", symptoms: ["Acne", "Oily hair", "Watery discharge", "Sweating", "Hot flashes", "Dry eyes", "Eye strain"] },
+    { name: "Energy & appetite", symptoms: ["Fatigue", "Hungry", "Small appetite", "Cravings", "Craving chocolate", "Vivid dreams", "Nesting"] },
+    { name: "Mood & mind", symptoms: ["Emotional", "Irritable", "Anxiety", "Overthinking", "Self critical", "Hopelessness", "PMDD", "Calm", "Confident", "Feeling okay", "Hating men", "Taking it personally", "Over it", "Sad"] },
+    { name: "Social & libido", symptoms: ["Sociable", "Solitary", "Flirty", "High libido", "Low libido"] },
+  ];
+  const SYMPTOM_OPTIONS = SYMPTOM_GROUPS.flatMap(g => g.symptoms);
+  const SYMPTOM_ICONS = {
+    "Cramps": "😣", "Pre-period cramps": "😖", "Ovulation pain": "🥚", "Spasms": "💢", "Headache": "🤕", "Tender breasts": "🩹", "Bloating": "🎈", "Muscle aches": "💪", "PMS flu": "🤧", "Spotting": "🩸",
+    "Acne": "🔴", "Oily hair": "🧴", "Watery discharge": "💧", "Sweating": "💦", "Hot flashes": "🥵", "Dry eyes": "🏜️", "Eye strain": "👀",
+    "Fatigue": "🥱", "Hungry": "🍔", "Small appetite": "🍽️", "Cravings": "🍕", "Craving chocolate": "🍫", "Vivid dreams": "🔮", "Nesting": "🧺",
+    "Emotional": "☁️", "Irritable": "😤", "Anxiety": "🌀", "Overthinking": "🧠", "Self critical": "🪞", "Hopelessness": "🥀", "PMDD": "🌪️", "Calm": "🎐", "Confident": "💅", "Feeling okay": "🎀", "Hating men": "🤹‍♂️", "Taking it personally": "🎯", "Over it": "🙄", "Sad": "😢",
+    "Sociable": "🍹", "Solitary": "🚪", "Flirty": "😏", "High libido": "🔥", "Low libido": "🧊",
+  };
+  function symptomIcon(symptom) { return SYMPTOM_ICONS[symptom] || "•"; }
+  // Stored internally as the 1-indexed position within SLEEP_HOUR_RANGES.
+  const SLEEP_HOUR_RANGES = ["1-2", "3-4", "4-5", "5-6", "6-7", "7-8", "8-9", "9-10", "10-11", "11-12", "12-13", "13+"];
+  const SLEEP_HOURS_MORE = SLEEP_HOUR_RANGES.length; // value for the final "13+" bucket
+  function sleepHoursLabel(v) {
+    const range = SLEEP_HOUR_RANGES[v - 1];
+    return range ? `${range} hrs` : "";
+  }
+  function getLetterLog() {
+    try { return JSON.parse(localStorage.getItem(LETTER_KEY) || "[]"); }
+    catch (e) { return []; }
+  }
+  function getPastLettersForCycleDay(targetCycleDay, maxCycles = PERIOD_CYCLE_LOOKBACK) {
+    const periodLog = getPeriodLog(); // sorted oldest → newest
+    if (periodLog.length < 2) return [];
+    const starts = periodLog.map(e => e.start);
 
-  const rgba = (hex, a) => { const h = String(hex).replace("#", ""), n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; };
+    const letterByDay = {};
+    getLetterLog().forEach(e => { letterByDay[e.date] = e.text; });
 
-  // everything on the card, each part on its own so one bad record never blanks it
-  function mbData() {
-    const out = { day: null, phase: null, pred: null, title: "", symptoms: null, sentence: null, feel: null };
-    let stats = null; try { stats = D.getPeriodStats(); } catch {}
-    if (!stats || stats.currentCycleDay == null) return out;
-    const day = out.day = stats.currentCycleDay;
-    try { const key = D.getPhaseForStatsDay(day, stats); out.phase = { key, label: (D.PHASE_DEFS.find(p => p.key === key) || {}).label || "" }; } catch {}
-    try { out.pred = D.getDayPrediction(day, stats); } catch {}
-    try { const gt = D.getCycleDayTitle(day, stats); out.title = [...(gt.tags || []), gt.custom ? gt.text : (gt.items || []).map(i => i.label).join(", ")].filter(Boolean).join(" · ") || gt.empty || ""; } catch {}
-    try {   // symptoms that repeated (2+ times) on this exact cycle day, most repeated first
-      const b = D.getMoodStatsByCycleDay()[day] || null;
-      const rep = b ? Object.entries(b.symptoms || {}).filter(([, n]) => n >= 2).sort((a, c) => c[1] - a[1] || a[0].localeCompare(c[0])) : [];
-      out.symptoms = { rep, entries: b ? b.entryCount : 0 };
-    } catch {}
-    try { out.sentence = out.pred && out.pred.ready ? D.buildTomorrowRecommendation(out.pred) : null; } catch {}
-    try {   // one of the phase's quotes, picked by calendar date so it changes every day
-      const set = out.phase && MB_GEN[out.phase.key];
-      if (set) { const p = String(D.getPragueTodayIso()).split("-").map(Number), ed = Math.floor(Date.UTC(p[0], (p[1] || 1) - 1, p[2] || 1) / 86400000); out.feel = set[((ed % set.length) + set.length) % set.length]; }
-    } catch {}
+    const todayIso = getPragueTodayIso();
+    const entries = [];
+    for (let i = starts.length - 2; i >= 0 && entries.length < maxCycles; i--) {
+      const cycleStart = starts[i];
+      const nextStart = starts[i + 1];
+      const cycleLen = daysBetween(cycleStart, nextStart);
+      if (targetCycleDay > cycleLen) continue; // that cycle ended before reaching this day
+      const dateObj = parseLocalIso(cycleStart);
+      dateObj.setDate(dateObj.getDate() + (targetCycleDay - 1));
+      const dateIso = toLocalIso(dateObj);
+      if (dateIso >= todayIso) continue; // guard against landing on today/future
+      const text = letterByDay[dateIso];
+      if (!text) continue; // nothing written that day — skip quietly
+      entries.push({ date: dateIso, cyclesAgo: starts.length - 1 - i, text });
+    }
+    return entries;
+  }
+  function daysUntilCycleDay(targetDay, currentCycleDay, cycleLen) {
+    let delta = Math.round(targetDay) - Math.round(currentCycleDay);
+    while (delta < 0) delta += Math.round(cycleLen);
+    return delta;
+  }
+  function getNextPhaseTransition(currentCycleDay, avgCycle, avgPeriod) {
+    const cycleLen = Math.round(avgCycle || 28);
+    const currentPhase = getPhaseForCycleDay(currentCycleDay, avgCycle, avgPeriod);
+    for (let step = 1; step <= cycleLen; step++) {
+      // Wrap into the next cycle once we pass cycleLen, so day 25 + 10 on a
+      // 31-day cycle is treated as day 4 of the *next* cycle (menstrual),
+      // not day 35 of a cycle that only has 31 days.
+      const rawDay = currentCycleDay + step;
+      const day = ((rawDay - 1) % cycleLen) + 1;
+      const phase = getPhaseForCycleDay(day, avgCycle, avgPeriod);
+      if (phase !== currentPhase) return { phase, daysUntil: step };
+    }
+    return null;
+  }
+  // ── today's outlook: reads the card the dashboard already revealed (never draws one) ──
+  const PREDICTION_DECK = [
+    { emoji: "🌅", title: "A Gentle One", caption: "Tomorrow isn't asking much of you. Let it be easy." },
+    { emoji: "📬", title: "Good News Incoming", caption: "Something small and pleasant is about to land in your inbox or your notifications." },
+    { emoji: "🛋️", title: "The Do-Nothing Day", caption: "Tomorrow rewards you for doing less, not more. Let yourself off the hook." },
+    { emoji: "🚦", title: "A Green Light", caption: "Something you've been hesitating on gets a clear yes tomorrow." },
+    { emoji: "🍳", title: "A Good Breakfast Kind of Day", caption: "Start slow tomorrow. The rest of the day follows that lead." },
+    { emoji: "📞", title: "An Unexpected Call", caption: "Someone reaches out tomorrow that you weren't expecting to hear from." },
+    { emoji: "🧦", title: "Small Comforts Win", caption: "Tomorrow's not a big day — it's a soft-socks, warm-drink kind of day." },
+    { emoji: "🎯", title: "One Thing Clicks", caption: "A problem that's felt stuck finally has an obvious next step tomorrow." },
+    { emoji: "🌦️", title: "Mixed, But Fine", caption: "Tomorrow's a little up and down, but it lands okay by the end." },
+    { emoji: "💤", title: "You'll Sleep Well", caption: "Tomorrow night, whatever's been keeping you up loosens its grip." },
+    { emoji: "🎁", title: "A Small Surprise", caption: "Something minor and delightful shows up tomorrow when you're not looking for it." },
+    { emoji: "🧺", title: "Catching Up", caption: "Tomorrow's a good day to finally deal with the thing you've been putting off — it goes faster than expected." },
+    { emoji: "🫂", title: "Someone Shows Up For You", caption: "Tomorrow, someone in your corner proves it in a small, concrete way." },
+    { emoji: "🚶", title: "A Walk Helps", caption: "If tomorrow feels heavy, ten minutes outside does more than you'd expect." },
+    { emoji: "📖", title: "A Good Chapter", caption: "Whatever fic you pick up tomorrow, it's exactly what you needed to read." },
+    { emoji: "🧊", title: "Cooler Heads", caption: "A tense moment tomorrow resolves faster than it would have today." },
+    { emoji: "🌻", title: "A Bright Spot", caption: "Look for the one good thing tomorrow — it shows up earlier than usual." },
+    { emoji: "🕰️", title: "Better Timing", caption: "Something you've been waiting on tomorrow finally moves." },
+    { emoji: "🎧", title: "The Right Song Comes On", caption: "Tomorrow, something small hits exactly right at exactly the right moment." },
+    { emoji: "🧵", title: "Loose Ends Tie Up", caption: "A small open thread from this week gets resolved tomorrow." },
+    { emoji: "☕", title: "A Slow Morning", caption: "Tomorrow starts unhurried, and that sets the tone for the whole day." },
+    { emoji: "🪁", title: "Lighter Than Today", caption: "Whatever's weighing on you now feels noticeably lighter by tomorrow evening." },
+    { emoji: "🌊", title: "A Calm Stretch", caption: "Tomorrow's quieter than it looks on paper. Let it be." },
+    { emoji: "🎀", title: "Someone Notices", caption: "Tomorrow, someone notices effort you didn't think anyone saw." },
+    { emoji: "🧩", title: "Things Fall Into Place", caption: "A few small pieces line up tomorrow without you having to force it." },
+    { emoji: "🌤️", title: "Better Than Expected", caption: "Tomorrow undersells itself. It goes better than you're bracing for." },
+    { emoji: "🥐", title: "A Treat-Yourself Day", caption: "Tomorrow's a good excuse to get the thing you've been telling yourself you don't need." },
+    { emoji: "📚", title: "A Productive Pocket", caption: "There's a good hour or two tomorrow where everything just moves." },
+    { emoji: "🧘", title: "A Reset", caption: "Tomorrow gives you a natural pause — take it instead of fighting it." },
+    { emoji: "🎈", title: "A Little Lift", caption: "Nothing dramatic, just a genuinely better mood settling in by tomorrow afternoon." },
+    { emoji: "🛎️", title: "A Small Win", caption: "Tomorrow hands you a small, satisfying win — the kind that's easy to miss if you're not looking." },
+    { emoji: "🌈", title: "After the Rain", caption: "If today's been rough, tomorrow's noticeably easier." },
+    { emoji: "🧴", title: "Take Care of Yourself", caption: "Tomorrow rewards whatever small self-care you actually follow through on." },
+    { emoji: "🗝️", title: "A Small Unlock", caption: "Something that's felt closed off opens up a little tomorrow." },
+    { emoji: "🍫", title: "Deserved Sweetness", caption: "Tomorrow, let yourself have the good thing without overthinking it." },
+    { emoji: "🌙", title: "A Peaceful Evening", caption: "However tomorrow starts, it winds down calm." },
+    { emoji: "🧭", title: "Clarity Shows Up", caption: "Something you've been unsure about becomes obvious tomorrow, almost out of nowhere." },
+    { emoji: "🎨", title: "A Spark of Motivation", caption: "Tomorrow, some small thing reignites interest in something you'd stalled out on." },
+    { emoji: "🐚", title: "A Quiet Kind of Good", caption: "Tomorrow's not loud or exciting — just steady, and that's enough." },
+    { emoji: "🪟", title: "A Fresh Angle", caption: "Something that's felt stuck looks different, and easier, from tomorrow's vantage point." },
+    { emoji: "🤝", title: "A Small Reconnection", caption: "Tomorrow, a bit of distance between you and someone else closes up." },
+    { emoji: "🌱", title: "Early Progress", caption: "Something you started recently shows its first real sign of working tomorrow." },
+    { emoji: "🎵", title: "Good Rhythm", caption: "Tomorrow has an easy pace to it — nothing rushed, nothing stalled." },
+    { emoji: "🔦", title: "Something Unexpected", caption: "Something you weren't looking for turns out to matter a lot tomorrow." },
+    { emoji: "🕯️", title: "A Quiet Good Thing", caption: "Not every good moment tomorrow announces itself. Some just sit there, glowing softly." },
+    { emoji: "🔋", title: "Permission to Recharge", caption: "Low battery isn't a personality flaw. Tomorrow, plug in guilt-free." },
+    { emoji: "🧷", title: "Held Together Counts", caption: "Tomorrow goes better than it might feel like going in. Held together still counts." },
+    { emoji: "📻", title: "Same Wavelength", caption: "You and someone else are on the same wavelength tomorrow, whether it gets said out loud or not." },
+    { emoji: "🕸️", title: "One Thing Loosens Up", caption: "One small thing you've been overthinking loosens up tomorrow." },
+    { emoji: "🧲", title: "Orbiting Back", caption: "Someone keeps ending up in your orbit tomorrow. No fighting that one." },
+    { emoji: "🫧", title: "Permission to Just Be", caption: "Tomorrow, you're allowed to just exist for a minute before the next thing." },
+    { emoji: "🕊️", title: "A Small Truce", caption: "Whatever tension's been sitting there eases up a little, tomorrow." },
+    { emoji: "🎇", title: "The Good Kind of Nervous", caption: "That flutter tomorrow isn't dread. Let yourself hope a little." },
+  ];
+  const PREDICTION_DAY_KEY = "ao3_prediction_today";
+  const PREDICTION_HISTORY_KEY = "ao3_prediction_history_v1"; // [{ date, index, rating }, ...] newest last
+  const PREDICTION_HISTORY_MAX = 60;
+
+  // Weighted draw for the "predicted day" score, 1-5. Middle values (3, 4)
+  // come up most often, 2 and 5 are moderately common, and 1 is the rarest —
+  // so the score leans encouraging without ever ruling out a rough day.
+  const DAY_RATING_WEIGHTS = [
+    { value: 1, weight: 1 },
+    { value: 2, weight: 3 },
+    { value: 3, weight: 4 },
+    { value: 4, weight: 4 },
+    { value: 5, weight: 3 },
+  ];
+  function drawDayRating() {
+    const total = DAY_RATING_WEIGHTS.reduce((sum, w) => sum + w.weight, 0);
+    let roll = Math.random() * total;
+    for (const { value, weight } of DAY_RATING_WEIGHTS) {
+      if (roll < weight) return value;
+      roll -= weight;
+    }
+    return DAY_RATING_WEIGHTS[DAY_RATING_WEIGHTS.length - 1].value; // fallback, shouldn't hit
+  }
+  function toTodayWording(card) {
+    const fix = (text) => String(text)
+      .replace(/If today's been rough, tomorrow's/g, "If yesterday was rough, today's")
+      .replace(/than it would have today/g, "than it would have yesterday")
+      .replace(/Lighter Than Today/g, "Lighter Than Yesterday")
+      .replace(/\b(tomorrow) (night|evening|afternoon|morning)\b/gi, (m, t, part) => {
+        const cap = t[0] === "T";
+        if (part.toLowerCase() === "night") return cap ? "Tonight" : "tonight";
+        return (cap ? "This " : "this ") + part;
+      })
+      .replace(/\bTomorrow\b/g, "Today")
+      .replace(/\btomorrow\b/g, "today");
+    return { ...card, title: fix(card.title), caption: fix(card.caption) };
+  }
+  function getRevealedPredictionForToday() {
+    const todayStr = getPragueTodayIso();
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(PREDICTION_DAY_KEY) || "null"); } catch (e) { saved = null; }
+    if (saved && saved.revealed && Number.isInteger(saved.index) && PREDICTION_DECK[saved.index]) {
+      const rating = Number.isInteger(saved.rating) && saved.rating <= 5 ? saved.rating : drawDayRating();
+      // Drawn today → it's genuinely about tomorrow. Drawn on an earlier day
+      // (still hanging around because today's mood hasn't been logged/revealed
+      // yet) → the "tomorrow" it predicted has since arrived, so it's about today.
+      const isForToday = saved.date !== todayStr;
+      const card = { ...PREDICTION_DECK[saved.index], rating, isForToday };
+      // The deck is written about "tomorrow"; once that day has arrived, reword it
+      // so it reads as today (everything that shows this card gets the fixed text).
+      return isForToday ? toTodayWording(card) : card;
+    }
+    return null;
+  }
+  // ── fics that could drop today, from the fic tracker's saved list ──
+  function getFicsCouldDropToday(mode) {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem("ao3_fic_tracker_v1") || "[]"); } catch (e) { return []; }
+    if (!Array.isArray(list)) return [];
+    const STALE = 120;
+    const dtO = (a, b) => (window.__ao3Dt ? window.__ao3Dt.overlap(a, b) : 0);
+    const since = d => (d ? Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000) - dtO(d, new Date())) : null);
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    // WIP rank from the tracker (position among current WIPs in the saved ranking)
+    const isWipF = f => !f.finished && f.manualAbandoned !== true
+      && (f.manualAbandoned === false || !(since(f.lastUpdate) !== null && since(f.lastUpdate) >= STALE));
+    const wipIds = new Set(list.filter(f => f && isWipF(f)).map(f => f.workId));
+    let order = [];
+    try { const r = JSON.parse(localStorage.getItem("ao3_fic_tracker_rank_v1") || "null"); if (r && Array.isArray(r.order)) order = r.order; } catch (e) {}
+    const rankMap = new Map();
+    order.filter(id => wipIds.has(id)).forEach((id, i) => rankMap.set(id, i + 1));
+    const out = [];
+    list.forEach(f => {
+      if (!f || f.finished || f.caughtUp === false) return;
+      const stale = f.manualAbandoned === true || (f.manualAbandoned !== false && since(f.lastUpdate) !== null && since(f.lastUpdate) >= STALE);
+      if (stale) return;
+      const dates = f.chapterDates;
+      if (!dates || dates.length < 2) return;
+      const sorted = [...dates].map(d => new Date(d + "T00:00:00")).sort((a, b) => a - b);
+      const gaps = [];
+      for (let i = 1; i < sorted.length; i++) gaps.push(Math.max(0, Math.round((sorted[i] - sorted[i - 1]) / 86400000) - dtO(sorted[i - 1], sorted[i])));
+      let ws = 0, wt = 0;
+      gaps.forEach((g, i) => { ws += g * (i + 1); wt += i + 1; });
+      const weightedAvgGap = ws / wt;
+      const avgGap = gaps.reduce((x, g) => x + g, 0) / gaps.length;
+      const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+      sorted.forEach(d => dayCounts[d.getDay()]++);
+      let commonDay = 0;
+      for (let i = 1; i < 7; i++) if (dayCounts[i] > dayCounts[commonDay]) commonDay = i;
+      const strongDay = dayCounts[commonDay] / sorted.length >= 0.5 && dates.length >= 3;
+      const base = (f.lastUpdate && !isNaN(new Date(f.lastUpdate + "T00:00:00"))) ? new Date(f.lastUpdate + "T00:00:00") : sorted[sorted.length - 1];
+      const predicted = new Date(base.getTime() + (Math.round(weightedAvgGap) + dtO(base, new Date())) * 86400000);
+      const last = sorted[sorted.length - 1];
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const daysSinceLast = Math.max(0, Math.floor((today - last) / 86400000) - dtO(last, today));
+      const daysUntil = Math.floor((predicted - today) / 86400000);
+      const within = Math.abs(daysUntil) <= 1;
+      const matchesDay = strongDay && today.getDay() === commonDay && daysSinceLast >= Math.floor(avgGap * 0.6);
+      if (mode === "overdue") { if (within || matchesDay || daysUntil > -3) return; }
+      else if (!(within || matchesDay)) return;
+      const hint = `usually every ~${Math.max(1, Math.round(weightedAvgGap))} day${Math.round(weightedAvgGap) === 1 ? "" : "s"}`
+        + (strongDay ? `, often ${dayNames[commonDay]}s` : "")
+        + ` \u00B7 last update ${daysSinceLast} day${daysSinceLast === 1 ? "" : "s"} ago`;
+      out.push({ workId: f.workId, title: f.title, url: f.url, hint, daysUntil, daysSinceLast, gap: Math.max(1, Math.round(weightedAvgGap)), usualDay: strongDay ? dayNames[commonDay] : null, matchesDay, rank: rankMap.get(f.workId) || null });
+    });
+    if (mode === "overdue") out.sort((a, b) => a.daysUntil - b.daysUntil);
+    else out.sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
     return out;
   }
+  // ── cycle at a glance ──
+  function buildCyclePositionBar(stats) {
+    const { cycleLen, periodLen, ovulationDay, pmsStart } = getCycleMarkers(stats.avgCycle, stats.avgPeriod);
+    const segments = [
+      { key: "menstrual",  start: 1,                end: periodLen },
+      { key: "follicular", start: periodLen + 1,     end: ovulationDay - 2 },
+      { key: "ovulatory",  start: ovulationDay - 1,   end: ovulationDay + 1 },
+      { key: "luteal",     start: ovulationDay + 2,   end: pmsStart - 1 },
+      { key: "pms",        start: pmsStart,           end: cycleLen },
+    ].map(s => ({ ...s, len: Math.max(0, s.end - s.start + 1) })).filter(s => s.len > 0);
 
-  // lays the card over the scene (inside its shell, so closing the scene takes it along); the button, or a tap outside the card, closes it and calls onClose once
-  function mbShow(sh, onClose) {
-    if (!sh.back.isConnected || sh.back.querySelector("[data-morning-brief]")) return;
-    const el = sh.kit.el, data = mbData();
-    const SERIF = "Georgia,'Times New Roman',serif", GOLD = "#ffd9a0", SOFT = "rgba(255,226,214,0.72)", TEXT = "#fff1ea";
-    const hc = data.pred && data.pred.ready && data.pred.dayScore ? data.pred.dayScore.color : (data.phase && PHASE_COLORS[data.phase.key]) || "#ffb8dc";
-    const veil = el("div", "position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px);background:radial-gradient(ellipse at 50% 25%,rgba(90,46,60,0.7),rgba(14,8,16,0.88));-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);box-sizing:border-box;overflow:hidden;animation:mbVeil .6s ease both;");
-    veil.setAttribute("data-morning-brief", "");
-    const css = document.createElement("style");
-    css.textContent = "@keyframes mbVeil{from{opacity:0}to{opacity:1}}@keyframes mbRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes mbGlow{0%,100%{opacity:.7}50%{opacity:1}}" +
-      "@media (prefers-reduced-motion:reduce){[data-morning-brief],[data-morning-brief] *{animation:none!important;transition:none!important}}" +
-      "[data-morning-brief] ::-webkit-scrollbar{display:none}";
-    veil.appendChild(css);
-    const frame = el("div", "position:relative;width:100%;max-width:350px;max-height:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;border-radius:26px;" +
-      "background:radial-gradient(circle at 50% -10%,rgba(255,196,140,0.38),transparent 55%),radial-gradient(circle at 100% 100%,rgba(190,110,150,0.22),transparent 55%),linear-gradient(170deg,#4a2a3c,#2a1824 55%,#1c1019);" +
-      "border:1px solid " + rgba(hc, 0.4) + ";box-shadow:0 18px 60px rgba(0,0,0,0.65),0 0 50px rgba(255,170,120,0.14);color:" + TEXT + ";font:13px/1.45 " + SERIF + ";");
-    frame.setAttribute("role", "dialog"); frame.setAttribute("aria-label", "Morning brief");
-    const card = el("div", "position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;box-sizing:border-box;padding:20px 14px 14px;overflow-wrap:anywhere;");
-    frame.appendChild(card);
-    const label = (t, extra) => el("div", "font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:" + SOFT + ";" + (extra || ""), t);
-    const tile = (k, kids) => { const b = el("div", "margin-top:8px;padding:11px 13px;border-radius:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,214,196,0.14);animation:mbRise .55s ease " + (0.12 + k * 0.09) + "s both;"); kids.forEach(x => b.appendChild(x)); return b; };
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex; flex-direction:column; gap:5px;";
 
-    // header: a rising sun over the title
-    const head = el("div", "text-align:center;margin-bottom:12px;animation:mbRise .6s ease both;");
-    head.appendChild(el("div", "width:30px;height:30px;margin:0 auto 8px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff3c8," + GOLD + " 60%,#ffb069);box-shadow:0 0 0 6px rgba(255,200,140,0.14),0 0 26px rgba(255,190,120,0.7);animation:mbGlow 4s ease-in-out infinite;"));
-    head.appendChild(el("div", "font-size:19px;letter-spacing:0.14em;color:" + GOLD + ";", "good morning"));
-    let dateText = ""; try { dateText = D.getPragueNow().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }); } catch {}
-    head.appendChild(label("morning brief" + (dateText ? " · " + dateText : ""), "margin-top:3px;letter-spacing:0.12em;"));
-    card.appendChild(head);
+    const label = document.createElement("div");
+    label.style.cssText = "font-size:9.5px; font-weight:600; color:rgba(255,234,244,0.5); text-transform:uppercase; letter-spacing:0.05em;";
+    label.textContent = stats.avgCycle ? "Where you are in your cycle" : "Where you are, based on a typical 28-day cycle";
+    wrap.appendChild(label);
 
-    let k = 0;
-    if (data.day == null) {
-      card.appendChild(tile(k++, [el("div", "text-align:center;color:" + SOFT + ";", "Log a period first so today can be placed in your cycle. The brief works from that.")]));
+    const track = document.createElement("div");
+    track.style.cssText = "position:relative; display:flex; height:10px; border-radius:5px; overflow:hidden;";
+    segments.forEach(seg => {
+      const bit = document.createElement("div");
+      bit.style.cssText = `flex:${seg.len} 0 0; background:${hexToRgba(PHASE_COLORS[seg.key], 0.55)};`;
+      bit.title = `${PHASE_DEFS.find(p => p.key === seg.key).label}: day ${seg.start}${seg.end > seg.start ? `–${seg.end}` : ""}`;
+      track.appendChild(bit);
+    });
+
+    // Marker for today (wraps if the current cycle is running longer than cycleLen).
+    const markerDay = ((stats.currentCycleDay - 1) % cycleLen) + 1;
+    const pct = Math.min(98, Math.max(2, ((markerDay - 0.5) / cycleLen) * 100));
+    const marker = document.createElement("div");
+    marker.style.cssText = `
+      position:absolute; top:-2px; left:${pct}%; width:2px; height:14px;
+      background:#fff; border-radius:1px; box-shadow:0 0 4px rgba(255,255,255,0.85);
+      transform:translateX(-1px); pointer-events:none;
+    `;
+    track.appendChild(marker);
+    wrap.appendChild(track);
+
+    return wrap;
+  }
+  function buildDayScoreThread(stats) {
+    const scores = [];
+    for (let d = 0; d < 7; d++) {
+      const cycleDay = stats.currentCycleDay + d;
+      const prediction = getDayPrediction(cycleDay, stats);
+      scores.push(prediction && prediction.ready && prediction.dayScore ? prediction.dayScore.score : null);
+    }
+    if (!scores.some(s => s != null)) return null;
+
+    const W = 100, H = 22, PAD = 3;
+    const stepX = W / 7;
+    const xAt = i => stepX * i + stepX / 2;
+    // Zoomed in on the part of the 0-100 scale scores actually live in (15-85
+    // instead of 0-100), so day-to-day movement reads clearly while a high
+    // line still sits higher than a low one.
+    const LO = 15, HI = 85;
+    const yAt = score => {
+      const t = Math.max(0, Math.min(1, (score - LO) / (HI - LO)));
+      return H - PAD - t * (H - PAD * 2);
+    };
+
+    let pathParts = [];
+    let open = false;
+    scores.forEach((score, i) => {
+      if (score == null) { open = false; return; }
+      pathParts.push(`${open ? "L" : "M"}${xAt(i).toFixed(1)},${yAt(score).toFixed(1)}`);
+      open = true;
+    });
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.cssText = "width:100%; height:28px; display:block; margin:3px 0 2px;";
+
+    const gradId = `ao3ScoreThread${Math.random().toString(36).slice(2, 8)}`;
+    const defs = document.createElementNS(svgNS, "defs");
+    const grad = document.createElementNS(svgNS, "linearGradient");
+    grad.setAttribute("id", gradId);
+    grad.setAttribute("x1", "0"); grad.setAttribute("x2", "1"); grad.setAttribute("y1", "0"); grad.setAttribute("y2", "0");
+    [[0, "#ff9ecf"], [50, "rgba(234,234,255,0.55)"], [100, "#8fd9c4"]].forEach(([offset, color]) => {
+      const stop = document.createElementNS(svgNS, "stop");
+      stop.setAttribute("offset", `${offset}%`);
+      stop.setAttribute("stop-color", color);
+      grad.appendChild(stop);
+    });
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    const path = document.createElementNS(svgNS, "path");
+    path.setAttribute("d", pathParts.join(" "));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", `url(#${gradId})`);
+    path.setAttribute("stroke-width", "1.1");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    path.setAttribute("vector-effect", "non-scaling-stroke");
+    path.style.opacity = "0.8";
+    svg.appendChild(path);
+
+    scores.forEach((score, i) => {
+      if (score == null) return;
+      const dot = document.createElementNS(svgNS, "circle");
+      dot.setAttribute("cx", xAt(i).toFixed(1));
+      dot.setAttribute("cy", yAt(score).toFixed(1));
+      dot.setAttribute("r", i === 0 ? "1.8" : "1.3");
+      dot.setAttribute("fill", "#eaeaff");
+      dot.setAttribute("fill-opacity", i === 0 ? "0.95" : "0.7");
+      svg.appendChild(dot);
+    });
+
+    return svg;
+  }
+
+
+  // ── the dashboard's other popups, copied as they are: day overview, cycle-day history, today's outlook card (+ its history), and the cycle overview list ──
+  // They sit on top of the page like everywhere else in the dashboard. Keyframes they use:
+  (function ensurePopupStyle() {
+    if (document.getElementById("ao3-brief-popup-style")) return;
+    const st = document.createElement("style");
+    st.id = "ao3-brief-popup-style";
+    st.textContent = `
+    @keyframes ao3TarotDropIn {
+      0%   { opacity:0; transform:translate(-50%, -50%) translateY(-18px) scale(0.9); }
+      100% { opacity:1; transform:translate(-50%, -50%) translateY(0) scale(1); }
+    }
+    @keyframes ao3TarotGlow {
+      0%, 100% { box-shadow:0 0 0 rgba(255,158,207,0); }
+      50%      { box-shadow:0 0 24px rgba(255,158,207,0.55); }
+    }
+    `;
+    document.head.appendChild(st);
+  })();
+  function closeSymptomsByDayList() {
+    const o = document.getElementById("ao3-brief-overview");
+    if (o) o.remove();
+  }
+  // The dashboard shows this list inside its period tracker window; here it gets a window of its own (same list, same look, same title editing).
+  function openCycleOverview() {
+    closeSymptomsByDayList();
+    const overlay = document.createElement("div");
+    overlay.id = "ao3-brief-overview";
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2147483002;";
+    overlay.addEventListener("click", (ev) => { if (ev.target === overlay) closeSymptomsByDayList(); });
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+      position:absolute; top:6%; left:50%; transform:translateX(-50%);
+      width:min(520px, 92%); height:88%;
+      background:#171117; color:#ffeaf4;
+      border:1px solid #ff9ecf; border-radius:14px;
+      display:flex; flex-direction:column; overflow:hidden;
+      font-family:inherit;
+      box-shadow:0 0 30px rgba(255,158,207,0.2);
+    `;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    const view = buildSymptomsByDayListView();
+    modal.appendChild(view);
+    // Always open scrolled to today's row (just below the sticky header).
+    const scrollToToday = () => {
+      const todayRow = view.querySelector("[data-today-row]");
+      if (todayRow) view.scrollTop = Math.max(0, todayRow.offsetTop - 56);
+    };
+    scrollToToday();
+    requestAnimationFrame(scrollToToday);
+  }
+
+  function renderDayOverviewPopup({ popupId, backdropId, prediction, titleText, noPredictionText }) {
+    const existing = document.getElementById(popupId);
+    if (existing) existing.remove();
+    const existingBackdrop = document.getElementById(backdropId);
+    if (existingBackdrop) existingBackdrop.remove();
+
+    const backdrop = document.createElement("div");
+    backdrop.id = backdropId;
+    backdrop.style.cssText = "position:fixed; inset:0; z-index:2147483000; background:rgba(0,0,0,0.4); perspective:800px;";
+
+    const popup = document.createElement("div");
+    popup.id = popupId;
+    popup.style.cssText = `
+      position:fixed; top:50%; left:50%; z-index:2147483001;
+      transform:translate(-50%, -50%);
+      animation: ao3TarotDropIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width:300px; width:calc(100% - 64px); max-height:92vh; overflow-y:auto;
+      border-radius:18px; padding:18px 18px;
+      background:linear-gradient(170deg, #191a2c, #100f1a 65%, #14141f);
+      border:1.5px solid rgba(158,178,255,0.5);
+      text-align:left; color:#eaeaff;
+    `;
+
+    const badge = document.createElement("div");
+    badge.textContent = titleText;
+    badge.style.cssText = "font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(158,178,255,0.8); margin-bottom:8px; text-align:center;";
+    popup.appendChild(badge);
+
+    if (!prediction) {
+      const empty = document.createElement("div");
+      empty.style.cssText = "font-size:13px; line-height:1.5; color:rgba(234,234,255,0.6); text-align:center; padding:6px 0;";
+      empty.textContent = noPredictionText;
+      popup.appendChild(empty);
+    } else if (!prediction.ready) {
+      const empty = document.createElement("div");
+      empty.style.cssText = "font-size:13px; line-height:1.5; color:rgba(234,234,255,0.6); text-align:center; padding:6px 0;";
+      empty.textContent = "No mood, sleep, or symptom logs yet for this point in the cycle — check back once you've tracked a bit more.";
+      popup.appendChild(empty);
     } else {
-      // hero: day, phase, score ring, mood/energy/sleep against your usual, the day's phrase
-      const pr = data.pred && data.pred.ready ? data.pred : null, ds = pr ? pr.dayScore : null;
-      const hero = [];
-      hero.push(el("div", "text-align:center;font-size:30px;line-height:1.05;color:#fff3ea;text-shadow:0 0 20px " + rgba(hc, 0.55) + ";", "Day " + data.day));
-      if (data.phase && data.phase.label) hero.push(el("div", "text-align:center;margin-top:6px;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:" + hc + ";", (PHASE_ICONS[data.phase.key] || "") + " " + data.phase.label));
-      if (ds) {
-        const wrap = el("div", "display:flex;justify-content:center;margin-top:12px;");
-        const ring = el("div", "width:96px;height:96px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(34,20,30,0.95) 63%,transparent 65%),conic-gradient(" + hc + " " + (ds.score * 3.6) + "deg," + rgba(hc, 0.16) + " 0);box-shadow:0 0 22px " + rgba(hc, 0.3) + ";");
-        ring.appendChild(el("div", "font-size:32px;line-height:1;color:" + hc + ";", String(ds.score)));
-        ring.appendChild(el("div", "font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:" + SOFT + ";margin-top:3px;", "out of 100"));
-        wrap.appendChild(ring); hero.push(wrap);
-        hero.push(el("div", "text-align:center;margin-top:8px;font-size:14px;color:" + hc + ";", ds.label || ""));
-        const metrics = [["😊", pr.avgMood, pr.moodDiff], ["⚡", pr.avgEnergy, pr.energyDiff], ["😴", pr.avgSleep, pr.sleepDiff]].filter(m => m[1] != null);
-        if (metrics.length) {
-          const g = el("div", "display:flex;gap:8px;margin-top:12px;");
-          metrics.forEach(([ic, v, d]) => {
-            const up = d != null && d >= 0.15, down = d != null && d <= -0.15;
-            const t = el("div", "flex:1 1 0;min-width:0;text-align:center;padding:8px 2px;border-radius:14px;background:rgba(255,255,255,0.05);border:1px solid " + rgba(hc, 0.18) + ";");
-            t.appendChild(el("div", "font-size:15px;line-height:1;", ic));
-            t.appendChild(el("div", "font-size:15px;margin-top:3px;color:" + TEXT + ";", Number(v).toFixed(1)));
-            t.appendChild(el("div", "font-size:10.5px;margin-top:1px;color:" + (up ? "#8fd9c4" : down ? "#ff9ecf" : SOFT) + ";", up ? "▲ " + d.toFixed(1) : down ? "▼ " + Math.abs(d).toFixed(1) : "usual"));
-            g.appendChild(t);
-          });
-          hero.push(g);
-        }
+      if (prediction.dayScore) {
+        popup.appendChild(buildDayScoreBadge(prediction.dayScore, 8));
       }
-      if (data.title) hero.push(el("div", "margin-top:12px;padding-top:10px;border-top:1px solid " + rgba(hc, 0.2) + ";text-align:center;font-style:italic;font-size:14px;color:" + GOLD + ";", data.title));
-      card.appendChild(tile(k++, hero));
 
-      // likely symptoms: repeated 2+ times on this exact cycle day
-      if (data.symptoms) {
-        const kids = [label("Likely symptoms", "margin-bottom:6px;")], rep = data.symptoms.rep;
-        if (!rep.length) kids.push(el("div", "font-size:12px;color:" + SOFT + ";", data.symptoms.entries ? "Nothing has shown up more than once on this day." : "No history for this cycle day yet."));
-        else {
-          const max = rep[0][1];
-          rep.forEach(([name, n]) => {
-            const r = el("div", "display:flex;align-items:center;gap:8px;margin:4px 0;min-width:0;");
-            r.appendChild(el("span", "flex:0 1 auto;min-width:0;font-size:12.5px;", name));
-            const bar = el("span", "flex:1 1 20px;min-width:20px;height:5px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.1);");
-            bar.appendChild(el("span", "display:block;height:100%;width:" + Math.round(n / max * 100) + "%;border-radius:999px;background:linear-gradient(90deg," + rgba(hc, 0.6) + "," + hc + ");"));
-            r.appendChild(bar); r.appendChild(el("span", "flex:none;font-size:11px;color:" + hc + ";", "×" + n)); kids.push(r);
-          });
-          if (data.symptoms.entries) kids.push(el("div", "font-size:10px;color:" + SOFT + ";margin-top:4px;", "out of " + data.symptoms.entries + " logged day" + (data.symptoms.entries === 1 ? "" : "s")));
-        }
-        card.appendChild(tile(k++, kids));
+      const intro = document.createElement("div");
+      intro.style.cssText = "font-size:13px; line-height:1.4; font-weight:500; color:#eaeaff; margin-bottom:1px; text-align:center;";
+      intro.textContent = prediction.hasExactMoodData
+        ? `On day ${prediction.cycleDay} you usually feel:`
+        : "You usually feel:";
+      popup.appendChild(intro);
+
+      // Subtle note on sample size — how many past cycles this exact-day
+      // reading is drawn from, so the prediction doesn't read as more
+      // certain than it is.
+      if (prediction.entryCount > 0) {
+        const cycleNote = document.createElement("div");
+        cycleNote.textContent = `from ${prediction.entryCount} past cycle${prediction.entryCount === 1 ? "" : "s"}`;
+        cycleNote.style.cssText = "font-size:9px; color:rgba(158,178,255,0.4); text-align:center; margin-bottom:6px;";
+        popup.appendChild(cycleNote);
       }
-      // today in one sentence
-      if (data.sentence) card.appendChild(tile(k++, [label("Today summarized", "margin-bottom:5px;"), el("div", "font-style:italic;font-size:13.5px;line-height:1.5;color:" + TEXT + ";", data.sentence)]));
-      // what many people feel in this phase, plus two small tips
-      if (data.feel && data.phase) {
-        const col = PHASE_COLORS[data.phase.key] || hc, g = data.feel, kids = [label("What people tend to feel today", "margin-bottom:6px;")];
-        kids.push(el("div", "font-style:italic;font-size:14px;line-height:1.5;color:" + TEXT + ";", "“" + g[0] + "”"));
-        kids.push(el("div", "height:1px;margin:10px 0 2px;background:linear-gradient(90deg," + col + ",transparent);"));
-        [["Tip for interactions", g[1], "→"], ["Tip for your body", g[2], "✦"]].filter(x => x[1]).forEach(([l, t, ic]) => {
-          const tip = el("div", "display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:8px 10px;border-radius:12px;border:1px dashed " + rgba(col, 0.55) + ";background:rgba(255,255,255,0.03);");
-          tip.appendChild(el("div", "flex:none;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;background:" + col + ";color:#1b1b1b;", ic));
-          const body = el("div", "min-width:0;"); body.appendChild(el("div", "font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:" + col + ";", l)); body.appendChild(el("div", "font-size:12.5px;line-height:1.45;color:" + TEXT + ";", t));
-          tip.appendChild(body); kids.push(tip);
+
+      const tiles = [
+        prediction.avgSleep != null ? { icon: "😴", label: "Sleep", value: prediction.avgSleep.toFixed(1), diff: prediction.sleepDiff } : null,
+        prediction.avgSleepHours != null ? { icon: "🛏️", label: "Hours", value: prediction.avgSleepHours.toFixed(1), diff: prediction.sleepHoursDiff, unit: "h" } : null,
+        prediction.avgEnergy != null ? { icon: "⚡", label: "Energy", value: prediction.avgEnergy.toFixed(1), diff: prediction.energyDiff } : null,
+        prediction.avgMood != null ? { icon: "😊", label: "Mood", value: prediction.avgMood.toFixed(1), diff: prediction.moodDiff } : null,
+      ].filter(Boolean);
+
+      // Small colored chip instead of a full "↑ 0.5 above your usual"
+      // sentence — direction-only color (teal up / pink down), no
+      // good/bad judgement since that depends on the metric.
+      function deltaChip(diff, unit = "") {
+        if (diff == null || Math.abs(diff) < 0.15) {
+          return { text: "usual", textColor: "rgba(234,234,255,0.55)", bg: "rgba(234,234,255,0.08)" };
+        }
+        const up = diff > 0;
+        const hex = up ? "#8fd9c4" : "#ff9ecf";
+        return { text: `${up ? "▲" : "▼"}${Math.abs(diff).toFixed(1)}${unit}`, textColor: hex, bg: hexToRgba(hex, 0.15) };
+      }
+
+      if (tiles.length) {
+        const grid = document.createElement("div");
+        grid.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px;";
+        tiles.forEach(t => {
+          const chip = deltaChip(t.diff, t.unit || "");
+          const tile = document.createElement("div");
+          tile.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 6px; border-radius:11px; background:rgba(158,178,255,0.08); border:1px solid rgba(158,178,255,0.18); text-align:center;";
+          const head = document.createElement("div");
+          head.style.cssText = "font-size:10px; color:rgba(234,234,255,0.6); display:flex; align-items:center; gap:4px;";
+          head.textContent = `${t.icon} ${t.label}`;
+          const val = document.createElement("div");
+          val.style.cssText = "font-size:16px; font-weight:700; color:#eaeaff; line-height:1.15;";
+          val.textContent = t.unit ? `${t.value}h` : `${t.value}/5`;
+          const badge = document.createElement("div");
+          badge.style.cssText = `font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:999px; color:${chip.textColor}; background:${chip.bg};`;
+          badge.textContent = chip.text;
+          tile.appendChild(head);
+          tile.appendChild(val);
+          tile.appendChild(badge);
+          grid.appendChild(tile);
         });
-        card.appendChild(tile(k++, kids));
+        popup.appendChild(grid);
+      }
+
+      const divider = document.createElement("div");
+      divider.style.cssText = "height:1px; background:rgba(158,178,255,0.25); margin:0 0 8px;";
+      popup.appendChild(divider);
+
+      const symptomsLabel = document.createElement("div");
+      symptomsLabel.style.cssText = "font-size:10px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase; color:rgba(234,234,255,0.5); margin-bottom:5px;";
+      symptomsLabel.textContent = prediction.hasExactSymptomData ? "Common symptoms" : "Common symptoms (phase avg.)";
+      popup.appendChild(symptomsLabel);
+
+      if (!prediction.repeatingSymptoms.length) {
+        const none = document.createElement("div");
+        none.style.cssText = "font-size:12px; color:rgba(234,234,255,0.5); padding-bottom:2px;";
+        none.textContent = "Nothing common logged here yet.";
+        popup.appendChild(none);
+      } else {
+        const symptomRow = document.createElement("div");
+        symptomRow.style.cssText = "display:flex; flex-wrap:wrap; gap:5px; cursor:pointer;";
+        symptomRow.title = "tap to see counts";
+
+        let countsRevealed = false;
+        const chips = prediction.repeatingSymptoms.map(s => {
+          const chip = document.createElement("span");
+          chip.style.cssText = "font-size:12px; line-height:1.5; color:#ffeaf4; padding:2px 6px; border-radius:8px; transition: background 0.2s;";
+          chip.textContent = `${symptomIcon(s.name)} ${s.name}`;
+          chip.dataset.count = s.count;
+          symptomRow.appendChild(chip);
+          return chip;
+        });
+
+        symptomRow.onclick = e => {
+          e.stopPropagation(); // don't let the "tap anywhere to close" handler eat this tap
+          if (countsRevealed) return;
+          countsRevealed = true;
+          chips.forEach((chip, i) => {
+            chip.style.background = "rgba(158,178,255,0.14)";
+            const countBadge = document.createElement("span");
+            countBadge.textContent = ` ×${chip.dataset.count}`;
+            countBadge.style.cssText = "font-weight:700; color:#c9d4ff; display:inline-block; animation: ao3ChecklistPop 0.35s ease both;";
+            countBadge.style.animationDelay = `${i * 0.07}s`;
+            chip.appendChild(countBadge);
+          });
+
+          // Also surface everything else logged on this cycle day, beyond
+          // the top-3 headline symptoms — same chip look, slightly dimmer,
+          // popping in just after the top 3 finish.
+          if (prediction.otherSymptoms && prediction.otherSymptoms.length) {
+            const otherRow = document.createElement("div");
+            otherRow.style.cssText = "display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;";
+            prediction.otherSymptoms.forEach((s, i) => {
+              const chip = document.createElement("span");
+              chip.style.cssText = "font-size:11px; line-height:1.5; color:rgba(255,234,244,0.65); padding:2px 6px; border-radius:8px; background:rgba(158,178,255,0.07); display:inline-block; animation: ao3ChecklistPop 0.35s ease both;";
+              chip.style.animationDelay = `${0.2 + i * 0.05}s`;
+              chip.textContent = `${symptomIcon(s.name)} ${s.name} ×${s.count}`;
+              otherRow.appendChild(chip);
+            });
+            symptomRow.insertAdjacentElement("afterend", otherRow);
+          }
+        };
+        popup.appendChild(symptomRow);
+      }
+
+      if (!prediction.hasExactMoodData || !prediction.hasExactSymptomData) {
+        const fallbackNote = document.createElement("div");
+        fallbackNote.style.cssText = "font-size:9.5px; color:rgba(234,234,255,0.4); font-style:italic; margin-top:6px; line-height:1.35;";
+        const fellBack = [];
+        if (!prediction.hasExactMoodData) fellBack.push("mood/energy/sleep");
+        if (!prediction.hasExactSymptomData) fellBack.push("symptoms");
+        fallbackNote.textContent = `No history yet for day ${prediction.cycleDay} specifically (${fellBack.join(", ")}) — showing the phase average instead.`;
+        popup.appendChild(fallbackNote);
+      }
+
+      // ── Orgasm likelihood ──
+      if (prediction.orgasmChance != null) {
+        const orgDivider = document.createElement("div");
+        orgDivider.style.cssText = "height:1px; background:rgba(158,178,255,0.25); margin:10px 0 8px;";
+        popup.appendChild(orgDivider);
+
+        const orgRow = document.createElement("div");
+        orgRow.style.cssText = "display:flex; align-items:baseline; justify-content:space-between; gap:8px;";
+        const orgLabel = document.createElement("div");
+        orgLabel.style.cssText = "font-size:10px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase; color:rgba(234,234,255,0.5);";
+        orgLabel.textContent = prediction.hasExactOrgasmData ? "Orgasm likelihood" : "Orgasm likelihood (phase avg.)";
+        const orgValue = document.createElement("div");
+        orgValue.style.cssText = "font-size:14px; font-weight:700; color:#eaeaff;";
+        orgValue.textContent = `${Math.round(prediction.orgasmChance * 100)}%`;
+        orgRow.appendChild(orgLabel);
+        orgRow.appendChild(orgValue);
+        popup.appendChild(orgRow);
+
+        const orgNote = document.createElement("div");
+        orgNote.style.cssText = "font-size:9px; color:rgba(158,178,255,0.4); margin-top:1px;";
+        orgNote.textContent = `from ${prediction.orgasmSampleSize} logged day${prediction.orgasmSampleSize === 1 ? "" : "s"}`;
+        popup.appendChild(orgNote);
+      }
+
+      // ── One-line recommendation ──
+      const recommendation = buildTomorrowRecommendation(prediction);
+      if (recommendation) {
+        const recDivider = document.createElement("div");
+        recDivider.style.cssText = "height:1px; background:rgba(158,178,255,0.25); margin:10px 0 6px;";
+        popup.appendChild(recDivider);
+
+        const recLine = document.createElement("div");
+        recLine.style.cssText = "font-size:11.5px; line-height:1.4; font-style:italic; color:rgba(234,234,255,0.75); text-align:center;";
+        recLine.textContent = recommendation;
+        popup.appendChild(recLine);
       }
     }
 
-    const btn = el("button", "display:block;margin:0 auto;padding:10px 24px;border-radius:999px;border:1px solid rgba(255,217,160,0.45);background:linear-gradient(180deg,rgba(255,217,160,0.24),rgba(255,217,160,0.08));color:" + GOLD + ";font:inherit;letter-spacing:0.06em;cursor:pointer;box-shadow:0 0 18px rgba(255,190,120,0.16);", "🍳 off to breakfast");
-    btn.type = "button";
-    const foot = el("div", "flex:none;position:relative;padding:12px 14px;background:linear-gradient(180deg,rgba(28,16,25,0),rgba(28,16,25,0.92) 38%);margin-top:-14px;");
-    foot.appendChild(btn); frame.appendChild(foot);
-    veil.appendChild(frame);
-    let done = false;
-    veil.addEventListener("click", ev => { ev.stopPropagation(); if (done || (ev.target !== veil && ev.target !== btn)) return; done = true; veil.remove(); try { onClose && onClose(); } catch {} });
-    sh.back.appendChild(veil);
+    const closeHint = document.createElement("div");
+    closeHint.textContent = "tap anywhere to close";
+    closeHint.style.cssText = "margin-top:8px; font-size:9.5px; color:rgba(234,234,255,0.4); text-align:center;";
+    popup.appendChild(closeHint);
+
+    const close = () => { popup.remove(); backdrop.remove(); };
+    backdrop.onclick = close;
+    popup.onclick = close;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(popup);
   }
 
-  return { mbShow };
+  function showDayOverviewPopup(cycleDay, stats) {
+    const prediction = getDayPrediction(cycleDay, stats);
+    renderDayOverviewPopup({
+      popupId: "ao3-dayoverview-popup",
+      backdropId: "ao3-dayoverview-backdrop",
+      prediction,
+      titleText: `✦ day ${cycleDay} ✦`,
+      noPredictionText: "Log a period first so cycle days can be tracked.",
+    });
+  }
+
+  function showPredictionPopup(card) {
+    const existing = document.getElementById("ao3-prediction-popup");
+    if (existing) existing.remove();
+    const existingBackdrop = document.getElementById("ao3-prediction-backdrop");
+    if (existingBackdrop) existingBackdrop.remove();
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "ao3-prediction-backdrop";
+    backdrop.style.cssText = "position:fixed; inset:0; z-index:2147483000; background:rgba(0,0,0,0.4); perspective:800px;";
+
+    const popup = document.createElement("div");
+    popup.id = "ao3-prediction-popup";
+    popup.style.cssText = `
+      position:fixed; top:50%; left:50%; z-index:2147483001;
+      transform:translate(-50%, -50%);
+      animation: ao3TarotDropIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), ao3TarotGlow 2.4s ease-in-out 0.3s infinite;
+      max-width:270px; width:calc(100% - 64px);
+      border-radius:18px; padding:26px 20px 22px;
+      background:linear-gradient(170deg, #201a2a, #120e18 65%, #171220);
+      border:1.5px solid rgba(216,180,254,0.55);
+      text-align:center; color:#f2eaff;
+    `;
+
+    const inner = document.createElement("div");
+    inner.style.cssText = "animation: ao3TarotFaceFlip 0.45s ease-out 0.15s both; transform-style:preserve-3d;";
+
+    const badge = document.createElement("div");
+    badge.textContent = card.isForToday ? "✦ today's outlook ✦" : "✦ tomorrow's outlook ✦";
+    badge.style.cssText = "font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(216,180,254,0.7); margin-bottom:14px;";
+    inner.appendChild(badge);
+
+    const emoji = document.createElement("div");
+    emoji.textContent = card.emoji;
+    emoji.style.cssText = "font-size:44px; margin-bottom:10px;";
+    inner.appendChild(emoji);
+
+    const title = document.createElement("div");
+    title.textContent = card.title;
+    title.style.cssText = "font-size:16px; font-weight:700; color:#d8b4fe; margin-bottom:10px; letter-spacing:0.01em;";
+    inner.appendChild(title);
+
+    const divider = document.createElement("div");
+    divider.style.cssText = "height:1px; background:rgba(216,180,254,0.25); margin:0 auto 12px; width:60%;";
+    inner.appendChild(divider);
+
+    const caption = document.createElement("div");
+    caption.textContent = card.caption;
+    caption.style.cssText = "font-size:13.5px; line-height:1.5; font-weight:500; color:#f2eaff;";
+    inner.appendChild(caption);
+
+    const ratingLine = document.createElement("div");
+    ratingLine.textContent = `predicted day: ${card.rating}/5`;
+    ratingLine.style.cssText = "margin-top:14px; font-size:11px; font-weight:600; letter-spacing:0.02em; color:#d8b4fe; opacity:0.85;";
+    inner.appendChild(ratingLine);
+
+    if (getPredictionHistory().length > 1) {
+      const historyLink = document.createElement("div");
+      historyLink.textContent = "📜 history";
+      historyLink.style.cssText = "margin-top:12px; font-size:11px; font-weight:600; color:rgba(216,180,254,0.75); text-decoration:underline; cursor:pointer;";
+      historyLink.onclick = (e) => {
+        e.stopPropagation();
+        showPredictionHistoryPopup();
+      };
+      inner.appendChild(historyLink);
+    }
+
+    popup.appendChild(inner);
+
+    const closeHint = document.createElement("div");
+    closeHint.textContent = "tap anywhere to close";
+    closeHint.style.cssText = "margin-top:16px; font-size:10px; color:rgba(242,234,255,0.4);";
+    popup.appendChild(closeHint);
+
+    const close = () => {
+      popup.remove();
+      backdrop.remove();
+      // Re-render so the companion panel's "tomorrow's outlook" line (now
+      // revealed) shows up immediately instead of waiting for some other
+      // interaction to trigger a refresh.
+    };
+    backdrop.onclick = close;
+    popup.onclick = close;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(popup);
+  }
+
+  function showPredictionHistoryPopup() {
+    const existing = document.getElementById("ao3-prediction-history-popup");
+    if (existing) existing.remove();
+    const existingBackdrop = document.getElementById("ao3-prediction-history-backdrop");
+    if (existingBackdrop) existingBackdrop.remove();
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "ao3-prediction-history-backdrop";
+    backdrop.style.cssText = "position:fixed; inset:0; z-index:2147483002; background:rgba(0,0,0,0.4); perspective:800px;";
+
+    const popup = document.createElement("div");
+    popup.id = "ao3-prediction-history-popup";
+    popup.style.cssText = `
+      position:fixed; top:50%; left:50%; z-index:2147483003;
+      transform:translate(-50%, -50%);
+      animation: ao3TarotDropIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width:290px; width:calc(100% - 64px); max-height:76vh; overflow-y:auto;
+      border-radius:18px; padding:22px 20px;
+      background:linear-gradient(170deg, #201a2a, #120e18 65%, #171220);
+      border:1.5px solid rgba(216,180,254,0.55);
+      text-align:left; color:#f2eaff;
+    `;
+
+    const badge = document.createElement("div");
+    badge.textContent = "✦ outlook history ✦";
+    badge.style.cssText = "font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(216,180,254,0.7); margin-bottom:14px; text-align:center;";
+    popup.appendChild(badge);
+
+    const entries = getPredictionHistory().slice().reverse(); // newest first
+    if (!entries.length) {
+      const empty = document.createElement("div");
+      empty.style.cssText = "font-size:13px; line-height:1.5; color:rgba(242,234,255,0.6); text-align:center; padding:6px 0;";
+      empty.textContent = "Nothing revealed yet — tap the pill to draw one.";
+      popup.appendChild(empty);
+    } else {
+      entries.forEach(entry => {
+        const card = PREDICTION_DECK[entry.index];
+        if (!card) return;
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(216,180,254,0.14);";
+
+        const emoji = document.createElement("div");
+        emoji.textContent = card.emoji;
+        emoji.style.cssText = "font-size:20px; flex-shrink:0;";
+        row.appendChild(emoji);
+
+        const text = document.createElement("div");
+        text.style.cssText = "flex:1; min-width:0;";
+        const dateLine = document.createElement("div");
+        dateLine.textContent = formatPrettyDate(entry.date);
+        dateLine.style.cssText = "font-size:10px; font-weight:700; letter-spacing:0.03em; color:rgba(216,180,254,0.7); text-transform:uppercase; margin-bottom:2px;";
+        text.appendChild(dateLine);
+        const titleLine = document.createElement("div");
+        titleLine.textContent = card.title;
+        titleLine.style.cssText = "font-size:12.5px; font-weight:600; color:#f2eaff;";
+        text.appendChild(titleLine);
+        row.appendChild(text);
+
+        const rating = document.createElement("div");
+        rating.textContent = `${entry.rating}/5`;
+        rating.style.cssText = "font-size:11px; font-weight:700; color:#d8b4fe; opacity:0.85; flex-shrink:0;";
+        row.appendChild(rating);
+
+        popup.appendChild(row);
+      });
+    }
+
+    const closeHint = document.createElement("div");
+    closeHint.textContent = "tap outside to close";
+    closeHint.style.cssText = "margin-top:14px; font-size:10px; color:rgba(242,234,255,0.4); text-align:center;";
+    popup.appendChild(closeHint);
+
+    const close = () => { popup.remove(); backdrop.remove(); };
+    backdrop.onclick = close;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(popup);
+  }
+
+  function showCycleDayHistoryPopup(cycleDay, accentColor = "#ff9ecf") {
+    const existing = document.getElementById("ao3-moodhistory-popup");
+    if (existing) existing.remove();
+    const existingBackdrop = document.getElementById("ao3-moodhistory-backdrop");
+    if (existingBackdrop) existingBackdrop.remove();
+
+    const entries = getCycleDayHistory(cycleDay);
+
+    // getCycleDayHistory only walks *past* cycles, so today's own log (if
+    // today happens to be this exact cycle day) gets folded in separately
+    // here — both as its own card and in the frequency count below.
+    const todayIso = getPragueTodayIso();
+    const todayMood = getMoodLog().find(e => e.date === todayIso);
+    if (todayMood) {
+      const symptoms = todayMood.symptoms || [];
+      const hasAny = typeof todayMood.mood === "number" || typeof todayMood.energy === "number" ||
+                     typeof todayMood.sleep === "number" || typeof todayMood.sleepHours === "number" ||
+                     typeof todayMood.orgasm === "boolean" || typeof todayMood.orgasmCount === "number" || symptoms.length > 0;
+      if (hasAny) {
+        entries.unshift({
+          date: todayIso,
+          cyclesAgo: 0,
+          mood: typeof todayMood.mood === "number" ? todayMood.mood : null,
+          energy: typeof todayMood.energy === "number" ? todayMood.energy : null,
+          sleep: typeof todayMood.sleep === "number" ? todayMood.sleep : null,
+          sleepHours: typeof todayMood.sleepHours === "number" ? todayMood.sleepHours : null,
+          orgasm: typeof todayMood.orgasm === "boolean" ? todayMood.orgasm : null,
+          orgasmCount: typeof todayMood.orgasmCount === "number" ? todayMood.orgasmCount : null,
+          symptoms,
+        });
+      }
+    }
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "ao3-moodhistory-backdrop";
+    backdrop.style.cssText = "position:fixed; inset:0; z-index:2147483000; background:rgba(0,0,0,0.45); perspective:800px;";
+
+    const popup = document.createElement("div");
+    popup.id = "ao3-moodhistory-popup";
+    popup.style.cssText = `
+      position:fixed; top:50%; left:50%; z-index:2147483001;
+      transform:translate(-50%, -50%);
+      animation: ao3TarotDropIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width:300px; width:calc(100% - 64px); max-height:78vh; overflow-y:auto;
+      border-radius:20px; padding:22px 20px 18px;
+      background:linear-gradient(170deg, #2a1c26, #14101a 65%, #1c1420);
+      border:1.5px solid ${hexToRgba(accentColor, 0.5)};
+      text-align:left; color:#ffeaf4;
+    `;
+
+    const badge = document.createElement("div");
+    badge.textContent = `✦ day ${cycleDay} · history ✦`;
+    badge.style.cssText = `font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:${hexToRgba(accentColor, 0.85)}; margin-bottom:14px; text-align:center;`;
+    popup.appendChild(badge);
+
+    if (!entries.length) {
+      const empty = document.createElement("div");
+      empty.style.cssText = "font-size:13px; line-height:1.5; color:rgba(255,234,244,0.6); text-align:center; padding:6px 0;";
+      empty.textContent = "Nothing logged on this cycle day in past cycles yet — check back once you've tracked a few more.";
+      popup.appendChild(empty);
+    } else {
+      // Aggregate: how many of these past cycles each symptom showed up in,
+      // for a quick "Bloating ×3" glance before the per-cycle breakdown below.
+      const symptomCounts = {};
+      entries.forEach(e => e.symptoms.forEach(s => { symptomCounts[s] = (symptomCounts[s] || 0) + 1; }));
+      const symptomFreq = Object.entries(symptomCounts).sort((a, b) => b[1] - a[1]);
+      if (symptomFreq.length) {
+        const freqWrap = document.createElement("div");
+        freqWrap.style.cssText = "display:flex; flex-direction:column; gap:6px; margin-bottom:16px;";
+        const freqLbl = document.createElement("div");
+        freqLbl.textContent = "🩹 Symptom frequency";
+        freqLbl.style.cssText = "font-size:11px; font-weight:600; color:rgba(255,234,244,0.7);";
+        freqWrap.appendChild(freqLbl);
+        const freqTags = document.createElement("div");
+        freqTags.style.cssText = "display:flex; flex-wrap:wrap; gap:5px;";
+        symptomFreq.forEach(([name, count]) => {
+          const tag = document.createElement("span");
+          tag.textContent = `${symptomIcon(name)} ${name} ×${count}`;
+          tag.style.cssText = `font-size:10.5px; font-weight:600; color:rgba(255,234,244,0.85); padding:3px 8px; border-radius:999px; background:${hexToRgba(accentColor, 0.14)}; border:1px solid ${hexToRgba(accentColor, 0.3)}; white-space:nowrap;`;
+          freqTags.appendChild(tag);
+        });
+        freqWrap.appendChild(freqTags);
+        popup.appendChild(freqWrap);
+
+        const freqDivider = document.createElement("div");
+        freqDivider.style.cssText = `height:1px; background:${hexToRgba(accentColor, 0.2)}; margin-bottom:16px;`;
+        popup.appendChild(freqDivider);
+      }
+
+      // ── Orgasm likelihood + one-line recommendation ──
+      // Same aggregate spirit as the symptom-frequency block above, just
+      // averaged straight off these entries rather than the exact-day bucket
+      // used elsewhere, since that's what's already on screen here.
+      const orgasmEntries = entries.filter(e => typeof e.orgasm === "boolean");
+      const orgasmChance = orgasmEntries.length ? orgasmEntries.filter(e => e.orgasm).length / orgasmEntries.length : null;
+      const moodVals = entries.map(e => e.mood).filter(v => v != null);
+      const energyVals = entries.map(e => e.energy).filter(v => v != null);
+      const sleepVals = entries.map(e => e.sleep).filter(v => v != null);
+      const avgMoodHere = moodVals.length ? moodVals.reduce((a, b) => a + b, 0) / moodVals.length : null;
+      const avgEnergyHere = energyVals.length ? energyVals.reduce((a, b) => a + b, 0) / energyVals.length : null;
+      const avgSleepHere = sleepVals.length ? sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length : null;
+      const recommendation = buildDayRecommendation(avgMoodHere, avgEnergyHere, new Set(Object.keys(symptomCounts)), avgSleepHere);
+
+      if (orgasmChance != null || recommendation) {
+        if (orgasmChance != null) {
+          const orgRow = document.createElement("div");
+          orgRow.style.cssText = "display:flex; align-items:baseline; justify-content:space-between; gap:8px;";
+          const orgLabel = document.createElement("div");
+          orgLabel.style.cssText = "font-size:11px; font-weight:600; color:rgba(255,234,244,0.7);";
+          orgLabel.textContent = "🔥 Orgasm likelihood";
+          const orgValue = document.createElement("div");
+          orgValue.style.cssText = "font-size:14px; font-weight:700; color:#ffeaf4;";
+          orgValue.textContent = `${Math.round(orgasmChance * 100)}%`;
+          orgRow.appendChild(orgLabel);
+          orgRow.appendChild(orgValue);
+          popup.appendChild(orgRow);
+
+          const orgNote = document.createElement("div");
+          orgNote.style.cssText = "font-size:9px; color:rgba(255,234,244,0.4); margin-top:1px;";
+          orgNote.textContent = `from ${orgasmEntries.length} logged day${orgasmEntries.length === 1 ? "" : "s"}`;
+          popup.appendChild(orgNote);
+        }
+
+        if (recommendation) {
+          const recLine = document.createElement("div");
+          recLine.style.cssText = `font-size:11.5px; line-height:1.4; font-style:italic; color:rgba(255,234,244,0.8); text-align:center; ${orgasmChance != null ? "margin-top:10px;" : ""}`;
+          recLine.textContent = recommendation;
+          popup.appendChild(recLine);
+        }
+
+        const orgRecDivider = document.createElement("div");
+        orgRecDivider.style.cssText = `height:1px; background:${hexToRgba(accentColor, 0.2)}; margin-top:14px; margin-bottom:16px;`;
+        popup.appendChild(orgRecDivider);
+      }
+
+      // Slim horizontal-bar meter for a 1-5 value — no baseline/delta here,
+      // just this one day's number, since the point of this popup is the
+      // raw per-cycle history rather than a comparison.
+      const miniMeter = (icon, label, value, max) => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex; align-items:center; gap:7px;";
+        const lbl = document.createElement("div");
+        lbl.textContent = `${icon} ${label}`;
+        lbl.style.cssText = "font-size:11px; font-weight:600; color:rgba(255,234,244,0.7); flex-shrink:0; width:58px; white-space:nowrap;";
+        row.appendChild(lbl);
+        const track = document.createElement("div");
+        track.style.cssText = `flex:1; height:6px; border-radius:999px; background:${hexToRgba(accentColor, 0.15)}; overflow:hidden;`;
+        const fill = document.createElement("div");
+        const pct = Math.max(0, Math.min(100, (value / max) * 100));
+        fill.style.cssText = `height:100%; width:${pct}%; border-radius:999px; background:linear-gradient(90deg, ${hexToRgba(accentColor, 0.65)}, ${accentColor});`;
+        track.appendChild(fill);
+        row.appendChild(track);
+        const val = document.createElement("div");
+        val.textContent = `${value}/${max}`;
+        val.style.cssText = "font-size:10.5px; font-weight:700; color:rgba(255,234,244,0.85); flex-shrink:0; width:26px; text-align:right;";
+        row.appendChild(val);
+        return row;
+      };
+
+      const sleepHoursMini = value => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex; align-items:center; gap:7px;";
+        const lbl = document.createElement("div");
+        lbl.textContent = "🛏️ Hours";
+        lbl.style.cssText = "font-size:11px; font-weight:600; color:rgba(255,234,244,0.7); flex-shrink:0; width:58px; white-space:nowrap;";
+        row.appendChild(lbl);
+        const val = document.createElement("div");
+        val.textContent = sleepHoursLabel(Math.round(value));
+        val.style.cssText = "font-size:11.5px; font-weight:700; color:rgba(255,234,244,0.9);";
+        row.appendChild(val);
+        return row;
+      };
+
+      const orgasmMini = (value, count) => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex; align-items:center; gap:7px;";
+        const lbl = document.createElement("div");
+        lbl.textContent = typeof count === "number" ? "🔥 Orgasms" : "🔥 Orgasm";
+        lbl.style.cssText = "font-size:11px; font-weight:600; color:rgba(255,234,244,0.7); flex-shrink:0; width:58px; white-space:nowrap;";
+        row.appendChild(lbl);
+        const val = document.createElement("div");
+        val.textContent = typeof count === "number" ? String(count) : (value ? "Yes" : "No");
+        val.style.cssText = "font-size:11.5px; font-weight:700; color:rgba(255,234,244,0.9);";
+        row.appendChild(val);
+        return row;
+      };
+
+      // Symptoms get their own stacked block rather than sharing a row with
+      // the label — a label-beside-wrap-container flex layout let the tags
+      // squeeze against the label and wrap unpredictably, so the label now
+      // sits on its own line with the full-width tag row underneath.
+      const symptomsMini = symptoms => {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex; flex-direction:column; gap:5px; margin-top:2px;";
+        const lbl = document.createElement("div");
+        lbl.textContent = "🩹 Symptoms";
+        lbl.style.cssText = "font-size:11px; font-weight:600; color:rgba(255,234,244,0.7);";
+        wrap.appendChild(lbl);
+        const tags = document.createElement("div");
+        tags.style.cssText = "display:flex; flex-wrap:wrap; gap:5px;";
+        symptoms.forEach(s => {
+          const tag = document.createElement("span");
+          tag.textContent = `${symptomIcon(s)} ${s}`;
+          tag.style.cssText = `font-size:10.5px; font-weight:600; color:rgba(255,234,244,0.85); padding:3px 8px; border-radius:999px; background:${hexToRgba(accentColor, 0.14)}; border:1px solid ${hexToRgba(accentColor, 0.3)}; white-space:nowrap;`;
+          tags.appendChild(tag);
+        });
+        wrap.appendChild(tags);
+        return wrap;
+      };
+
+      const list = document.createElement("div");
+      list.style.cssText = "display:flex; flex-direction:column; gap:10px;";
+
+      entries.forEach(e => {
+        const card = document.createElement("div");
+        card.style.cssText = `border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:7px; background:${hexToRgba(accentColor, 0.08)}; border:1px solid ${hexToRgba(accentColor, 0.22)};`;
+
+        const head = document.createElement("div");
+        head.style.cssText = "display:flex; align-items:baseline; justify-content:space-between; gap:8px;";
+        const dateEl = document.createElement("div");
+        dateEl.textContent = formatPrettyDate(e.date);
+        dateEl.style.cssText = "font-size:12.5px; font-weight:700; color:#ffeaf4;";
+        head.appendChild(dateEl);
+        const agoEl = document.createElement("div");
+        agoEl.textContent = e.cyclesAgo === 0 ? "Today" : `${e.cyclesAgo} cycle${e.cyclesAgo > 1 ? "s" : ""} ago`;
+        agoEl.style.cssText = "font-size:10px; color:rgba(255,234,244,0.45); flex-shrink:0;";
+        head.appendChild(agoEl);
+        card.appendChild(head);
+
+        if (e.mood !== null)       card.appendChild(miniMeter("😊", "Mood", e.mood, 5));
+        if (e.energy !== null)     card.appendChild(miniMeter("⚡", "Energy", e.energy, 5));
+        if (e.sleep !== null)      card.appendChild(miniMeter("😴", "Sleep", e.sleep, 5));
+        if (e.sleepHours !== null) card.appendChild(sleepHoursMini(e.sleepHours));
+        if (e.orgasm !== null || e.orgasmCount !== null) card.appendChild(orgasmMini(e.orgasm, e.orgasmCount));
+        if (e.symptoms.length)     card.appendChild(symptomsMini(e.symptoms));
+
+        list.appendChild(card);
+      });
+
+      popup.appendChild(list);
+    }
+
+    const closeHint = document.createElement("div");
+    closeHint.textContent = "tap anywhere to close";
+    closeHint.style.cssText = "margin-top:14px; font-size:10px; color:rgba(255,234,244,0.4); text-align:center;";
+    popup.appendChild(closeHint);
+
+    const close = () => { popup.remove(); backdrop.remove(); };
+    backdrop.onclick = close;
+    popup.onclick = close;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(popup);
+  }
+
+  function getCycleDayHistory(targetCycleDay, maxCycles = PERIOD_CYCLE_LOOKBACK) {
+    const periodLog = getPeriodLog(); // sorted oldest → newest
+    if (periodLog.length < 2) return [];
+    const starts = periodLog.map(e => e.start);
+
+    const moodByDay = {};
+    getMoodLog().forEach(e => { moodByDay[e.date] = e; });
+
+    const todayIso = getPragueTodayIso();
+    const entries = [];
+    for (let i = starts.length - 2; i >= 0 && entries.length < maxCycles; i--) {
+      const cycleStart = starts[i];
+      const nextStart = starts[i + 1];
+      const cycleLen = daysBetween(cycleStart, nextStart);
+      if (targetCycleDay > cycleLen) continue;
+      const dateObj = parseLocalIso(cycleStart);
+      dateObj.setDate(dateObj.getDate() + (targetCycleDay - 1));
+      const dateIso = toLocalIso(dateObj);
+      if (dateIso >= todayIso) continue;
+      const mood = moodByDay[dateIso];
+      if (!mood) continue;
+      const symptoms = mood.symptoms || [];
+      const hasAny = typeof mood.mood === "number" || typeof mood.energy === "number" ||
+                     typeof mood.sleep === "number" || typeof mood.sleepHours === "number" ||
+                     typeof mood.orgasm === "boolean" || typeof mood.orgasmCount === "number" || symptoms.length > 0;
+      if (!hasAny) continue; // logged that day, but nothing relevant to this popup
+      entries.push({
+        date: dateIso,
+        cyclesAgo: starts.length - 1 - i,
+        mood: typeof mood.mood === "number" ? mood.mood : null,
+        energy: typeof mood.energy === "number" ? mood.energy : null,
+        sleep: typeof mood.sleep === "number" ? mood.sleep : null,
+        sleepHours: typeof mood.sleepHours === "number" ? mood.sleepHours : null,
+        orgasm: typeof mood.orgasm === "boolean" ? mood.orgasm : null,
+        orgasmCount: typeof mood.orgasmCount === "number" ? mood.orgasmCount : null,
+        symptoms,
+      });
+    }
+    return entries;
+  }
+
+  function buildSymptomsByDayListView() {
+    const view = document.createElement("div");
+    view.id = "ao3-symptoms-by-day";
+    view.style.cssText = `
+      position:absolute; inset:0; background:#171117; z-index:10;
+      overflow:auto; padding:16px; display:flex; flex-direction:column; gap:14px;
+    `;
+
+    // Sticky so the X stays reachable while scrolling through the days.
+    const header = document.createElement("div");
+    header.style.cssText = `
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      position:sticky; top:-16px; z-index:2; margin:-16px -16px 0; padding:14px 16px 10px;
+      background:#171117; border-bottom:1px solid rgba(255,158,207,0.1);
+    `;
+    const headerTitle = document.createElement("div");
+    headerTitle.style.cssText = "font-weight:600; color:#ffb8dc; font-size:13px; cursor:pointer;";
+    headerTitle.textContent = "Cycle at a glance";
+    headerTitle.title = "tap to jump to today";
+    const closeBtn4 = document.createElement("button");
+    closeBtn4.textContent = "✕";
+    closeBtn4.setAttribute("aria-label", "Close");
+    closeBtn4.style.cssText = `
+      background:none; border:none; color:rgba(255,158,207,0.6);
+      cursor:pointer; font-size:18px; line-height:1; padding:6px 10px;
+      border-radius:8px; transition:color 0.15s, background 0.15s;
+    `;
+    closeBtn4.onmouseover = () => { closeBtn4.style.color = "#ffeaf4"; closeBtn4.style.background = "rgba(255,158,207,0.12)"; };
+    closeBtn4.onmouseout  = () => { closeBtn4.style.color = "rgba(255,158,207,0.6)"; closeBtn4.style.background = "none"; };
+    closeBtn4.onclick = closeSymptomsByDayList;
+    header.appendChild(headerTitle);
+    header.appendChild(closeBtn4);
+    view.appendChild(header);
+
+    const stats = getPeriodStats();
+    const todayCycleDay = stats.currentCycleDay;
+    headerTitle.onclick = () => {
+      if (todayCycleDay == null) return;
+      const todayRow = view.querySelector(`[data-cycle-day="${todayCycleDay}"]`);
+      if (todayRow) todayRow.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    const buckets = getMoodStatsByCycleDay();
+    const loggedDays = Object.keys(buckets).map(Number);
+
+    if (!stats.avgCycle && !loggedDays.length) {
+      view.appendChild(emptyStateNote("Log at least one period and a few mood/symptom entries to see each cycle day broken down."));
+      return view;
+    }
+
+
+    const baseline = getOverallMoodBaseline();
+    const { cycleLen } = getCycleMarkers(stats.avgCycle, stats.avgPeriod);
+    const lastDay = Math.min(45, Math.max(cycleLen, ...loggedDays, 1));
+
+    // Legend for the score colors (same palette as the score pill in the overview card).
+    {
+      const legend = document.createElement("div");
+      legend.style.cssText = "display:flex; flex-wrap:wrap; gap:4px 12px; font-size:10.5px; color:rgba(255,234,244,0.6);";
+      [["#8fd9c4", "good"], ["#bfe3d6", "decent"], ["#c4c4de", "mixed"], ["#ffb38a", "tough"], ["#ff9ecf", "rough"]].forEach(([c, name]) => {
+        const item = document.createElement("span");
+        item.style.cssText = "display:inline-flex; align-items:center; gap:5px;";
+        const dot = document.createElement("span");
+        dot.style.cssText = `width:9px; height:9px; border-radius:50%; background:${c};`;
+        const txt = document.createElement("span");
+        txt.textContent = name;
+        item.appendChild(dot);
+        item.appendChild(txt);
+        legend.appendChild(item);
+      });
+      view.appendChild(legend);
+    }
+    const phaseHeading = key => key === "menstrual" ? "Period" : key === "pms" ? "PMS week" : (PHASE_DEFS.find(p => p.key === key)?.label || key);
+
+    const list = document.createElement("div");
+    list.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+    let lastPhase = null;
+
+    for (let day = 1; day <= lastDay; day++) {
+      const phaseKey = getPhaseForCycleDay(day, stats.avgCycle, stats.avgPeriod);
+      if (phaseKey !== lastPhase) {
+        const h = document.createElement("div");
+        h.style.cssText = `font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:${PHASE_COLORS[phaseKey]}; margin:${lastPhase ? "12px" : "0"} 0 2px;`;
+        h.textContent = `${PHASE_ICONS[phaseKey] || ""} ${phaseHeading(phaseKey)}`;
+        list.appendChild(h);
+        lastPhase = phaseKey;
+      }
+
+      const bucket = buckets[day] || null;
+      const isToday = day === todayCycleDay;
+      // Same score (and same exact-day / phase-fallback logic) as the overview
+      // card and tomorrow's outlook, so the numbers agree everywhere.
+      const pred = getDayPrediction(day, stats);
+      const dayScore = pred && pred.dayScore ? pred.dayScore : null;
+      const sc = dayScore ? dayScore.color : null; // null = nothing to score yet
+      const accent = sc || PHASE_COLORS[phaseKey] || "#ff9ecf";
+
+      // Flat rows: no boxes or pills. The cycle day is the big colored
+      // number on the left (its color = the day's score); the title and a
+      // quiet score/icons line sit beside it.
+      const wrap = document.createElement("div");
+      wrap.dataset.cycleDay = String(day);
+      if (isToday) wrap.setAttribute("data-today-row", "1");
+      wrap.style.cssText = `
+        padding:9px 8px; scroll-margin-top:60px; border-radius:${isToday ? 12 : 0}px;
+        border-bottom:1px solid rgba(255,158,207,0.08);
+        background:${isToday ? "rgba(255,158,207,0.1)" : (sc ? `linear-gradient(90deg, ${hexToRgba(sc, 0.07)}, transparent 55%)` : "none")};
+      `;
+
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:flex-start; gap:14px; cursor:pointer;";
+
+      const dayCol = document.createElement("div");
+      dayCol.style.cssText = "width:46px; flex-shrink:0; text-align:center; line-height:1;";
+      const dayLabel = document.createElement("div");
+      dayLabel.textContent = isToday ? "today" : "day";
+      dayLabel.style.cssText = `font-size:9.5px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:3px; color:${isToday ? "#ff9ecf" : "rgba(255,234,244,0.4)"};`;
+      const dayNum = document.createElement("div");
+      dayNum.textContent = String(day);
+      dayNum.style.cssText = `font-size:26px; font-weight:800; color:${sc || "rgba(255,234,244,0.55)"};`;
+      dayCol.appendChild(dayLabel);
+      dayCol.appendChild(dayNum);
+      row.appendChild(dayCol);
+
+      const body = document.createElement("div");
+      body.style.cssText = "flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; padding-top:1px;";
+
+      const titleEl = document.createElement("div");
+      const paintTitle = () => {
+        const t = getCycleDayTitle(day, stats, buckets, baseline);
+        titleEl.textContent = "";
+        titleEl.style.cssText = "font-size:13.5px; line-height:1.4; color:rgba(255,234,244,0.92);";
+        if (t.custom) {
+          t.tags.forEach(tag => {
+            const tg = document.createElement("div");
+            tg.textContent = `✦ ${tag}`;
+            tg.style.cssText = `font-size:10.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:${accent}; margin-bottom:2px;`;
+            titleEl.appendChild(tg);
+          });
+          const txt = document.createElement("div");
+          txt.textContent = t.text;
+          titleEl.appendChild(txt);
+        } else if (t.empty) {
+          titleEl.textContent = t.empty;
+          titleEl.style.cssText = "font-size:12.5px; line-height:1.4; font-style:italic; color:rgba(255,234,244,0.4);";
+        } else {
+          // Heads-up tags are just bold colored text, not boxes.
+          t.tags.forEach(tag => {
+            const tg = document.createElement("div");
+            tg.textContent = `✦ ${tag}`;
+            tg.style.cssText = `font-size:10.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:${accent}; margin-bottom:2px;`;
+            titleEl.appendChild(tg);
+          });
+          if (t.items.length) {
+            const txt = document.createElement("div");
+            txt.textContent = t.items.map(i => i.label).join(" · ");
+            titleEl.appendChild(txt);
+          }
+        }
+      };
+      paintTitle();
+      body.appendChild(titleEl);
+
+      // Quiet meta line: score + the day's common symptom icons, plain text.
+      const topSymptoms = bucket
+        ? Object.entries(bucket.symptoms || {}).filter(([, n]) => n >= TITLE_MIN_COUNT || bucket.entryCount < 2).sort((a, b) => b[1] - a[1]).slice(0, 5)
+        : [];
+      if (dayScore || topSymptoms.length) {
+        const meta = document.createElement("div");
+        meta.style.cssText = "display:flex; align-items:baseline; gap:10px; font-size:12px;";
+        if (dayScore) {
+          const sEl = document.createElement("span");
+          sEl.style.cssText = `font-weight:700; color:${sc};`;
+          sEl.textContent = String(dayScore.score);
+          const den = document.createElement("span");
+          den.textContent = "/100";
+          den.style.cssText = `font-size:9px; font-weight:600; color:${hexToRgba(sc, 0.65)}; margin-left:1px;`;
+          sEl.appendChild(den);
+          sEl.title = dayScore.label;
+          meta.appendChild(sEl);
+        }
+        if (topSymptoms.length) {
+          const ic = document.createElement("span");
+          ic.style.cssText = "letter-spacing:3px; font-size:13px;";
+          ic.textContent = topSymptoms.map(([name]) => symptomIcon(name)).join("");
+          meta.appendChild(ic);
+        }
+        body.appendChild(meta);
+      }
+      row.appendChild(body);
+      wrap.appendChild(row);
+
+      // Expanded panel: title editor + full symptom counts
+      const panel = document.createElement("div");
+      panel.style.cssText = "display:none; flex-direction:column; gap:8px; margin:8px 0 2px 60px;";
+
+      const editRow = document.createElement("div");
+      editRow.style.cssText = "display:flex; gap:6px; align-items:center;";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = 80;
+      input.placeholder = "your own title for this day…";
+      input.value = getCycleDayTitles()[day] || "";
+      input.style.cssText = "flex:1; min-width:0; background:rgba(255,255,255,0.06); border:1px solid rgba(255,158,207,0.3); border-radius:8px; color:#ffeaf4; padding:6px 8px; font-size:12px; font-family:inherit;";
+      input.addEventListener("keydown", e => e.stopPropagation());
+      const saveBtn = document.createElement("button");
+      saveBtn.textContent = "Save";
+      saveBtn.style.cssText = periodBtnStyle("primary") + " padding:5px 10px; font-size:11px;";
+      saveBtn.onclick = () => { setCycleDayTitle(day, input.value); paintTitle(); };
+      const resetBtn = document.createElement("button");
+      resetBtn.textContent = "Auto";
+      resetBtn.title = "go back to the automatic title";
+      resetBtn.style.cssText = periodBtnStyle("secondary") + " padding:5px 10px; font-size:11px;";
+      resetBtn.onclick = () => { setCycleDayTitle(day, ""); input.value = ""; paintTitle(); };
+      editRow.appendChild(input);
+      editRow.appendChild(saveBtn);
+      editRow.appendChild(resetBtn);
+      panel.appendChild(editRow);
+
+      const entries = bucket ? Object.entries(bucket.symptoms || {}).sort((a, b) => b[1] - a[1]) : [];
+      const meta = document.createElement("div");
+      meta.style.cssText = "font-size:10px; color:rgba(255,234,244,0.4);";
+      meta.textContent = bucket ? `logged ${bucket.entryCount} ${bucket.entryCount === 1 ? "time" : "times"}` : "nothing logged on this day yet";
+      panel.appendChild(meta);
+      entries.forEach(([name, count]) => {
+        const r = document.createElement("div");
+        r.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 8px; border-radius:7px; background:rgba(255,158,207,0.06);";
+        const label = document.createElement("div");
+        label.style.cssText = "font-size:12px;";
+        label.textContent = `${symptomIcon(name)} ${name}`;
+        const countEl = document.createElement("div");
+        countEl.style.cssText = "font-size:11px; color:rgba(255,234,244,0.55); flex-shrink:0;";
+        countEl.textContent = `×${count}`;
+        r.appendChild(label);
+        r.appendChild(countEl);
+        panel.appendChild(r);
+      });
+      wrap.appendChild(panel);
+
+      row.onclick = () => { panel.style.display = panel.style.display === "none" ? "flex" : "none"; };
+      list.appendChild(wrap);
+    }
+
+    view.appendChild(list);
+    return view;
+  }
+
+  function buildDayScoreBadge(dayScore, marginBottom = 14) {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = `display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:${marginBottom}px;`;
+
+    const pill = document.createElement("div");
+    pill.style.cssText = `
+      display:inline-flex; align-items:baseline; gap:3px; padding:5px 14px; border-radius:999px;
+      background:${hexToRgba(dayScore.color, 0.16)}; border:1px solid ${hexToRgba(dayScore.color, 0.45)};
+    `;
+    const num = document.createElement("span");
+    num.textContent = dayScore.score;
+    num.style.cssText = `font-size:20px; font-weight:800; color:${dayScore.color};`;
+    const denom = document.createElement("span");
+    denom.textContent = "/100";
+    denom.style.cssText = `font-size:10px; font-weight:600; color:${hexToRgba(dayScore.color, 0.7)};`;
+    pill.appendChild(num);
+    pill.appendChild(denom);
+    wrap.appendChild(pill);
+
+    const label = document.createElement("div");
+    label.textContent = dayScore.label;
+    label.style.cssText = `font-size:11px; font-weight:600; color:${dayScore.color};`;
+    wrap.appendChild(label);
+
+    return wrap;
+  }
+
+  function getPredictionHistory() {
+    try {
+      const log = JSON.parse(localStorage.getItem(PREDICTION_HISTORY_KEY) || "[]");
+      return Array.isArray(log) ? log : [];
+    } catch { return []; }
+  }
+
+  function periodBtnStyle(kind) {
+    if (kind === "primary") {
+      return `
+        background:rgba(255,158,207,0.15); border:1px solid #ff9ecf; color:#ffb8dc;
+        border-radius:8px; padding:6px 14px; font-size:12px; cursor:pointer;
+        font-family:inherit; transition:background 0.15s;
+      `;
+    }
+    return `
+      background:none; border:1px solid rgba(255,158,207,0.3); color:rgba(255,234,244,0.7);
+      border-radius:8px; padding:6px 14px; font-size:12px; cursor:pointer;
+      font-family:inherit; transition:background 0.15s;
+    `;
+  }
+
+  function emptyStateNote(text) {
+    const el = document.createElement("div");
+    el.style.cssText = "color:rgba(255,234,244,0.4); font-size:12px;";
+    el.textContent = text;
+    return el;
+  }
+
+  function showMorningBrief(sh, onClose) {
+    let stats = null; try { stats = D.getPeriodStats(); } catch (e) { stats = null; }
+    if (!stats) stats = { currentCycleDay: null };
+    if (!sh.back.isConnected || sh.back.querySelector("[data-morning-brief]")) return;
+    let finished = false;
+    const day = stats.currentCycleDay;
+    const phaseKey = day != null ? getPhaseForStatsDay(day, stats) : null;
+    const phaseDef = phaseKey ? PHASE_DEFS.find(p => p.key === phaseKey) : null;
+    const accent = (phaseKey && PHASE_COLORS[phaseKey]) || "#ffb8dc";
+    const TEXT = "rgba(255,234,244,0.92)", DIM = "rgba(255,234,244,0.5)";
+
+    const backdrop = document.createElement("div");
+    backdrop.setAttribute("data-morning-brief", "");
+    backdrop.style.cssText = "position:absolute; inset:0; z-index:20; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:calc(env(safe-area-inset-top, 0px) + 12px) 0 calc(env(safe-area-inset-bottom, 0px) + 12px); background:rgba(0,0,0,0.55); -webkit-tap-highlight-color:transparent;";
+
+    // iPhone Safari: 86vh is taller than the area actually visible above
+    // Safari's toolbar, so the old popup got clipped top and bottom (and the
+    // "tap outside" backdrop was unreachable). Now it's pinned between the
+    // safe areas, capped with dvh, centred with margin:auto, and scrolls
+    // inside itself without dragging the page behind it.
+    if (!document.getElementById("ao3-morning-style")) {
+      const st = document.createElement("style");
+      st.id = "ao3-morning-style";
+      st.textContent = "@keyframes ao3MorningIn { 0% { opacity:0; transform:translateY(14px) scale(0.96); } 100% { opacity:1; transform:translateY(0) scale(1); } }";
+      document.head.appendChild(st);
+    }
+
+    const popup = document.createElement("div");
+    popup.id = "ao3-morning-popup";
+    popup.style.cssText = `
+      position:relative; box-sizing:border-box; flex:0 1 auto;
+      max-width:340px; width:calc(100% - 32px); max-height:100%;
+      overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+      animation: ao3MorningIn 0.25s ease-out;
+      border-radius:18px; padding:20px 18px 18px;
+      background:linear-gradient(170deg, #2a1c26, #171117 65%, #1d1219);
+      border:1.5px solid ${hexToRgba(accent, 0.55)};
+      text-align:left; color:#ffeaf4;
+    `;
+
+    // Close handling shared by the ✕, the Done button, the backdrop and Esc.
+    const onKey = (e) => { if (!backdrop.isConnected) { document.removeEventListener("keydown", onKey, true); return; } if (e.key === "Escape") { if (document.getElementById("ao3-brief-overview")) return; close(); } };
+    const close = () => {
+      document.removeEventListener("keydown", onKey, true);
+      backdrop.remove();
+      if (finished) return; finished = true;
+      try { onClose && onClose(); } catch (e) {}
+    };
+
+    // Sticky ✕ — stays pinned top-right while the brief scrolls.
+    const topClose = document.createElement("div");
+    topClose.style.cssText = "position:sticky; top:2px; height:0; z-index:3; display:flex; justify-content:flex-end; overflow:visible;";
+    const xBtn = document.createElement("button");
+    xBtn.type = "button";
+    xBtn.setAttribute("aria-label", "Close morning brief");
+    xBtn.textContent = "✕";
+    xBtn.style.cssText = `width:28px; height:28px; margin-right:0; padding:0; border-radius:50%; border:1px solid ${hexToRgba(accent, 0.28)}; background:rgba(23,17,25,0.7); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); color:rgba(255,234,244,0.65); font:inherit; font-size:11px; font-weight:600; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.15s, color 0.15s; -webkit-tap-highlight-color:transparent; touch-action:manipulation;`;
+    xBtn.onmouseover = () => { xBtn.style.background = hexToRgba(accent, 0.18); xBtn.style.color = "#ffeaf4"; };
+    xBtn.onmouseout  = () => { xBtn.style.background = "rgba(23,17,25,0.7)"; xBtn.style.color = "rgba(255,234,244,0.65)"; };
+    xBtn.onclick = (e) => { e.stopPropagation(); close(); };
+    topClose.appendChild(xBtn);
+    popup.appendChild(topClose);
+
+    const sectionLabel = (text) => {
+      const el = document.createElement("div");
+      el.style.cssText = `font-size:10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:${hexToRgba(accent, 0.85)}; margin:0 0 6px;`;
+      el.textContent = text;
+      return el;
+    };
+    const divider = () => {
+      const el = document.createElement("div");
+      el.style.cssText = `height:1px; background:${hexToRgba(accent, 0.25)}; margin:12px 0;`;
+      return el;
+    };
+
+    // ── Header + hero: ONE card — eyebrow, phase pill, score ring, usual-vs-today tiles, title ──
+    const headText = day != null
+      ? `Day ${day}${phaseDef ? " · " + phaseDef.label : ""}`
+      : "No cycle day yet";
+    const dateText = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+
+    const makeEyebrow = (col) => {
+      const el = document.createElement("div");
+      el.textContent = "☀️ morning brief";
+      el.style.cssText = `font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:${hexToRgba(col, 0.85)}; text-align:center;`;
+      return el;
+    };
+
+    if (day == null) {
+      popup.appendChild(makeEyebrow(accent));
+      const head = document.createElement("div");
+      head.style.cssText = "text-align:center; font-size:15px; font-weight:700; margin:4px 0 2px;";
+      head.textContent = headText;
+      popup.appendChild(head);
+      const dateLine = document.createElement("div");
+      dateLine.style.cssText = `text-align:center; font-size:10.5px; color:${DIM}; margin-bottom:12px;`;
+      dateLine.textContent = dateText;
+      popup.appendChild(dateLine);
+      const none = document.createElement("div");
+      none.style.cssText = `font-size:12.5px; line-height:1.5; color:${DIM}; text-align:center; padding:6px 0;`;
+      none.textContent = "Log a period first so today can be placed in your cycle — the brief works from that.";
+      popup.appendChild(none);
+    } else {
+      const prediction = getDayPrediction(day, stats);
+      const ds = prediction && prediction.ready ? prediction.dayScore : null;
+      const hc = ds ? ds.color : accent;
+
+      const hero = document.createElement("div");
+      hero.style.cssText = `position:relative; display:flex; flex-direction:column; align-items:center; text-align:center; padding:16px 14px 14px; border-radius:22px; overflow:hidden; background:radial-gradient(120% 80% at 50% 0%, ${hexToRgba(hc, 0.2)}, rgba(0,0,0,0) 62%), linear-gradient(180deg, ${hexToRgba(hc, 0.07)}, ${hexToRgba(hc, 0.02)}); border:1px solid ${hexToRgba(hc, 0.28)}; box-shadow:inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 26px -14px ${hexToRgba(hc, 0.5)};`;
+
+      // Eyebrow, phase pill and date, all inside the card
+      hero.appendChild(makeEyebrow(hc));
+      // Big "Day 25" with the phase flanked by hairlines underneath
+      const dayTitle = document.createElement("div");
+      dayTitle.textContent = `Day ${day}`;
+      dayTitle.style.cssText = `margin-top:6px; font-size:32px; font-weight:800; line-height:1.05; letter-spacing:-0.025em; color:#fff3f9; text-shadow:0 0 22px ${hexToRgba(hc, 0.55)}, 0 1px 0 rgba(0,0,0,0.25);`;
+      hero.appendChild(dayTitle);
+      if (phaseDef && phaseDef.label) {
+        const phaseRow = document.createElement("div");
+        phaseRow.style.cssText = "display:flex; align-items:center; justify-content:center; gap:10px; margin-top:7px; width:100%;";
+        const mkLine = (toRight) => {
+          const l = document.createElement("span");
+          l.style.cssText = `flex:0 1 38px; height:1px; background:linear-gradient(${toRight ? "90deg" : "270deg"}, ${hexToRgba(hc, 0)}, ${hexToRgba(hc, 0.6)});`;
+          return l;
+        };
+        const ph = document.createElement("span");
+        ph.textContent = phaseDef.label;
+        ph.style.cssText = `font-size:12px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:${hc}; padding-left:0.22em;`;
+        phaseRow.appendChild(mkLine(true)); phaseRow.appendChild(ph); phaseRow.appendChild(mkLine(false));
+        hero.appendChild(phaseRow);
+      }
+      const dateLine = document.createElement("div");
+      dateLine.textContent = dateText;
+      dateLine.style.cssText = `margin-top:8px; font-size:10.5px; letter-spacing:0.02em; color:${DIM};`;
+      hero.appendChild(dateLine);
+
+      if (ds) {
+        // Score as a ring gauge
+        const SIZE = 116, R = 50, SW = 7, C = 2 * Math.PI * R;
+        const pct = Math.max(0, Math.min(100, ds.score)) / 100;
+        const ringWrap = document.createElement("div");
+        ringWrap.style.cssText = `position:relative; width:${SIZE}px; height:${SIZE}px; margin-top:14px; display:flex; align-items:center; justify-content:center;`;
+        const NS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(NS, "svg");
+        svg.setAttribute("viewBox", `0 0 ${SIZE} ${SIZE}`);
+        svg.setAttribute("width", SIZE); svg.setAttribute("height", SIZE);
+        svg.style.cssText = `position:absolute; inset:0; transform:rotate(-90deg); filter:drop-shadow(0 0 6px ${hexToRgba(hc, 0.45)});`;
+        const track = document.createElementNS(NS, "circle");
+        track.setAttribute("cx", SIZE / 2); track.setAttribute("cy", SIZE / 2); track.setAttribute("r", R);
+        track.setAttribute("fill", "none"); track.setAttribute("stroke", hexToRgba(hc, 0.14)); track.setAttribute("stroke-width", SW);
+        const arc = document.createElementNS(NS, "circle");
+        arc.setAttribute("cx", SIZE / 2); arc.setAttribute("cy", SIZE / 2); arc.setAttribute("r", R);
+        arc.setAttribute("fill", "none"); arc.setAttribute("stroke", hc); arc.setAttribute("stroke-width", SW);
+        arc.setAttribute("stroke-linecap", "round");
+        arc.setAttribute("stroke-dasharray", `${C} ${C}`);
+        arc.setAttribute("stroke-dashoffset", C);
+        arc.style.transition = "stroke-dashoffset 0.9s cubic-bezier(0.22, 1, 0.36, 1)";
+        svg.appendChild(track); svg.appendChild(arc);
+        ringWrap.appendChild(svg);
+        requestAnimationFrame(() => requestAnimationFrame(() => arc.setAttribute("stroke-dashoffset", C * (1 - pct))));
+
+        const center = document.createElement("div");
+        center.style.cssText = "position:relative; display:flex; flex-direction:column; align-items:center; line-height:1;";
+        const num = document.createElement("span");
+        num.textContent = ds.score;
+        num.style.cssText = `font-size:38px; font-weight:800; letter-spacing:-0.03em; color:${hc};`;
+        const den = document.createElement("span");
+        den.textContent = "out of 100";
+        den.style.cssText = `margin-top:4px; font-size:9px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:${hexToRgba(hc, 0.6)};`;
+        center.appendChild(num); center.appendChild(den);
+        ringWrap.appendChild(center);
+        hero.appendChild(ringWrap);
+
+        const lab = document.createElement("div");
+        lab.textContent = ds.label;
+        lab.style.cssText = `font-size:13px; font-weight:700; letter-spacing:0.02em; color:${hc}; margin-top:10px;`;
+        hero.appendChild(lab);
+
+        // Mood / energy / sleep vs. your usual as three matching tiles
+        const metrics = [
+          prediction.avgMood   != null ? { icon: "😊", v: prediction.avgMood,   d: prediction.moodDiff }   : null,
+          prediction.avgEnergy != null ? { icon: "⚡", v: prediction.avgEnergy, d: prediction.energyDiff } : null,
+          prediction.avgSleep  != null ? { icon: "😴", v: prediction.avgSleep,  d: prediction.sleepDiff }  : null,
+        ].filter(Boolean);
+        if (metrics.length) {
+          const grid = document.createElement("div");
+          grid.style.cssText = `display:grid; grid-template-columns:repeat(${metrics.length}, 1fr); gap:8px; width:100%; margin-top:14px;`;
+          metrics.forEach(m => {
+            const up = m.d != null && m.d >= 0.15, down = m.d != null && m.d <= -0.15;
+            const col = up ? "#8fd9c4" : down ? "#ff9ecf" : DIM;
+            const tile = document.createElement("div");
+            tile.style.cssText = `display:flex; flex-direction:column; align-items:center; gap:3px; padding:9px 4px 8px; border-radius:14px; background:rgba(255,255,255,0.04); border:1px solid ${hexToRgba(hc, 0.16)};`;
+            const ic = document.createElement("span");
+            ic.textContent = m.icon; ic.style.cssText = "font-size:16px; line-height:1;";
+            const val = document.createElement("span");
+            val.textContent = m.v.toFixed(1); val.style.cssText = `font-size:15px; font-weight:700; line-height:1.1; color:${TEXT};`;
+            const delta = document.createElement("span");
+            delta.textContent = up ? `▲ ${m.d.toFixed(1)}` : down ? `▼ ${Math.abs(m.d).toFixed(1)}` : "usual";
+            delta.style.cssText = `font-size:9.5px; font-weight:600; letter-spacing:0.03em; color:${col};`;
+            tile.appendChild(ic); tile.appendChild(val); tile.appendChild(delta);
+            grid.appendChild(tile);
+          });
+          hero.appendChild(grid);
+        }
+      }
+
+      // Today's daily title (plain text, no tags); tap for the full cycle overview
+      const gt = getCycleDayTitle(day, stats);
+      const gtext = [
+        ...(gt.tags || []),
+        gt.custom ? gt.text : (gt.items || []).map(i => i.label).join(", "),
+      ].filter(Boolean).join(" · ") || null;
+      const glance = document.createElement("div");
+            glance.setAttribute("role", "button");
+      glance.setAttribute("aria-label", "Today's title — tap for the full cycle overview");
+      glance.onclick = () => openCycleOverview();
+      glance.style.cssText = `cursor:pointer; width:100%; box-sizing:border-box; margin-top:14px; padding-top:12px; border-top:1px solid ${hexToRgba(hc, 0.16)}; font-size:13px; line-height:1.45; font-style:italic; color:${gtext ? TEXT : DIM}; -webkit-tap-highlight-color:transparent; touch-action:manipulation;`;
+      glance.textContent = gtext || gt.empty || "No history for this cycle day yet.";
+      hero.appendChild(glance);
+      popup.appendChild(hero);
+
+      // ── Symptoms that have repeated (2+ times) on this exact cycle day ──
+      popup.appendChild(divider());
+      // Whole section is one tap target: opens the cycle-day history popup on top of the brief.
+      const symWrap = document.createElement("div");
+      symWrap.setAttribute("role", "button");
+      symWrap.setAttribute("aria-label", "Likely symptoms — tap for this cycle day's history");
+      symWrap.style.cssText = "cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation;";
+      symWrap.onclick = () => showCycleDayHistoryPopup(day, accent);
+      symWrap.appendChild(sectionLabel("Likely symptoms"));
+      const bucket = D.getMoodStatsByCycleDay()[day] || null;
+      const repeated = bucket
+        ? Object.entries(bucket.symptoms || {})
+            .filter(([, n]) => n >= 2)
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        : [];
+      if (!repeated.length) {
+        const none = document.createElement("div");
+        none.style.cssText = `font-size:12px; color:${DIM};`;
+        none.textContent = bucket && bucket.entryCount
+          ? "Nothing has shown up more than once on this day."
+          : "No history for this cycle day yet.";
+        symWrap.appendChild(none);
+      } else {
+        const list = document.createElement("div");
+        list.style.cssText = "display:flex; flex-direction:column; gap:4px;";
+        const max = repeated[0][1];
+        repeated.forEach(([name, n]) => {
+          const r = document.createElement("div");
+          r.style.cssText = "display:flex; align-items:center; gap:8px; font-size:12.5px;";
+          const lbl = document.createElement("span");
+          lbl.style.cssText = `flex:0 0 auto; min-width:0; color:${TEXT};`;
+          lbl.textContent = `${symptomIcon(name)} ${name}`;
+          const bar = document.createElement("span");
+          bar.style.cssText = "flex:1 1 auto; height:5px; border-radius:999px; overflow:hidden; background:" + hexToRgba(accent, 0.12) + ";";
+          const fill = document.createElement("span");
+          fill.style.cssText = `display:block; height:100%; width:${Math.round((n / max) * 100)}%; background:${hexToRgba(accent, 0.7)}; border-radius:999px;`;
+          bar.appendChild(fill);
+          const cnt = document.createElement("span");
+          cnt.style.cssText = `flex:0 0 auto; font-size:11px; font-weight:700; color:${accent};`;
+          cnt.textContent = `×${n}`;
+          r.appendChild(lbl); r.appendChild(bar); r.appendChild(cnt);
+          list.appendChild(r);
+        });
+        symWrap.appendChild(list);
+        if (bucket && bucket.entryCount) {
+          const note = document.createElement("div");
+          note.style.cssText = `font-size:9.5px; color:${DIM}; margin-top:5px;`;
+          note.textContent = `out of ${bucket.entryCount} logged day${bucket.entryCount === 1 ? "" : "s"}`;
+          symWrap.appendChild(note);
+        }
+      }
+      popup.appendChild(symWrap);
+
+      // ── Today in a sentence: just the one-line "how might today go" suggestion
+      // (the day's title / phase heads-up already lives in the hero card) ──
+      const sentence = prediction && prediction.ready ? buildTomorrowRecommendation(prediction) : null;
+      if (sentence) {
+        popup.appendChild(divider());
+        popup.appendChild(sectionLabel("Today summarized"));
+        const s = document.createElement("div");
+        s.style.cssText = `font-size:12.5px; line-height:1.5; font-style:italic; color:${TEXT};`;
+        s.textContent = sentence;
+        popup.appendChild(s);
+      }
+
+      // ── What many people feel on this phase + one small people tip (general, not from your logs) ──
+      if (phaseKey) {
+        const GEN = {
+          menstrual: [
+            ["Energy is often lower and the body wants rest, so a quieter, slower pace feels natural.", "Tell the people close to you \"I'm low-energy today\" so they don't read it as distance.", "Try to stay warm today: a hot water bottle or warm drink often eases the achy, heavy feeling."],
+            ["Cramps, tiredness or a short fuse are common, and many people feel a pull to be alone.", "Keep replies short and warm: a heart or a quick \"thinking of you\" still counts as connecting.", "Gentle stretching or a slow walk can loosen cramps better than pushing through."],
+            ["Many people feel tender but also relieved as the cycle resets.", "Let someone do one small thing for you instead of saying you're fine.", "Iron-rich food (lentils, greens, red meat) and plenty of water can help you feel steadier."],
+            ["Lower back aches and a heavy, slow feeling are common, and resting isn't laziness.", "It's okay to cancel a plan: a simple 'rain check?' is enough.", "A heating pad on your lower belly or back can ease cramps more than you'd expect."],
+            ["Mood can wobble a little while hormones sit at their lowest, and it passes.", "If you feel snappy, a quick 'not you, just tired' smooths things over.", "Water or a warm herbal tea can ease headaches and bloating."],
+            ["Many people feel foggy and less sharp today, so go easy on your own to-do list.", "Ask for what you need in one sentence: 'can you handle dinner?' beats hinting.", "Pick one or two must-do tasks and let the rest wait: your brain has less spare capacity."],
+            ["Sleep can be lighter or more broken, and tiredness stacks up.", "Short check-ins with a friend can feel better than a long catch-up.", "A warm shower or bath before bed can help your muscles unclench and your sleep settle."],
+            ["Many people feel their energy start to creep back toward the end of the period.", "If you feel a bit more like yourself, reach out: people usually love hearing from you.", "A short, easy walk in daylight can lift your mood without costing much energy."],
+          ],
+          follicular: [
+            ["Energy and mood tend to climb, and starting things feels easier.", "Make that plan with a friend you've been putting off while the motivation is here.", "Good day for a new workout or a project you've been postponing: effort tends to feel lighter."],
+            ["Many people feel curious, sharper and more social than a week ago.", "Message someone you haven't talked to in a while: a short hello is enough.", "Try something new today (a recipe, a route, a topic): your brain is primed for novelty."],
+            ["Focus and optimism are often higher, and new ideas flow.", "Share one idea out loud with someone: you're likely to explain it well today.", "Jot your ideas down as they come: this is a good window for planning and brainstorming."],
+            ["Many people notice a brighter mood and a lighter feeling in the body.", "Suggest a small plan for later this week: a coffee, a walk, a movie night.", "Strength and stamina tend to respond well now, so it's a good week to push a little."],
+            ["Motivation often comes easier, and tasks you dreaded feel less heavy.", "Send the awkward message or make the ask you've been delaying: you're likely to word it well.", "Eat something fresh and colorful: appetite is often steadier at this point."],
+            ["Many people feel more playful and open to spontaneity.", "Say yes to one unplanned thing today.", "Try a longer or tougher workout than usual: recovery tends to be quicker in this phase."],
+            ["Mental energy is often high, and learning feels smoother.", "Explain something to someone: you're likely to be clear and patient.", "Good time to start a habit: it tends to stick better when energy is up."],
+            ["Many people feel upbeat and ready to take on a bit more.", "Check in on a friend who's been quiet: you likely have the bandwidth.", "Stretching or yoga often feels especially good now: the body tends to feel more flexible."],
+          ],
+          ovulatory: [
+            ["Many people feel confident, talkative and outgoing around now.", "It's a good day for the conversation you've been avoiding: the words tend to come.", "Energy runs high, so a bit of cardio or a long walk outside is a good use of it."],
+            ["Energy and mood often peak, and social settings feel easier.", "Say yes to an invite, or be the one who sends it.", "Drink more water than usual: you may run warmer and sweat more around now."],
+            ["Communication tends to feel smooth, and people often feel warm and open.", "Give someone a specific compliment: it's likely to come out naturally.", "Do the task that needs presenting or speaking up: you're likely at your most articulate."],
+            ["Many people feel attractive, expressive and a bit more adventurous.", "Plan something social and a little ambitious: a dinner, a day out, a call you've postponed.", "Warm up properly before intense exercise: joints can feel looser around now."],
+            ["Energy is often at its highest, though some people notice a brief twinge or bloating mid-cycle.", "Be generous with your time today: you likely have it to spare.", "A mild, brief twinge on one side is common for some people: rest and warmth usually help."],
+            ["Many people feel sociable and find it easy to read a room.", "Introduce two people who'd get along: you're likely to do it well.", "Balanced meals and water keep this high-energy stretch from tipping into a crash."],
+            ["Confidence and verbal fluency are often high, so speaking up feels easier.", "Ask for what you want today, whether it's a favor, a raise or a plan.", "Use the extra energy on a favorite active thing: dancing, hiking, cycling or swimming."],
+            ["Many people feel open and emotionally warm toward others.", "Tell someone what they mean to you: it's likely to land well.", "Enjoy the energy, but still sleep enough: it can tempt you to stay up late."],
+          ],
+          luteal: [
+            ["Energy often settles down, and many people prefer calmer, smaller settings.", "Choose one-on-one over a crowd and let that be enough.", "Steady meals with some protein and complex carbs help keep your energy and mood even."],
+            ["Attention to detail is often strong, while patience for noise or chaos can be shorter.", "If a message bothers you, wait ten minutes before replying.", "Good day for tidying, admin or finishing tasks: detail work tends to feel satisfying."],
+            ["Many people feel more inward and want things done properly and quietly.", "Say what you need (\"I need a quiet evening\") instead of hoping people guess.", "Wind down earlier tonight: sleep can get lighter in this phase, so protect it."],
+            ["Appetite can creep up as the body asks for a bit more fuel.", "Keep plans small and predictable, and tell people early if you need to dial back.", "A snack with protein and fiber in the afternoon can even out energy dips."],
+            ["Many people feel more focused on getting things properly finished.", "Do one nagging chore alongside someone else so it feels lighter.", "Moderate exercise like pilates, swimming or a brisk walk often feels better than all-out effort."],
+            ["Social battery often drains faster, and quiet evenings feel restorative.", "It's fine to leave early: a warm goodbye keeps things easy.", "A magnesium-rich snack (nuts, seeds, dark chocolate) is a gentle option for steadier mood."],
+            ["Many people are more sensitive to criticism or tone right now.", "If you feel stung, ask a question before assuming the worst.", "Cut back on caffeine later in the day: sleep tends to be lighter in this phase."],
+            ["Energy is steady but lower than last week, and that's normal.", "Share your plan for the week so people know when you'll be less available.", "Slow stretching or a gentle evening walk can help you unwind."],
+          ],
+          pms: [
+            ["Mood can be more sensitive, and small things may feel bigger than they are.", "Before reading a message as cold, try the kinder meaning first.", "Go easy on caffeine and sugar today: they can make jitters and mood dips feel sharper."],
+            ["Irritability, tiredness and feeling easily overwhelmed are common just before a period.", "Save any serious talk for a calmer day unless it's urgent.", "Magnesium-rich snacks (nuts, dark chocolate, bananas) and a warm shower can take the edge off."],
+            ["Many people feel more emotional, crave comfort and have less social battery.", "Tell one person you're running low so they go gently, rather than cancelling on everyone.", "Comfort is allowed: cozy clothes, a favorite show, and keeping your body warm and fed."],
+            ["Bloating, tender breasts and a heavier mood often show up together.", "Give yourself and others a little extra patience today.", "Loose clothes and a warm drink can make the physical side feel gentler."],
+            ["Many people feel more tearful or easily moved, and it's usually temporary.", "If you want comfort, say so: 'can I have a hug?' is easier than hoping.", "Gentle movement like a short walk or stretching can ease tension and lift your mood a bit."],
+            ["Sleep can get restless and cravings stronger as the period gets close.", "Keep today's social load light and tell people you're recharging.", "Eat regular meals so blood sugar swings don't add to the mood dips."],
+            ["Thoughts can feel louder and more critical, so don't trust every harsh one.", "Skip the long, heated text: draft it and sleep on it.", "A warm bath or a heat pack can calm both cramps and nerves."],
+            ["Many people feel tired but wired: wanting rest and finding it harder to get.", "Choose low-effort company: a show, a game, or just sharing a room.", "Switch screens off earlier tonight and aim for a calm, dark room."],
+          ],
+        };
+        const set = GEN[phaseKey];
+        if (set) {
+          // pick by calendar date (not cycle day) so it changes every day, even if the cycle day stalls
+          const _iso = getPragueTodayIso();
+          const _p = String(_iso).split("-").map(Number);
+          const _epochDay = Math.floor(Date.UTC(_p[0], (_p[1] || 1) - 1, _p[2] || 1) / 86400000);
+          const g = set[((_epochDay % set.length) + set.length) % set.length];
+          const col = PHASE_COLORS[phaseKey] || accent;
+          const pdef = (typeof PHASE_DEFS !== "undefined" && PHASE_DEFS.find(x => x.key === phaseKey)) || null;
+          popup.appendChild(divider());
+          popup.appendChild(sectionLabel("What people tend to feel today"));
+
+          // editorial look: no box, a faint phase-icon watermark, serif italic quote, gradient rule, ticket-style tip
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "position:relative; overflow:hidden; padding:4px 2px 2px;";
+          const mark = document.createElement("div");
+          mark.textContent = PHASE_ICONS[phaseKey] || "";
+          mark.style.cssText = "position:absolute; right:-6px; top:-10px; font-size:72px; line-height:1; opacity:0.13; pointer-events:none;";
+
+          const chipRow = document.createElement("div");
+          chipRow.style.cssText = "position:relative; display:flex; align-items:center; gap:8px;";
+          const chip = document.createElement("span");
+          chip.textContent = (pdef && pdef.label) || phaseKey;
+          chip.style.cssText = `padding:3px 11px; border-radius:999px; border:1px solid ${col}; color:${col}; font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;`;
+          chipRow.appendChild(chip);
+          if (day) {
+            const dn = document.createElement("span");
+            dn.textContent = `day ${day}`;
+            dn.style.cssText = `font-size:10px; color:${DIM}; letter-spacing:0.06em;`;
+            chipRow.appendChild(dn);
+          }
+
+          const quote = document.createElement("div");
+          quote.style.cssText = `position:relative; margin:11px 0 12px; font-family:Georgia,'Times New Roman',serif; font-style:italic; font-size:15px; line-height:1.5; color:${TEXT};`;
+          const qm = document.createElement("span");
+          qm.textContent = "\u201c";
+          qm.style.cssText = `color:${col}; font-size:30px; line-height:0; vertical-align:-0.35em; margin-right:3px;`;
+          quote.appendChild(qm);
+          quote.appendChild(document.createTextNode(g[0]));
+
+          const rule = document.createElement("div");
+          rule.style.cssText = `position:relative; height:1px; margin:0 0 11px; background:linear-gradient(90deg, ${col}, transparent);`;
+
+          const makeTip = (label, text, icon) => {
+            const tip = document.createElement("div");
+            tip.style.cssText = `position:relative; display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:10px; border:1px dashed ${col}99; background:rgba(255,255,255,0.03); margin-top:8px;`;
+            const arrow = document.createElement("div");
+            arrow.textContent = icon;
+            arrow.style.cssText = `flex:0 0 auto; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; background:${col}; color:#1b1b1b;`;
+            const tipBody = document.createElement("div");
+            const tipLabel = document.createElement("div");
+            tipLabel.textContent = label;
+            tipLabel.style.cssText = `font-size:9.5px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:${col}; margin-bottom:1px;`;
+            const tipText = document.createElement("div");
+            tipText.textContent = text;
+            tipText.style.cssText = `font-size:12.5px; line-height:1.5; color:${TEXT};`;
+            tipBody.appendChild(tipLabel); tipBody.appendChild(tipText);
+            tip.appendChild(arrow); tip.appendChild(tipBody);
+            return tip;
+          };
+          const tip = makeTip("Tip for interactions", g[1], "\u2192");
+          const tip2 = g[2] ? makeTip("Tip for your body", g[2], "\u2726") : null;
+
+          wrap.appendChild(mark); wrap.appendChild(chipRow); wrap.appendChild(quote); wrap.appendChild(rule); wrap.appendChild(tip);
+          if (tip2) wrap.appendChild(tip2);
+          popup.appendChild(wrap);
+        }
+      }
+
+      // ── Today's outlook: the card revealed yesterday as "tomorrow's outlook", now
+      // that it's today. Read-only: this only looks up what's already been revealed
+      // (never draws or reveals a card -- that stays with the outlook pill). Hidden
+      // when there's no card for today. Tap it to open the full card. ──
+      {
+        let outlook = null;
+        try { outlook = getRevealedPredictionForToday(); } catch (e) { outlook = null; }
+        if (outlook && outlook.isForToday) {
+          popup.appendChild(divider());
+          popup.appendChild(sectionLabel("Today's outlook"));
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex; align-items:flex-start; gap:10px; cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation;";
+          row.onclick = () => showPredictionPopup(outlook);
+          const em = document.createElement("div");
+          em.textContent = outlook.emoji;
+          em.style.cssText = "font-size:26px; line-height:1.1; flex:0 0 auto;";
+          const col = document.createElement("div");
+          col.style.cssText = "min-width:0;";
+          const ttl = document.createElement("div");
+          ttl.textContent = outlook.title;
+          ttl.style.cssText = `font-size:12.5px; font-weight:700; color:${TEXT};`;
+          const cap = document.createElement("div");
+          cap.textContent = outlook.caption;
+          cap.style.cssText = `font-size:12px; line-height:1.45; color:${TEXT}; margin-top:2px;`;
+          const rt = document.createElement("div");
+          rt.textContent = `predicted day: ${outlook.rating}/5`;
+          rt.style.cssText = `font-size:9.5px; color:${DIM}; margin-top:4px;`;
+          col.appendChild(ttl); col.appendChild(cap); col.appendChild(rt);
+          row.appendChild(em); row.appendChild(col);
+          popup.appendChild(row);
+        }
+      }
+
+      // ── Today so far: what's actually logged for today (check-in + reading) ──
+      popup.appendChild(divider());
+      {
+        const todayIso = getPragueTodayIso();
+        let quickLogOpen = false;
+        let symptomPickerOpen = false;
+
+        // Tap the "Today so far" header to show / hide the quick log (no visual hint).
+        const todayToggle = document.createElement("button");
+        todayToggle.type = "button";
+        todayToggle.setAttribute("aria-expanded", "false");
+        todayToggle.setAttribute("aria-label", "Today so far — tap to log sleep and symptoms");
+        todayToggle.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:2px 0; margin:0 0 6px; font:inherit; text-align:left; cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation; -webkit-appearance:none !important; appearance:none !important; border:0 !important; border-radius:0 !important; box-shadow:none !important; text-shadow:none !important; background:none !important; background-image:none !important; outline:none;";
+        const todayLbl = sectionLabel("Today so far");
+        todayLbl.style.margin = "0";
+        todayToggle.appendChild(todayLbl);
+        popup.appendChild(todayToggle);
+
+        const todayBox = document.createElement("div");
+        popup.appendChild(todayBox);
+        const toggleQuickLog = () => {
+          quickLogOpen = !quickLogOpen;
+          todayToggle.setAttribute("aria-expanded", quickLogOpen ? "true" : "false");
+          renderToday();
+        };
+        todayToggle.onclick = toggleQuickLog;
+        // The summary under the header is a tap target too (not the open quick-log panel itself,
+        // whose buttons/chips do their own thing).
+        todayBox.style.cssText = "cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation;";
+        todayBox.onclick = (e) => {
+          if (e.target.closest && e.target.closest("[data-quicklog]")) return;
+          toggleQuickLog();
+        };
+
+        const chipCss = (on) => `font:inherit; font-size:11px; font-weight:600; line-height:1; padding:6px 10px; border-radius:999px; cursor:pointer; color:${on ? "#171117" : TEXT}; background:${on ? hexToRgba(accent, 0.9) : hexToRgba(accent, 0.08)}; border:1px solid ${on ? hexToRgba(accent, 0.9) : hexToRgba(accent, 0.28)}; -webkit-tap-highlight-color:transparent; touch-action:manipulation;`;
+        const miniLabel = (text) => {
+          const el = document.createElement("div");
+          el.style.cssText = `font-size:9.5px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:${DIM}; margin:0 0 4px;`;
+          el.textContent = text;
+          return el;
+        };
+
+        const renderToday = () => {
+          todayBox.textContent = "";
+          const entry = getMoodLog().find(e => e.date === todayIso) || null;
+          const bits = [];
+          if (entry) {
+            if (entry.sick === true)              bits.push("🤒 sick day");
+            if (typeof entry.mood === "number")   bits.push(`😊 ${entry.mood}/5`);
+            if (typeof entry.energy === "number") bits.push(`⚡ ${entry.energy}/5`);
+            if (typeof entry.sleep === "number")  bits.push(`😴 ${entry.sleep}/5`);
+            if (typeof entry.sleepHours === "number" && sleepHoursLabel(entry.sleepHours)) bits.push(`🛏️ ${sleepHoursLabel(entry.sleepHours)}`);
+          }
+          const loggedSymptoms = entry && Array.isArray(entry.symptoms) ? entry.symptoms : [];
+
+          if (bits.length) {
+            const row = document.createElement("div");
+            row.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;";
+            bits.forEach(t => {
+              const chip = document.createElement("span");
+              chip.style.cssText = `font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; color:${TEXT}; background:${hexToRgba(accent, 0.1)}; border:1px solid ${hexToRgba(accent, 0.28)};`;
+              chip.textContent = t;
+              row.appendChild(chip);
+            });
+            todayBox.appendChild(row);
+          }
+          if (loggedSymptoms.length) {
+            const sy = document.createElement("div");
+            sy.style.cssText = `font-size:12.5px; line-height:1.5; color:${TEXT}; margin-bottom:4px;`;
+            sy.textContent = loggedSymptoms.map(n => `${symptomIcon(n)} ${n}`).join("  ·  ");
+            todayBox.appendChild(sy);
+          }
+          if (!bits.length && !loggedSymptoms.length) {
+            const none = document.createElement("div");
+            none.style.cssText = `font-size:12px; color:${DIM}; margin-bottom:4px;`;
+            none.textContent = "Nothing logged yet today.";
+            todayBox.appendChild(none);
+          }
+
+          // ── Quick log: sleep quality, hours slept, symptoms (unrolls on header tap) ──
+          if (!quickLogOpen) return;
+          const ql = document.createElement("div");
+          ql.setAttribute("data-quicklog", "1");
+          ql.style.cssText = `margin-top:12px; padding:10px; border-radius:12px; background:${hexToRgba(accent, 0.05)}; border:1px solid ${hexToRgba(accent, 0.18)};`;
+
+          // Sick day toggle — down-weights everything logged today in the averages/day score
+          const sickToggle = document.createElement("button");
+          sickToggle.type = "button";
+          const sickNow = !!(entry && entry.sick === true);
+          sickToggle.textContent = sickNow ? "🤒 Sick today · counts for less (tap to undo)" : "🤒 I'm sick today";
+          sickToggle.style.cssText = chipCss(sickNow) + " width:100%; margin-bottom:10px; padding:7px 0; text-align:center;";
+          sickToggle.onclick = () => { setMoodEntry(todayIso, { sick: sickNow ? undefined : true }); renderToday(); };
+          ql.appendChild(sickToggle);
+
+          // Sleep quality 1-5 (tap the active one again to clear)
+          const qWrap = document.createElement("div");
+          qWrap.style.cssText = "margin-bottom:10px;";
+          qWrap.appendChild(miniLabel("Sleep quality"));
+          const qRow = document.createElement("div");
+          qRow.style.cssText = "display:flex; gap:6px;";
+          for (let v = 1; v <= 5; v++) {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = String(v);
+            b.setAttribute("aria-label", `Sleep quality ${v} of 5`);
+            const on = entry && entry.sleep === v;
+            b.style.cssText = chipCss(on) + " flex:1; padding:7px 0; text-align:center;";
+            b.onclick = () => { setMoodEntry(todayIso, { sleep: on ? undefined : v }); renderToday(); };
+            qRow.appendChild(b);
+          }
+          qWrap.appendChild(qRow);
+          const qHint = document.createElement("div");
+          qHint.style.cssText = `display:flex; justify-content:space-between; font-size:9px; color:${DIM}; margin-top:3px;`;
+          const qLo = document.createElement("span"); qLo.textContent = "rough";
+          const qHi = document.createElement("span"); qHi.textContent = "restful";
+          qHint.appendChild(qLo); qHint.appendChild(qHi);
+          qWrap.appendChild(qHint);
+          ql.appendChild(qWrap);
+
+          // Hours slept (same coarse ranges as the tracker)
+          const hWrap = document.createElement("div");
+          hWrap.style.cssText = "margin-bottom:10px;";
+          hWrap.appendChild(miniLabel("Hours slept"));
+          const sel = document.createElement("select");
+          sel.style.cssText = `width:100%; box-sizing:border-box; font:inherit; font-size:12.5px; padding:7px 10px; border-radius:10px; color:${TEXT}; background:${hexToRgba(accent, 0.08)}; border:1px solid ${hexToRgba(accent, 0.28)}; outline:none;`;
+          const ph = document.createElement("option");
+          ph.value = ""; ph.textContent = "—"; ph.style.color = "#171117";
+          sel.appendChild(ph);
+          for (let i = 1; i <= SLEEP_HOUR_RANGES.length; i++) {
+            const o = document.createElement("option");
+            o.value = String(i); o.textContent = sleepHoursLabel(i); o.style.color = "#171117";
+            sel.appendChild(o);
+          }
+          sel.value = entry && entry.sleepHours ? String(entry.sleepHours) : "";
+          sel.onchange = () => { setMoodEntry(todayIso, { sleepHours: sel.value ? Number(sel.value) : undefined }); renderToday(); };
+          hWrap.appendChild(sel);
+          ql.appendChild(hWrap);
+
+          // Symptoms — collapsed behind a toggle, grouped chips when open
+          const sWrap = document.createElement("div");
+          const sToggle = document.createElement("button");
+          sToggle.type = "button";
+          sToggle.setAttribute("aria-expanded", symptomPickerOpen ? "true" : "false");
+          sToggle.style.cssText = `display:flex; align-items:center; justify-content:space-between; width:100%; padding:0; margin:0; font:inherit; cursor:pointer; text-align:left; -webkit-tap-highlight-color:transparent; touch-action:manipulation; -webkit-appearance:none !important; appearance:none !important; border:0 !important; border-radius:0 !important; box-shadow:none !important; text-shadow:none !important; background:none !important; background-image:none !important; outline:none;`;
+          const sLbl = miniLabel(`Symptoms${loggedSymptoms.length ? ` · ${loggedSymptoms.length}` : ""}`);
+          sLbl.style.margin = "0";
+          sToggle.appendChild(sLbl);
+          sToggle.onclick = () => { symptomPickerOpen = !symptomPickerOpen; renderToday(); };
+          sWrap.appendChild(sToggle);
+
+          if (symptomPickerOpen) {
+            const active = new Set(loggedSymptoms);
+            SYMPTOM_GROUPS.forEach(group => {
+              const gt = document.createElement("div");
+              gt.style.cssText = `font-size:9px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:${DIM}; margin:10px 0 5px;`;
+              gt.textContent = group.name;
+              sWrap.appendChild(gt);
+              const gr = document.createElement("div");
+              gr.style.cssText = "display:flex; flex-wrap:wrap; gap:5px;";
+              group.symptoms.forEach(sym => {
+                const c = document.createElement("button");
+                c.type = "button";
+                c.textContent = `${symptomIcon(sym)} ${sym}`;
+                c.style.cssText = chipCss(active.has(sym));
+                c.onclick = () => {
+                  const cur = new Set((getMoodForDate(todayIso) || {}).symptoms || []);
+                  if (cur.has(sym)) cur.delete(sym); else cur.add(sym);
+                  setMoodEntry(todayIso, { symptoms: [...cur] });
+                  renderToday();
+                };
+                gr.appendChild(c);
+              });
+              sWrap.appendChild(gr);
+            });
+          }
+          ql.appendChild(sWrap);
+          todayBox.appendChild(ql);
+        };
+        renderToday();
+      }
+
+      // ── Could drop today: fics from the fic tracker predicted to update today ──
+      // Reads the tracker's saved list (same origin) and uses the same prediction
+      // rules as the tracker's own "could drop today" pill. Hidden when none.
+      try {
+        const dropFics = getFicsCouldDropToday();
+        if (dropFics.length) {
+          popup.appendChild(divider());
+          popup.appendChild(sectionLabel(`Could drop today \u00B7 ${dropFics.length}`));
+          const ordinalCol = hexToRgba(accent, 0.9);
+          dropFics.forEach((f) => {
+            const card = document.createElement("a");
+            card.href = f.url || `https://archiveofourown.org/works/${f.workId}`;
+            card.target = "_blank";
+            card.rel = "noopener";
+            card.style.cssText = `position:relative; overflow:hidden; display:flex; align-items:center; gap:8px; text-decoration:none; margin-top:6px; padding:6px 10px; border-radius:11px; border:1px solid ${hexToRgba(accent, 0.28)}; background:linear-gradient(135deg, ${hexToRgba(accent, 0.14)}, ${hexToRgba(accent, 0.03)}); -webkit-tap-highlight-color:transparent;`;
+
+            // rank badge (or a spark when the fic isn't ranked yet)
+            const badge = document.createElement("div");
+            badge.textContent = f.rank ? String(f.rank) : "\u2726";
+            badge.style.cssText = `flex:0 0 auto; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:Georgia,'Times New Roman',serif; font-size:${f.rank && f.rank > 99 ? 9 : 12}px; font-weight:700; color:#1b1b1b; background:${ordinalCol}; box-shadow:0 0 8px ${hexToRgba(accent, 0.35)};`;
+
+            const body = document.createElement("div");
+            body.style.cssText = "flex:1 1 auto; min-width:0;";
+            const t = document.createElement("div");
+            t.textContent = f.title || `Work ${f.workId}`;
+            t.style.cssText = `font-family:Georgia,'Times New Roman',serif; font-size:12.5px; font-weight:700; line-height:1.25; color:${TEXT}; overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical;`;
+
+            // status chip + weekday chip
+            const chips = document.createElement("div");
+            chips.style.cssText = "display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:3px;";
+            const status = f.daysUntil === 0 ? "due today"
+              : f.daysUntil === 1 ? "due tomorrow"
+              : f.daysUntil === -1 ? "due yesterday"
+              : f.daysUntil < -1 ? `${Math.abs(f.daysUntil)}d overdue`
+              : f.matchesDay && f.usualDay ? `usual ${f.usualDay}` : "due soon";
+            const mkChip = (txt, strong) => {
+              const c = document.createElement("span");
+              c.textContent = txt;
+              c.style.cssText = `font-size:8px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; padding:1px 6px; border-radius:999px; border:1px solid ${hexToRgba(accent, strong ? 0.8 : 0.3)}; color:${strong ? "#1b1b1b" : hexToRgba(accent, 0.95)}; background:${strong ? hexToRgba(accent, 0.9) : "transparent"};`;
+              return c;
+            };
+            chips.appendChild(mkChip(status, f.daysUntil === 0));
+            if (f.usualDay && !(f.matchesDay && status === `usual ${f.usualDay}`)) chips.appendChild(mkChip(`${f.usualDay}s`, false));
+
+            // cadence bar: how far through its usual wait it is
+            const barWrap = document.createElement("div");
+            barWrap.style.cssText = "display:flex; align-items:center; gap:7px; margin-top:5px;";
+            const bar = document.createElement("div");
+            bar.style.cssText = `flex:1 1 auto; height:4px; border-radius:999px; overflow:hidden; background:${hexToRgba(accent, 0.15)};`;
+            const fill = document.createElement("div");
+            const pct = Math.max(6, Math.min(100, Math.round((f.daysSinceLast / f.gap) * 100)));
+            fill.style.cssText = `height:100%; width:${pct}%; border-radius:999px; background:linear-gradient(90deg, ${hexToRgba(accent, 0.45)}, ${accent});`;
+            bar.appendChild(fill);
+            const cap = document.createElement("div");
+            cap.textContent = `day ${f.daysSinceLast} of ~${f.gap}`;
+            cap.style.cssText = `flex:0 0 auto; font-size:9px; color:${DIM}; letter-spacing:0.03em;`;
+            barWrap.appendChild(bar); barWrap.appendChild(cap);
+
+            body.appendChild(t); body.appendChild(chips); body.appendChild(barWrap);
+            card.appendChild(badge); card.appendChild(body);
+            popup.appendChild(card);
+          });
+        }
+      } catch (e) { /* optional section; never break the brief */ }
+
+      // ── Update drought: a roll-out shelf of caught-up fics that are overdue (3+ days
+      // past their predicted update). Collapsed by default so it takes no space. ──
+      try {
+        const overdue = getFicsCouldDropToday("overdue");
+        if (overdue.length) {
+          popup.appendChild(divider());
+          const shelfBtn = document.createElement("button");
+          shelfBtn.type = "button";
+          shelfBtn.setAttribute("aria-expanded", "false");
+          shelfBtn.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:2px 0; margin:0; font:inherit; text-align:left; cursor:pointer; background:none; border:none; -webkit-tap-highlight-color:transparent; touch-action:manipulation;";
+          const shelfLbl = document.createElement("span");
+          shelfLbl.style.cssText = `font-size:10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:${hexToRgba(accent, 0.85)};`;
+          shelfLbl.textContent = `Still waiting on \u00B7 ${overdue.length}`;
+          const chev = document.createElement("span");
+          chev.textContent = "\u25BE";
+          chev.style.cssText = `font-size:12px; color:${hexToRgba(accent, 0.7)}; transition:transform 0.2s; transform:rotate(-90deg);`;
+          shelfBtn.appendChild(shelfLbl); shelfBtn.appendChild(chev);
+
+          const shelfBody = document.createElement("div");
+          shelfBody.style.cssText = "display:none; margin-top:6px;";
+          overdue.forEach((f, i) => {
+            const row = document.createElement("a");
+            row.href = f.url || `https://archiveofourown.org/works/${f.workId}`;
+            row.target = "_blank";
+            row.rel = "noopener";
+            row.style.cssText = `display:flex; align-items:baseline; gap:8px; text-decoration:none; padding:5px 0; ${i < overdue.length - 1 ? `border-bottom:1px solid ${hexToRgba(accent, 0.12)};` : ""}`;
+            const t = document.createElement("div");
+            t.textContent = (f.rank ? `#${f.rank} ` : "") + (f.title || `Work ${f.workId}`);
+            t.style.cssText = `flex:1 1 auto; min-width:0; font-size:12px; color:${TEXT}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;`;
+            const d = document.createElement("div");
+            d.textContent = `${Math.abs(f.daysUntil)}d late`;
+            d.style.cssText = `flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:0.03em; color:${hexToRgba(accent, 0.9)};`;
+            row.appendChild(t); row.appendChild(d);
+            shelfBody.appendChild(row);
+          });
+          shelfBtn.onclick = () => {
+            const open = shelfBody.style.display === "none";
+            shelfBody.style.display = open ? "block" : "none";
+            chev.style.transform = open ? "rotate(0deg)" : "rotate(-90deg)";
+            shelfBtn.setAttribute("aria-expanded", open ? "true" : "false");
+          };
+          popup.appendChild(shelfBtn);
+          popup.appendChild(shelfBody);
+        }
+      } catch (e) { /* optional section; never break the brief */ }
+
+      // ── Cycle at a glance: position bar, key stats, and the week ahead ──
+      popup.appendChild(divider());
+      popup.appendChild(sectionLabel("Cycle at a glance"));
+      {
+        popup.appendChild(buildCyclePositionBar(stats));
+
+        const { cycleLen } = getCycleMarkers(stats.avgCycle, stats.avgPeriod);
+        const nextTr = getNextPhaseTransition(day, stats.avgCycle, stats.avgPeriod);
+        const nextTrLabel = nextTr
+          ? (nextTr.phase === "menstrual" ? "Period" : (PHASE_DEFS.find(p => p.key === nextTr.phase)?.label || nextTr.phase))
+          : null;
+        const periodIn = daysUntilCycleDay(cycleLen + 1, day, cycleLen);
+        const tiles = [
+          { v: stats.nextPredicted ? formatPrettyDateNoYear(stats.nextPredicted) : `${periodIn}d`, l: "Next period" },
+          { v: nextTr ? `${nextTr.daysUntil}d` : "—", l: nextTr ? `Until ${nextTrLabel}` : "Next phase" },
+          { v: stats.avgCycle ? `${stats.avgCycle.toFixed(1)}d` : "—", l: "Avg. cycle" },
+        ];
+        const tileRow = document.createElement("div");
+        tileRow.style.cssText = "display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; margin-top:10px;";
+        tiles.forEach(t => {
+          const cell = document.createElement("div");
+          cell.style.cssText = `border-radius:10px; padding:8px 4px; text-align:center; min-width:0; background:${hexToRgba(accent, 0.08)}; border:1px solid ${hexToRgba(accent, 0.22)};`;
+          const v = document.createElement("div");
+          v.style.cssText = "font-size:15px; font-weight:700; line-height:1.2; color:#ffeaf4;";
+          v.textContent = t.v;
+          const l = document.createElement("div");
+          l.style.cssText = `font-size:8.5px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; margin-top:3px; color:${hexToRgba(accent, 0.8)};`;
+          l.textContent = t.l;
+          cell.appendChild(v); cell.appendChild(l);
+          tileRow.appendChild(cell);
+        });
+        popup.appendChild(tileRow);
+
+        // Week ahead — same phase chips as the overview card's strip; tapping
+        // one opens that day's overview on top of the brief.
+        const strip = document.createElement("div");
+        strip.style.cssText = "display:flex; gap:4px; margin-top:10px;";
+        for (let d = 0; d < 7; d++) {
+          const cd = day + d;
+          const pk = getPhaseForStatsDay(cd, stats);
+          const col = PHASE_COLORS[pk];
+          const dateObj = parseLocalIso(getPragueDaysAgoIso(-d));
+          const chip = document.createElement("div");
+          chip.style.cssText = `flex:1; min-width:0; min-height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:5px 2px; border-radius:9px; cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; touch-action:manipulation; background:${hexToRgba(col, d === 0 ? 0.22 : 0.11)}; border:1px solid ${hexToRgba(col, d === 0 ? 0.55 : 0.22)};`;
+          chip.onclick = () => showDayOverviewPopup(cd, stats);
+          const wd = document.createElement("div");
+          wd.style.cssText = `font-size:8.5px; font-weight:700; letter-spacing:0.02em; text-transform:uppercase; color:${hexToRgba(col, 0.9)};`;
+          wd.textContent = d === 0 ? "today" : dateObj.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2);
+          const ic = document.createElement("div");
+          ic.style.cssText = "font-size:14px; line-height:1;";
+          ic.textContent = PHASE_ICONS[pk];
+          chip.appendChild(wd); chip.appendChild(ic);
+          strip.appendChild(chip);
+        }
+        popup.appendChild(strip);
+
+        const thread = buildDayScoreThread(stats);
+        if (thread) popup.appendChild(thread);
+      }
+
+      // ── Letters you left for this cycle day ──
+      popup.appendChild(divider());
+      const letters = getPastLettersForCycleDay(day);
+      // Collapsed by default, tap the header to show/hide (no visual indicator).
+      const lettersToggle = document.createElement("button");
+      lettersToggle.type = "button";
+      lettersToggle.setAttribute("aria-expanded", "false");
+      lettersToggle.style.cssText = `display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:2px 0; margin:0; font:inherit; text-align:left; cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation; -webkit-appearance:none !important; appearance:none !important; border:0 !important; border-radius:0 !important; box-shadow:none !important; text-shadow:none !important; background:none !important; background-image:none !important; outline:none;`;
+      const lettersLabel = document.createElement("span");
+      lettersLabel.style.cssText = `font-size:10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:${hexToRgba(accent, 0.85)};`;
+      lettersLabel.textContent = `💌 Letters from past cycles${letters.length ? ` · ${letters.length}` : ""}`;
+      lettersToggle.appendChild(lettersLabel);
+      const lettersBody = document.createElement("div");
+      lettersBody.style.cssText = "display:none; margin-top:6px;";
+      lettersToggle.onclick = () => {
+        const open = lettersBody.style.display === "none";
+        lettersBody.style.display = open ? "block" : "none";
+        lettersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      };
+      popup.appendChild(lettersToggle);
+      popup.appendChild(lettersBody);
+      if (!letters.length) {
+        const none = document.createElement("div");
+        none.style.cssText = `font-size:12px; color:${DIM};`;
+        none.textContent = "Nothing written on this cycle day yet.";
+        lettersBody.appendChild(none);
+      } else {
+        letters.forEach((letter, i) => {
+          const row = document.createElement("div");
+          row.style.cssText = `padding:6px 0; ${i < letters.length - 1 ? `border-bottom:1px solid ${hexToRgba(accent, 0.12)};` : ""}`;
+          const d = document.createElement("div");
+          d.style.cssText = `font-size:10.5px; font-weight:700; color:${accent}; margin-bottom:2px;`;
+          d.textContent = `${formatPrettyDate(letter.date)} · ${letter.cyclesAgo} cycle${letter.cyclesAgo > 1 ? "s" : ""} ago`;
+          const t = document.createElement("div");
+          t.style.cssText = `font-size:12.5px; line-height:1.5; color:${TEXT}; white-space:pre-wrap;`;
+          t.textContent = letter.text;
+          row.appendChild(d); row.appendChild(t);
+          lettersBody.appendChild(row);
+        });
+      }
+    }
+
+    const doneBtn = document.createElement("button");
+    doneBtn.type = "button";
+    doneBtn.textContent = "🍳 off to breakfast";
+    doneBtn.style.cssText = `display:block; width:auto; min-width:84px; min-height:34px; margin:18px auto 2px; padding:7px 22px; border-radius:999px; border:1px solid ${hexToRgba(accent, 0.35)}; background:${hexToRgba(accent, 0.1)}; color:rgba(255,234,244,0.85); font:inherit; font-size:12px; font-weight:600; letter-spacing:0.04em; cursor:pointer; transition:background 0.15s; -webkit-tap-highlight-color:transparent; touch-action:manipulation;`;
+    doneBtn.onmouseover = () => { doneBtn.style.background = hexToRgba(accent, 0.2); };
+    doneBtn.onmouseout  = () => { doneBtn.style.background = hexToRgba(accent, 0.1); };
+    doneBtn.onclick = close;
+    popup.appendChild(doneBtn);
+
+    backdrop.addEventListener("click", (ev) => { ev.stopPropagation(); if (ev.target === backdrop) close(); });
+    ["pointerdown", "touchstart", "mousedown"].forEach(t => backdrop.addEventListener(t, (ev) => ev.stopPropagation()));
+    document.addEventListener("keydown", onKey, true);
+    backdrop.appendChild(popup);
+    sh.back.appendChild(backdrop);
+  }
+
+  return { mbShow: showMorningBrief };
 };
 
 // ════════ graveyard.js ════════
