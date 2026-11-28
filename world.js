@@ -204,18 +204,21 @@
     if (liveBusy || Date.now() < liveRetry || (c && Date.now() - c.at < LIVE_FRESH)) return;
     liveBusy = true;
     const toMin = t => { const m = /T(\d\d):(\d\d)/.exec(t || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; };
-    fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current=weather_code,wind_speed_10m&daily=sunrise,sunset&timezone=Europe%2FPrague&forecast_days=2")
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=50.0755&longitude=14.4378&current=weather_code,wind_speed_10m&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FPrague&forecast_days=2")
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(j => {
-        const sun = {};
+        const sun = {}, days = {};
+        ((j.daily && j.daily.time) || []).forEach((d, i) => { if (j.daily.weather_code) days[d] = [j.daily.weather_code[i], j.daily.temperature_2m_max[i], j.daily.temperature_2m_min[i]]; });   // each day's forecast, for the bedtime summary
         ((j.daily && j.daily.time) || []).forEach((d, i) => { sun[d] = [toMin(j.daily.sunrise[i]), toMin(j.daily.sunset[i])]; });
         if (!j.current || typeof j.current.weather_code !== "number") throw 0;
-        localStorage.setItem(LIVE_KEY, JSON.stringify({ at: Date.now(), code: j.current.weather_code, wind: j.current.wind_speed_10m || 0, sun }));
+        localStorage.setItem(LIVE_KEY, JSON.stringify({ at: Date.now(), code: j.current.weather_code, wind: j.current.wind_speed_10m || 0, sun, days }));
       })
       .catch(() => { liveRetry = Date.now() + 5 * 60000; })
       .then(() => { liveBusy = false; });
   }
   const hkLiveData = () => { hkLiveRefresh(); const c = hkLiveRead(); return c && Date.now() - c.at < LIVE_MAX ? c : null; };
+  // the forecast [weather code, high, low] for a Prague date (YYYY-MM-DD), or null when there is no recent answer
+  const hkForecast = date => { const c = hkLiveData(); return (c && c.days && c.days[date]) || null; };
   // night 0, dusk 1, dawn 2, day 3. With real sun times: dawn runs from 45 min before sunrise to 60 min after, dusk from 60 min before sunset to 45 min after.
   const hkLiveTime = () => {
     const now = hkPrague(), c = hkLiveData(), s = c && c.sun && c.sun[now.date], m = now.min;
@@ -807,8 +810,8 @@
   // Where Will and Mike are while they are awake: ONE place at a time (Mike's room, the table in the basement, inside the blanket fort, or the kitchen; plus the split place "mom": Mike is in the kitchen with his mother and Will is alone in Mike's room; "byers": the sofa in the Byers' living room; "byerskitchen": the Byers' kitchen across town; and "wills": Will's room at the Byers'), and every other
   // scene is empty until you find them or call them over (the "call them here" pills). They move on by themselves every 12 to 40 minutes, never to the place
   // they just left (saved under "ao3-hk-where"). Asleep, they are in whichever bedroom they went to bed in (hkSleep.at()). A scene asks once, when it opens: hkWhere.here("basement").
-  const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort", "kitchen", "mom", "byers", "byerskitchen", "wills"];
-  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket.", kitchen: "Somewhere in the house, a cupboard bangs and the fridge door sighs open.", mom: "Somewhere in the house, Mrs. Wheeler is asking a question in her Very Calm Voice, and a boy is answering far too quickly.", byers: "Somewhere in the house, an afghan rustles and somebody says, \u201cStop pulling.\u201d", byerskitchen: "Across town, in a kitchen under a stained-glass lamp, two voices are arguing happily about pancakes.", wills: "Across town, a lamp is on in a pine-panelled room, and two boys are being very quiet about something.", willsAsleep: "Across town, a lamp has gone out in a pine-panelled room." };
+  const WHERE_KEY = "ao3-hk-where", HK_PLACES = ["room", "basement", "fort", "kitchen", "mom", "byers", "byerskitchen", "wills", "dining"];
+  const HK_HINTS = { room: "Somewhere in the house, a floorboard creaks and somebody laughs.", basement: "Somewhere in the house, a die rattles across a table.", fort: "Somewhere in the house, two people are giggling under a blanket.", kitchen: "Somewhere in the house, a cupboard bangs and the fridge door sighs open.", mom: "Somewhere in the house, Mrs. Wheeler is asking a question in her Very Calm Voice, and a boy is answering far too quickly.", byers: "Somewhere in the house, an afghan rustles and somebody says, \u201cStop pulling.\u201d", byerskitchen: "Across town, in a kitchen under a stained-glass lamp, two voices are arguing happily about pancakes.", wills: "Across town, a lamp is on in a pine-panelled room, and two boys are being very quiet about something.", willsAsleep: "Across town, a lamp has gone out in a pine-panelled room.", dining: "Somewhere in the house, a chandelier tinkles and someone is whispering about the good china." };
   const hkWhere = {
     set(p, lo, hi) { try { const a = lo || 12, b = hi || 40; localStorage.setItem(WHERE_KEY, JSON.stringify({ p, until: Date.now() + (a + Math.random() * (b - a)) * 60000 })); } catch {} },
     get() {
@@ -834,7 +837,8 @@
     mom: ["openKitchen", "Mrs. Wheeler\u2019s Very Calm Voice, and a boy answering far too quickly. You follow it\u2026"],
     byers: ["openByersLivingRoom", "An afghan rustles. You follow the sound\u2026"],
     byerskitchen: ["openByersKitchen", "Across town, two voices arguing happily about pancakes. You follow them\u2026"],
-    wills: ["openWillsRoom", "Across town, a lamp glows in a pine-panelled room. You follow the whispering\u2026"]
+    wills: ["openWillsRoom", "Across town, a lamp glows in a pine-panelled room. You follow the whispering\u2026"],
+    dining: ["openWheelersDining", "A chandelier tinkles in the next room, and somebody giggles. You follow it\u2026"]
   };
   function hkFindThem(sh, say) {
     const p = hkWhere.get(), t = HK_FIND[p] || HK_FIND.room;
@@ -888,7 +892,7 @@
   }
   hkLiveRefresh();                                                                  // warm the cache as soon as the world loads
 
-  return { hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkWxNext, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere, hkFindThem };
+  return { hkForecast, hkWxOverlay, hkEnvWatch, hkPrague, hkShell, hkTimeGet, HK_TIMES, hkTimeSet, hkTimeNext, hkSeason, hkWxGet, hkWxNext, hkKnock, hkVoice, HK_WX, HK_SEASON_TAG, hkWxSet, hkCrackle, bfFade, hkWindowSky, hkThunder, hkAmbience, hkBike, hkSoundPill, hkSleep, hkSleepSound, hkWhere, hkFindThem };
 };
 
 // ════════ lib/figures.js ════════
@@ -1207,6 +1211,638 @@
   }
 
   return { bsKit };
+};
+
+// ════════ lib/day-stats.js ════════
+// lib/day-stats.js — the dashboard's own reading-log, mood-log and cycle prediction code, so the world shows the SAME numbers as the app.
+// Part of the keepsake world: see world.js for how the files fit together.
+// COPIED UNCHANGED from the userscript (v18.34) by pulling these functions and everything they depend on. Read-only: nothing here saves.
+// If the cycle or prediction logic changes in the dashboard, copy it here again. Do not tune it here.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/day-stats"] = function (ctx) {
+  'use strict';
+
+  const LOG_KEY        = "ao3_word_log_v4";
+  const PERIOD_KEY     = "ao3_period_log_v1";
+  const SHIFT_KEY      = "ao3_cycle_shift_v1";
+  const MOOD_KEY        = "ao3_mood_log_v1";
+  const PERIOD_CYCLE_LOOKBACK = 6;
+  function getLog() {
+    try { return JSON.parse(localStorage.getItem(LOG_KEY) || "[]"); }
+    catch { return []; }
+  }
+  function getPeriodLog() {
+    try {
+      const log = JSON.parse(localStorage.getItem(PERIOD_KEY) || "[]");
+      return Array.isArray(log) ? log : [];
+    } catch { return []; }
+  }
+  const SICK_DAY_WEIGHT = 0.25;
+  function moodEntryWeight(entry) { return entry && entry.sick === true ? SICK_DAY_WEIGHT : 1; }
+  const SYMPTOM_VALENCE = {
+    "Cramps": -1, "Pre-period cramps": -0.8, "Ovulation pain": -0.7, "Spasms": -0.8, "Headache": -0.8, "Tender breasts": -0.4, "Bloating": -0.4, "Muscle aches": -0.5, "PMS flu": -0.9, "Spotting": -0.2,
+    "Acne": -0.3, "Oily hair": -0.15, "Watery discharge": 0, "Sweating": -0.25, "Hot flashes": -0.5, "Dry eyes": -0.25, "Eye strain": -0.25,
+    "Fatigue": -0.7, "Hungry": 0, "Small appetite": -0.2, "Cravings": 0, "Craving chocolate": 0, "Vivid dreams": 0, "Nesting": 0.1,
+    "Emotional": -0.35, "Irritable": -0.6, "Anxiety": -0.7, "Overthinking": -0.6, "Self critical": -0.7, "Hopelessness": -1, "PMDD": -1, "Calm": 0.7, "Confident": 0.8, "Feeling okay": 0.7, "Hating men": -0.3, "Taking it personally": -0.5, "Over it": -0.5, "Sad": -0.6,
+    "Sociable": 0.4, "Solitary": -0.2, "Flirty": 0.4, "High libido": 0.3, "Low libido": 0,
+  };
+  const SYMPTOM_COUNT_PRIOR = 1;
+  const SYMPTOM_LOAD_SOFTNESS = 1.2;
+  function computeDayScoreRaw(avgMood, avgEnergy, avgSleepQuality, symptomCounts, symptomEntryCount) {
+    const parts = [];
+    if (avgMood != null)         parts.push({ v: (avgMood - 3) / 2, w: 1.3 });
+    if (avgEnergy != null)       parts.push({ v: (avgEnergy - 3) / 2, w: 1.1 });
+    if (avgSleepQuality != null) parts.push({ v: (avgSleepQuality - 3) / 2, w: 0.9 });
+
+    if (symptomCounts && symptomEntryCount) {
+      const entries = Object.entries(symptomCounts);
+      if (entries.length) {
+        // Every symptom pulls the day by (its valence x how often it was
+        // logged on this day), and those pulls ADD UP: three symptoms that
+        // show up every time weigh more than the same three showing up
+        // once, and a symptom logged 5 of 5 times weighs more than one
+        // logged 1 of 5. (This used to be a frequency-weighted *average*,
+        // which cancelled the frequency out whenever all the symptoms
+        // scaled together.) The count is shrunk slightly for small samples
+        // so 1-of-1 doesn't count as much as 5-of-5, then the total is
+        // squashed into -1..+1 so a pile of symptoms saturates smoothly.
+        let load = 0;
+        entries.forEach(([name, count]) => {
+          const freq = count / (symptomEntryCount + SYMPTOM_COUNT_PRIOR);
+          load += (SYMPTOM_VALENCE[name] ?? 0) * freq;
+        });
+        parts.push({ v: Math.tanh(load / SYMPTOM_LOAD_SOFTNESS), w: 1.5 });
+      }
+    }
+
+    if (!parts.length) return null;
+    return parts.reduce((s, p) => s + p.v * p.w, 0) / parts.reduce((s, p) => s + p.w, 0);
+  }
+  const DAYSCORE_FULL_DATA_DAYS = 45;
+  const DAYSCORE_MAX_DATA_DAYS = 180;
+  const DAYSCORE_STRENGTH_MIN = 0.6;
+  const DAYSCORE_STRENGTH_MAX = 0.85;
+  const DAYSCORE_AMP_MIN = 40;
+  const DAYSCORE_AMP_MAX = 50;
+  const DAYSCORE_REF_PERCENTILE = 1;
+  const DAYSCORE_MIN_REF = 0.3;
+  let _dayScoreCalib = { key: null, value: null };
+  function getDayScoreCalibration() {
+    const key = [MOOD_KEY, PERIOD_KEY, SHIFT_KEY].map(k => localStorage.getItem(k) || "").join("|");
+    if (_dayScoreCalib.key === key) return _dayScoreCalib.value;
+
+    const buckets = getMoodStatsByCycleDay();
+    const all = Object.values(buckets);
+    const solid = all.filter(b => b.entryCount >= 2);
+    const days = solid.length >= 10 ? solid : all; // prefer days averaged over 2+ cycles
+    const vals = [];
+    days.forEach(b => {
+      const raw = computeDayScoreRaw(
+        b.moodCount ? b.moodSum / b.moodCount : null,
+        b.energyCount ? b.energySum / b.energyCount : null,
+        b.sleepCount ? b.sleepSum / b.sleepCount : null,
+        b.symptomsW, b.entryWeight);
+      if (raw != null) vals.push(raw);
+    });
+    const qRef = arr => arr.length ? arr.sort((a, b) => a - b)[Math.min(arr.length - 1, Math.floor(arr.length * DAYSCORE_REF_PERCENTILE))] : 0;
+    const posRef = Math.max(DAYSCORE_MIN_REF, qRef(vals.filter(v => v > 0)));
+    const negRef = Math.max(DAYSCORE_MIN_REF, qRef(vals.filter(v => v < 0).map(v => -v)));
+    const loggedDays = getMoodLog().length;
+    const enough = vals.length >= 5;
+    const c  = enough ? Math.min(1, loggedDays / DAYSCORE_FULL_DATA_DAYS) : 0;  // stretch kicks in
+    const c2 = enough ? Math.min(1, loggedDays / DAYSCORE_MAX_DATA_DAYS) : 0;   // keeps growing past that
+    const strength  = DAYSCORE_STRENGTH_MIN + (DAYSCORE_STRENGTH_MAX - DAYSCORE_STRENGTH_MIN) * c2;
+    const amplitude = DAYSCORE_AMP_MIN + (DAYSCORE_AMP_MAX - DAYSCORE_AMP_MIN) * c2;
+    const value = {
+      c, c2, loggedDays, strength, amplitude,
+      posScale: 1 + c * strength * (1 / posRef - 1),
+      negScale: 1 + c * strength * (1 / negRef - 1),
+    };
+    _dayScoreCalib = { key, value };
+    return value;
+  }
+  function computeDayScore(avgMood, avgEnergy, avgSleepQuality, symptomCounts, symptomEntryCount) {
+    const weighted = computeDayScoreRaw(avgMood, avgEnergy, avgSleepQuality, symptomCounts, symptomEntryCount);
+    if (weighted == null) return null;
+    const cal = getDayScoreCalibration();
+    const scaled = Math.max(-1, Math.min(1, weighted * (weighted >= 0 ? cal.posScale : cal.negScale)));
+    const score = Math.round(Math.max(0, Math.min(100, 50 + scaled * cal.amplitude)));
+
+    let label, color;
+    if (score >= 72)      { label = "Likely a good day";     color = "#8fd9c4"; }
+    else if (score >= 55) { label = "Probably a decent day"; color = "#bfe3d6"; }
+    else if (score >= 40) { label = "A mixed day";           color = "#c4c4de"; }
+    else if (score >= 25) { label = "Could be a tough day";  color = "#ffb38a"; }
+    else                  { label = "Likely a rough day";    color = "#ff9ecf"; }
+
+    return { score, label, color };
+  }
+  const SLEEP_HOUR_RANGES = ["1-2", "3-4", "4-5", "5-6", "6-7", "7-8", "8-9", "9-10", "10-11", "11-12", "12-13", "13+"];
+  function sleepHourRangeMidpoint(idx) {
+    const range = SLEEP_HOUR_RANGES[idx - 1];
+    if (!range) return null;
+    if (range.endsWith("+")) return parseFloat(range);
+    const [lo, hi] = range.split("-").map(Number);
+    return (lo + hi) / 2;
+  }
+  function getMoodLog() {
+    try {
+      const log = JSON.parse(localStorage.getItem(MOOD_KEY) || "[]");
+      return Array.isArray(log) ? log : [];
+    } catch { return []; }
+  }
+  function getMoodForDate(date) {
+    return getMoodLog().find(e => e.date === date) || null;
+  }
+  const MS_PER_DAY = 86400000;
+  function daysBetween(a, b) {
+    // Whole-day difference, ignoring time-of-day drift
+    const da = new Date(a); da.setHours(0,0,0,0);
+    const db = new Date(b); db.setHours(0,0,0,0);
+    return Math.round((db - da) / MS_PER_DAY);
+  }
+  function toLocalIso(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function parseLocalIso(str) {
+    const [y, m, day] = str.split("-").map(Number);
+    return new Date(y, m - 1, day);
+  }
+  function getPragueNowParts() {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Prague",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date());
+    const get = type => parts.find(p => p.type === type).value;
+    return {
+      year:   parseInt(get("year"), 10),
+      month:  parseInt(get("month"), 10) - 1, // 0-indexed, matches Date
+      day:    parseInt(get("day"), 10),
+      hour:   parseInt(get("hour"), 10) % 24, // Intl can return "24" for midnight
+      minute: parseInt(get("minute"), 10),
+      second: parseInt(get("second"), 10),
+    };
+  }
+  function getPragueRolledParts(cutoffMinutes) {
+    const { year, month, day, hour, minute, second } = getPragueNowParts();
+    const minutesSinceMidnight = hour * 60 + minute;
+    if (minutesSinceMidnight < cutoffMinutes) {
+      const rolled = new Date(year, month, day);
+      rolled.setDate(rolled.getDate() - 1);
+      return {
+        year: rolled.getFullYear(), month: rolled.getMonth(), day: rolled.getDate(),
+        hour, minute, second,
+      };
+    }
+    return { year, month, day, hour, minute, second };
+  }
+  function getPragueNow() {
+    const { year, month, day, hour, minute, second } = getPragueRolledParts(120);
+    return new Date(year, month, day, hour, minute, second);
+  }
+  function getPragueTodayIso() {
+    return toLocalIso(getPragueNow());
+  }
+  function getCycleLengths(log) {
+    const sorted = [...log].sort((a, b) => new Date(a.start) - new Date(b.start));
+    const lengths = [];
+    for (let i = 1; i < sorted.length; i++) {
+      lengths.push(daysBetween(sorted[i - 1].start, sorted[i].start));
+    }
+    return lengths;
+  }
+  function getPeriodLengths(log) {
+    return log
+      .filter(e => e.end)
+      .map(e => daysBetween(e.start, e.end) + 1); // inclusive of both days
+  }
+  function average(arr) {
+    if (!arr.length) return null;
+    return arr.reduce((s, v) => s + v, 0) / arr.length;
+  }
+  const OVU_SYMPTOM        = "Watery discharge";
+  const OVU_TO_PERIOD_DAYS = 14;
+  const OVU_WIN_BEFORE     = 6;
+  const OVU_WIN_AFTER      = 4;
+  const OVU_OFF_KEY        = "ao3_ovu_anchor_off_v1";
+  function getOvuOffStore() {
+    try { const o = JSON.parse(localStorage.getItem(OVU_OFF_KEY) || "{}"); return (o && typeof o === "object") ? o : {}; }
+    catch { return {}; }
+  }
+  let _ovuCacheKey = null, _ovuCache = new Map();
+  function getOvulationAnchor(owner, avgCycle, avgPeriod, ignoreOff) {
+    if (!owner) return null;
+    if (!ignoreOff && getOvuOffStore()[owner.id]) return null;
+    const moodRaw = localStorage.getItem(MOOD_KEY) || "";
+    const key = moodRaw + "|" + (avgCycle || "") + "|" + (avgPeriod || "");
+    if (key !== _ovuCacheKey) { _ovuCacheKey = key; _ovuCache = new Map(); }
+    const cacheId = owner.id + (ignoreOff ? "|any" : "");
+    if (_ovuCache.has(cacheId)) return _ovuCache.get(cacheId);
+
+    const { ovulationDay } = getCycleMarkers(avgCycle, avgPeriod);
+    const days = new Set();
+    getMoodLog().forEach(e => {
+      if (!e || !e.date || !Array.isArray(e.symptoms) || !e.symptoms.includes(OVU_SYMPTOM)) return;
+      if (e.date < owner.start) return;
+      const rawDay = daysBetween(owner.start, e.date) + 1;
+      if (rawDay < ovulationDay - OVU_WIN_BEFORE || rawDay > ovulationDay + OVU_WIN_AFTER) return;
+      days.add(String(e.date).slice(0, 10));
+    });
+    const sorted = [...days].sort();
+    let res = null;
+    if (sorted.length >= 2) {
+      const ov = parseLocalIso(sorted[1]);
+      const np = new Date(ov); np.setDate(np.getDate() + OVU_TO_PERIOD_DAYS);
+      res = { date: sorted[1], firstDate: sorted[0], nextPeriod: toLocalIso(np) };
+    }
+    _ovuCache.set(cacheId, res);
+    return res;
+  }
+  function getPhaseForStatsDay(cycleDay, stats) {
+    return getPhaseForCycleDay(cycleDay, stats.avgCycle, stats.avgPeriod);
+  }
+  function getPeriodStats() {
+    const log = getPeriodLog();
+    if (!log.length) {
+      return { avgCycle: null, avgPeriod: null, nextPredicted: null, currentCycleDay: null, isOnPeriod: false, lastEntry: null, cycleDeviation: null, cycleDeviationCount: 0, cycleLengths: [], periodLengths: [] };
+    }
+    const sorted = [...log].sort((a, b) => new Date(a.start) - new Date(b.start));
+    const lastEntry = sorted[sorted.length - 1];
+
+    const cycleLengths  = getCycleLengths(sorted).slice(-PERIOD_CYCLE_LOOKBACK);
+    const periodLengths = getPeriodLengths(sorted).slice(-PERIOD_CYCLE_LOOKBACK);
+    const avgCycle  = average(cycleLengths);
+    const avgPeriod = average(periodLengths);
+    // Needs at least 2 cycle-length samples to say anything about *variation*
+    // (a single gap has nothing to vary against).
+    const cycleDeviation = (cycleLengths.length >= 2 && avgCycle)
+      ? average(cycleLengths.map(l => Math.abs(l - avgCycle)))
+      : null;
+
+    const cycleShift = getCycleShiftFor(lastEntry.id);
+    const shiftOffset = cycleShift ? cycleShift.offset : 0;
+
+    let nextPredicted = null;
+    if (avgCycle) {
+      const predicted = parseLocalIso(lastEntry.start);
+      // Running a day "ahead" (offset +1) means the next period should land a day sooner.
+      predicted.setDate(predicted.getDate() + Math.round(avgCycle) - shiftOffset);
+      nextPredicted = toLocalIso(predicted);
+    }
+
+    const today = getPragueTodayIso();
+    const isOnPeriod = !lastEntry.end
+      ? new Date(lastEntry.start) <= new Date(today)
+      : new Date(lastEntry.start) <= new Date(today) && new Date(today) <= new Date(lastEntry.end);
+
+    const rawCycleDay = daysBetween(lastEntry.start, today) + 1;
+    const currentCycleDay = rawCycleDay + (cycleShift && today >= cycleShift.fromDate ? shiftOffset : 0);
+    // Watery-discharge ovulation estimate: only feeds the extra "based on your ovulation" stat.
+    const ovuAnchor = getOvulationAnchor(lastEntry, avgCycle, avgPeriod);
+    const nextPredictedOvu = ovuAnchor ? ovuAnchor.nextPeriod : null;
+
+    return { avgCycle, avgPeriod, nextPredicted, nextPredictedOvu, ovuAnchor, currentCycleDay, rawCycleDay, cycleShift, isOnPeriod, lastEntry, cycleDeviation, cycleDeviationCount: cycleLengths.length, cycleLengths, periodLengths };
+  }
+  const PHASE_DEFS = [
+    { key: "menstrual", label: "Menstrual" },
+    { key: "follicular", label: "Follicular" },
+    { key: "ovulatory", label: "Ovulatory" },
+    { key: "luteal", label: "Luteal" },
+    { key: "pms", label: "PMS" },
+  ];
+  const PMS_WINDOW_DAYS = 7;
+  function getCycleMarkers(avgCycle, avgPeriod) {
+    const cycleLen  = Math.round(avgCycle || 28);
+    const periodLen = Math.round(avgPeriod || 5);
+    const ovulationDay = Math.max(periodLen + 1, Math.round(cycleLen / 2));
+    // PMS window is the last PMS_WINDOW_DAYS days of the cycle, but never allowed
+    // to eat into the ovulatory window on short cycles.
+    const pmsStart = Math.max(ovulationDay + 2, cycleLen - (PMS_WINDOW_DAYS - 1));
+    return { cycleLen, periodLen, ovulationDay, pmsStart };
+  }
+  function getPhaseForCycleDay(cycleDay, avgCycle, avgPeriod) {
+    const { periodLen, ovulationDay, pmsStart } = getCycleMarkers(avgCycle, avgPeriod);
+
+    if (cycleDay <= periodLen) return "menstrual";
+    if (cycleDay >= pmsStart) return "pms";
+    if (cycleDay < ovulationDay - 1) return "follicular";
+    if (cycleDay <= ovulationDay + 1) return "ovulatory";
+    return "luteal";
+  }
+  function classifyDateByCycle(dateIso, periodLog, avgCycle, avgPeriod) {
+    const sorted = [...periodLog].sort((a, b) => new Date(a.start) - new Date(b.start));
+    let owner = null;
+    for (const entry of sorted) {
+      if (new Date(entry.start) <= new Date(dateIso)) owner = entry;
+      else break;
+    }
+    if (!owner) return null;
+    let cycleDay = daysBetween(owner.start, dateIso) + 1;
+    // A confirmed "this cycle slipped by a day" shift applies from its start date onward.
+    const shift = getCycleShiftFor(owner.id);
+    if (shift && String(dateIso).slice(0, 10) >= shift.fromDate) cycleDay += shift.offset;
+    if (cycleDay < 1 || (avgCycle && cycleDay > avgCycle + 10)) return null; // too far past — unreliable
+    return { cycleDay, phase: getPhaseForCycleDay(cycleDay, avgCycle, avgPeriod), ownerId: owner.id };
+  }
+  let _shiftRaw = null, _shiftParsed = { shifts: {}, dismissed: {}, notified: {} };
+  function getCycleShiftStore() {
+    const raw = localStorage.getItem(SHIFT_KEY) || "";
+    if (raw !== _shiftRaw) {
+      _shiftRaw = raw;
+      try {
+        const o = JSON.parse(raw || "{}");
+        _shiftParsed = { shifts: o.shifts || {}, dismissed: o.dismissed || {}, notified: o.notified || {} };
+      } catch { _shiftParsed = { shifts: {}, dismissed: {}, notified: {} }; }
+    }
+    return _shiftParsed;
+  }
+  function getCycleShiftFor(periodId) { return getCycleShiftStore().shifts[periodId] || null; }
+  function getDayPrediction(cycleDay, stats) {
+    if (cycleDay == null) return null;
+    const dayPhaseKey = getPhaseForStatsDay(cycleDay, stats);
+
+    const exactDayBucket = getMoodStatsByCycleDay()[cycleDay] || null;
+    const phaseBucket    = getMoodStatsByPhase()[dayPhaseKey] || null;
+
+    const hasExactMoodData = !!exactDayBucket && (
+      exactDayBucket.moodCount || exactDayBucket.energyCount || exactDayBucket.sleepCount || exactDayBucket.sleepHoursCount
+    );
+    const hasExactSymptomData = !!exactDayBucket && Object.keys(exactDayBucket.symptoms || {}).length > 0;
+
+    const moodSourceBucket    = hasExactMoodData    ? exactDayBucket : phaseBucket;
+    const symptomSourceBucket = hasExactSymptomData ? exactDayBucket : phaseBucket;
+
+    if (!moodSourceBucket && !symptomSourceBucket) {
+      return { cycleDay, ready: false, entryCount: 0 };
+    }
+
+    const avgMood          = moodSourceBucket && moodSourceBucket.moodCount       ? histogramMode(moodSourceBucket.moodValues)       : null;
+    const avgEnergy        = moodSourceBucket && moodSourceBucket.energyCount     ? histogramMode(moodSourceBucket.energyValues)     : null;
+    const avgSleep         = moodSourceBucket && moodSourceBucket.sleepCount      ? histogramMode(moodSourceBucket.sleepValues)      : null;
+    const avgSleepHoursIdx = moodSourceBucket && moodSourceBucket.sleepHoursCount ? histogramMode(moodSourceBucket.sleepHoursValues) : null;
+
+    const topSymptoms = symptomSourceBucket
+      ? topKeys(symptomSourceBucket.symptoms, 3).map(([name, count]) => ({ name, count }))
+      : [];
+    // Everything logged on this cycle day beyond the top 3 headline symptoms,
+    // most-frequent first — kept hidden by default, revealed on tap.
+    const topNames = new Set(topSymptoms.map(s => s.name));
+    const otherSymptoms = symptomSourceBucket
+      ? Object.entries(symptomSourceBucket.symptoms)
+          .filter(([name]) => !topNames.has(name))
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, count]) => ({ name, count }))
+      : [];
+
+    // Orgasm likelihood — same exact-day-first, phase-fallback pattern as
+    // mood/energy/sleep above, but its own independent fallback since it's
+    // logged separately from those.
+    const hasExactOrgasmData = !!exactDayBucket && exactDayBucket.orgasmLoggedCount > 0;
+    const orgasmSourceBucket = hasExactOrgasmData ? exactDayBucket : phaseBucket;
+    const orgasmChance = (orgasmSourceBucket && orgasmSourceBucket.orgasmLoggedCount)
+      ? orgasmSourceBucket.orgasmTrueCount / orgasmSourceBucket.orgasmLoggedCount
+      : null;
+    const orgasmSampleSize = orgasmSourceBucket ? orgasmSourceBucket.orgasmLoggedCount : 0;
+
+    const dayScore = computeDayScore(
+      avgMood, avgEnergy, avgSleep,
+      symptomSourceBucket ? symptomSourceBucket.symptomsW : null,
+      symptomSourceBucket ? symptomSourceBucket.entryWeight : null
+    );
+
+    const baseline = getOverallMoodBaseline();
+    const avgSleepHours      = avgSleepHoursIdx != null ? sleepHourRangeMidpoint(Math.round(avgSleepHoursIdx)) : null;
+    const baselineSleepHours = baseline.sleepHours != null ? sleepHourRangeMidpoint(Math.round(baseline.sleepHours)) : null;
+    const diff = (v, b) => (v != null && b != null) ? v - b : null;
+
+    return {
+      cycleDay,
+      ready: true,
+      hasExactMoodData,
+      hasExactSymptomData,
+      entryCount: exactDayBucket ? exactDayBucket.entryCount : 0,
+      avgMood, avgEnergy, avgSleep, avgSleepHours,
+      moodDiff:       diff(avgMood, baseline.mood),
+      energyDiff:     diff(avgEnergy, baseline.energy),
+      sleepDiff:      diff(avgSleep, baseline.sleep),
+      sleepHoursDiff: diff(avgSleepHours, baselineSleepHours),
+      repeatingSymptoms: topSymptoms,
+      otherSymptoms,
+      hasExactOrgasmData,
+      orgasmChance,
+      orgasmSampleSize,
+      dayScore,
+    };
+  }
+  function getMoodStatsByPhase() {
+    const periodLog = getPeriodLog();
+    const buckets = {};
+    PHASE_DEFS.forEach(p => buckets[p.key] = {
+      moodSum: 0, moodCount: 0, energySum: 0, energyCount: 0, sleepSum: 0, sleepCount: 0, sleepHoursSum: 0, sleepHoursCount: 0,
+      moodValues: {}, energyValues: {}, sleepValues: {}, sleepHoursValues: {},
+      symptoms: {}, symptomsW: {}, entryCount: 0, entryWeight: 0, orgasmLoggedCount: 0, orgasmTrueCount: 0,
+    });
+    if (!periodLog.length) return buckets;
+
+    const { avgCycle, avgPeriod } = getPeriodStats();
+    getMoodLog().forEach(entry => {
+      const classified = classifyDateByCycle(entry.date, periodLog, avgCycle, avgPeriod);
+      if (!classified) return;
+      const b = buckets[classified.phase];
+      const w = moodEntryWeight(entry);
+      b.entryCount += 1;
+      b.entryWeight += w;
+      if (typeof entry.mood === "number")   { b.moodSum += entry.mood * w; b.moodCount += w; bumpHistogram(b.moodValues, entry.mood, w); }
+      if (typeof entry.energy === "number") { b.energySum += entry.energy * w; b.energyCount += w; bumpHistogram(b.energyValues, entry.energy, w); }
+      if (typeof entry.sleep === "number")  { b.sleepSum += entry.sleep * w; b.sleepCount += w; bumpHistogram(b.sleepValues, entry.sleep, w); }
+      if (typeof entry.sleepHours === "number") { b.sleepHoursSum += entry.sleepHours * w; b.sleepHoursCount += w; bumpHistogram(b.sleepHoursValues, entry.sleepHours, w); }
+      if (typeof entry.orgasm === "boolean") { b.orgasmLoggedCount += 1; if (entry.orgasm) b.orgasmTrueCount += 1; }
+      (entry.symptoms || []).forEach(s => { b.symptoms[s] = (b.symptoms[s] || 0) + 1; b.symptomsW[s] = (b.symptomsW[s] || 0) + w; });
+    });
+    return buckets;
+  }
+  function bumpHistogram(hist, value, weight = 1) {
+    hist[value] = (hist[value] || 0) + weight;
+  }
+  function histogramMode(hist) {
+    const entries = Object.entries(hist).map(([k, c]) => [Number(k), c]);
+    if (!entries.length) return null;
+    const maxCount = Math.max(...entries.map(([, c]) => c));
+    const tied = entries.filter(([, c]) => c === maxCount).map(([v]) => v);
+    if (tied.length === 1) return tied[0];
+    const totalCount = entries.reduce((s, [, c]) => s + c, 0);
+    const weightedSum = entries.reduce((s, [v, c]) => s + v * c, 0);
+    const mean = weightedSum / totalCount;
+    tied.sort((a, b) => Math.abs(a - mean) - Math.abs(b - mean));
+    return tied[0];
+  }
+  function getMoodStatsByCycleDay() {
+    const periodLog = getPeriodLog();
+    const buckets = {};
+    if (!periodLog.length) return buckets;
+
+    const { avgCycle, avgPeriod } = getPeriodStats();
+    getMoodLog().forEach(entry => {
+      const classified = classifyDateByCycle(entry.date, periodLog, avgCycle, avgPeriod);
+      if (!classified) return;
+      const day = classified.cycleDay;
+      if (!buckets[day]) buckets[day] = {
+        moodSum: 0, moodCount: 0, energySum: 0, energyCount: 0, sleepSum: 0, sleepCount: 0, sleepHoursSum: 0, sleepHoursCount: 0,
+        moodValues: {}, energyValues: {}, sleepValues: {}, sleepHoursValues: {},
+        symptoms: {}, symptomsW: {}, entryCount: 0, entryWeight: 0, orgasmLoggedCount: 0, orgasmTrueCount: 0,
+      };
+      const b = buckets[day];
+      const w = moodEntryWeight(entry);
+      b.entryCount += 1;
+      b.entryWeight += w;
+      if (typeof entry.mood === "number")   { b.moodSum += entry.mood * w; b.moodCount += w; bumpHistogram(b.moodValues, entry.mood, w); }
+      if (typeof entry.energy === "number") { b.energySum += entry.energy * w; b.energyCount += w; bumpHistogram(b.energyValues, entry.energy, w); }
+      if (typeof entry.sleep === "number")  { b.sleepSum += entry.sleep * w; b.sleepCount += w; bumpHistogram(b.sleepValues, entry.sleep, w); }
+      if (typeof entry.sleepHours === "number") { b.sleepHoursSum += entry.sleepHours * w; b.sleepHoursCount += w; bumpHistogram(b.sleepHoursValues, entry.sleepHours, w); }
+      if (typeof entry.orgasm === "boolean") { b.orgasmLoggedCount += 1; if (entry.orgasm) b.orgasmTrueCount += 1; }
+      (entry.symptoms || []).forEach(s => { b.symptoms[s] = (b.symptoms[s] || 0) + 1; b.symptomsW[s] = (b.symptomsW[s] || 0) + w; });
+    });
+    return buckets;
+  }
+  function getOverallMoodBaseline() {
+    const log = getMoodLog();
+    let moodSum = 0, moodCount = 0, energySum = 0, energyCount = 0,
+        sleepSum = 0, sleepCount = 0, sleepHoursSum = 0, sleepHoursCount = 0;
+    log.forEach(e => {
+      const w = moodEntryWeight(e);
+      if (typeof e.mood === "number")       { moodSum += e.mood * w; moodCount += w; }
+      if (typeof e.energy === "number")     { energySum += e.energy * w; energyCount += w; }
+      if (typeof e.sleep === "number")      { sleepSum += e.sleep * w; sleepCount += w; }
+      if (typeof e.sleepHours === "number") { sleepHoursSum += e.sleepHours * w; sleepHoursCount += w; }
+    });
+    return {
+      mood: moodCount ? moodSum / moodCount : null,
+      energy: energyCount ? energySum / energyCount : null,
+      sleep: sleepCount ? sleepSum / sleepCount : null,
+      sleepHours: sleepHoursCount ? sleepHoursSum / sleepHoursCount : null,
+    };
+  }
+  function topKeys(obj, n) {
+    return Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n);
+  }
+
+  return { getLog, getMoodForDate, getPeriodStats, getDayPrediction, getPhaseForStatsDay, getPragueNow, getPragueTodayIso, toLocalIso, daysBetween, PHASE_DEFS };
+};
+
+// ════════ lib/night-summary.js ════════
+// lib/night-summary.js — the "today" card that appears once Will and Mike have fallen asleep (Mike's room and Will's room).
+// Part of the keepsake world: see world.js for how the files fit together. Read-only: it saves nothing.
+(window.__ao3WorldModules = window.__ao3WorldModules || {})["lib/night-summary"] = function (ctx) {
+  'use strict';
+  const { core } = ctx;
+  const { gyHash } = ctx.shared;
+  const { hkForecast } = ctx.lib["hawkins-kit"];
+  const D = ctx.lib["day-stats"];
+
+  // the closing line: [who, text]. NS_SOFT is used when today's mood or energy was logged as 1 or 2.
+  const NS_CLOSE = [
+    ["Mike", "No need to overthink it. Today’s done, and tomorrow’s another day."],
+    ["Will", "That’s enough thinking. Today is finished. Tomorrow gets its own turn."],
+    ["Mike", "Whatever’s left over can wait. Today’s done. Tomorrow’s a new one."],
+    ["Will", "Nothing to figure out tonight. Today’s over, and there’s another one coming."]];
+  const NS_SOFT = [
+    ["Mike", "Don’t go back over it. Today’s done. Tomorrow’s another day, and it’s allowed to be easier."],
+    ["Will", "No need to overthink today. You got to the end of it. Tomorrow is another day."]];
+
+  const nsWeather = code => code === 0 ? "☀️ clear" : code <= 2 ? "🌤️ partly cloudy" : code === 3 ? "☁️ cloudy" : code <= 48 ? "🌫️ fog"
+    : code <= 67 ? "🌧️ rain" : code <= 77 ? "🌨️ snow" : code <= 82 ? "🌧️ showers" : code <= 86 ? "🌨️ snow showers" : "⛈️ storms";
+  const nsPlural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+  const NS_SLEEP = ["", "very poor", "poor", "okay", "good", "great"];
+
+  // everything on the card, as [{ title, lines: [text] }]; each part fails on its own, so one bad record never blanks the card
+  function nsSections() {
+    const today = D.getPragueTodayIso();                                                  // the app's day: it turns over at 2 am, Prague time
+    const next = D.getPragueNow(); next.setDate(next.getDate() + 1);
+    const tomorrow = D.toLocalIso(next);
+    const out = [], part = (title, fn) => { let lines; try { lines = fn(); } catch { lines = ["Couldn’t read this tonight."]; } out.push({ title, lines: lines.filter(Boolean) }); };
+    const entry = () => D.getMoodForDate(today);
+    let stats = null; try { stats = D.getPeriodStats(); } catch {}
+
+    part("📖 Read today", () => {
+      const dayOf = e => { const d = new Date(e.date); return isNaN(d) ? "" : D.toLocalIso(d); };
+      const log = (D.getLog() || []).filter(e => e && e.date), mine = log.filter(e => dayOf(e) === today);
+      if (!mine.length) return ["Nothing logged today."];
+      const words = mine.reduce((a, e) => a + (Number(e.words) || 0), 0);
+      const lines = [words.toLocaleString("en-US") + " words · " + nsPlural(mine.length, "chapter")];
+      // finished today: a finished fic whose latest logged chapter is today's
+      const ids = new Set(mine.map(e => String(e.key || "").split("::")[0]));
+      const done = (core.getTracked ? core.getTracked() : []).filter(f => f && f.finished && ids.has(String(f.workId)));
+      if (done.length) lines.push("Finished: " + done.map(f => String(f.title || "a story")).join(", "));
+      return lines;
+    });
+    part("🌙 Cycle today", () => {
+      if (!stats || stats.currentCycleDay == null) return ["No period logged yet."];
+      const key = D.getPhaseForStatsDay(stats.currentCycleDay, stats), ph = D.PHASE_DEFS.find(p => p.key === key);
+      const lines = ["Day " + stats.currentCycleDay + (ph ? " · " + ph.label + " phase" : "")];
+      if (stats.isOnPeriod) lines.push("On your period.");
+      else if (stats.nextPredicted) {
+        const n = D.daysBetween(today, stats.nextPredicted);
+        lines.push(n > 0 ? "Next period expected in " + nsPlural(n, "day") + "." : n === 0 ? "Next period expected today." : "Period was expected " + nsPlural(-n, "day") + " ago.");
+      }
+      const e = entry(), sy = e && Array.isArray(e.symptoms) ? e.symptoms : [];
+      lines.push(sy.length ? "Logged: " + sy.join(", ") : "No symptoms logged.");
+      return lines;
+    });
+    part("📝 Check-in", () => {
+      const e = entry(), bits = [];
+      if (e && e.mood) bits.push("Mood " + e.mood + "/5");
+      if (e && e.energy) bits.push("Energy " + e.energy + "/5");
+      return [bits.length ? bits.join(" · ") : "Mood and energy not logged."];
+    });
+    // the same number as the dashboard's "tomorrow" card: what you most often logged on that cycle day (or in that phase)
+    part("😴 Next-day sleep forecast", () => {
+      const p = stats && stats.currentCycleDay != null ? D.getDayPrediction(stats.currentCycleDay + 1, stats) : null;
+      if (!p || !p.ready || p.avgSleep == null) return ["Not enough sleep logs to predict yet."];
+      const diff = p.sleepDiff, vs = diff == null ? "" : Math.abs(diff) < 0.15 ? "About your usual." : Math.abs(diff).toFixed(1) + (diff > 0 ? " above" : " below") + " your usual.";
+      return [p.avgSleep + "/5 · likely " + (NS_SLEEP[Math.round(p.avgSleep)] || "okay"), vs];
+    });
+    part("🌤️ Tomorrow", () => {
+      const f = hkForecast(tomorrow);
+      return [
+        stats && stats.currentCycleDay != null ? "Cycle day " + (stats.currentCycleDay + 1) : "",
+        f && f[0] != null && f[1] != null && f[2] != null ? "Prague: " + nsWeather(f[0]) + ", " + Math.round(f[2]) + " to " + Math.round(f[1]) + " °C" : "Weather forecast not available right now."];
+    });
+
+    let soft = false; try { const e = entry(); soft = !!e && ((e.mood > 0 && e.mood <= 2) || (e.energy > 0 && e.energy <= 2)); } catch {}
+    const pool = soft ? NS_SOFT : NS_CLOSE;
+    return { sections: out, close: pool[gyHash(today + "ns") % pool.length] };
+  }
+
+  // lays the card over the scene (inside its shell, so closing the scene takes it along); one tap on the button or outside the card closes it
+  function nsShow(sh) {
+    if (!sh.back.isConnected || sh.back.querySelector("[data-night-summary]")) return;
+    const el = sh.kit.el, data = nsSections();
+    const veil = el("div", "position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 16px) 18px calc(env(safe-area-inset-bottom,0px) + 16px);background:rgba(4,3,12,0.6);box-sizing:border-box;");
+    veil.setAttribute("data-night-summary", "");
+    const card = el("div", "width:100%;max-width:360px;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding:16px 18px;border-radius:18px;background:#17132b;border:1px solid rgba(190,170,255,0.3);box-shadow:0 12px 40px rgba(0,0,0,0.6);color:#ece6fb;font:13px/1.45 Georgia,'Times New Roman',serif;");
+    card.setAttribute("role", "dialog"); card.setAttribute("aria-label", "Today");
+    card.appendChild(el("div", "font-size:15px;font-weight:700;letter-spacing:0.06em;text-align:center;margin-bottom:4px;", "✦ today ✦"));
+    data.sections.forEach(s => {
+      const box = el("div", "padding:8px 0;border-bottom:1px solid rgba(190,170,255,0.16);");
+      box.appendChild(el("div", "font-size:11px;letter-spacing:0.05em;color:rgba(217,208,245,0.65);", s.title));
+      s.lines.forEach(t => box.appendChild(el("div", "", t)));
+      card.appendChild(box);
+    });
+    card.appendChild(el("div", "margin-top:12px;text-align:center;font-style:italic;font-size:14px;color:#ffe9c2;", "“" + data.close[1] + "”"));
+    card.appendChild(el("div", "text-align:center;font-size:11px;color:rgba(217,208,245,0.55);", "— " + data.close[0]));
+    card.appendChild(el("div", "margin-top:12px;padding-top:10px;border-top:1px solid rgba(190,170,255,0.16);text-align:center;color:#cfc6f2;", "💤 Mike and Will are safe and sound in dreamland. You can drift off too. No need to worry."));
+    const btn = el("button", "display:block;margin:12px auto 0;padding:8px 22px;border-radius:999px;border:1px solid rgba(190,170,255,0.4);background:rgba(190,170,255,0.14);color:#ece6fb;font:inherit;cursor:pointer;", "🌙 goodnight");
+    btn.type = "button"; card.appendChild(btn);
+    veil.appendChild(card);
+    veil.addEventListener("click", ev => { ev.stopPropagation(); if (ev.target === veil || ev.target === btn) veil.remove(); });
+    sh.back.appendChild(veil);
+  }
+
+  return { nsShow };
 };
 
 // ════════ graveyard.js ════════
@@ -10734,6 +11370,8 @@
   const openWheelers = (...args) => world.openWheelers(...args);
   const openHawkins = (...args) => world.openHawkins(...args);
   const openKitchen = (...args) => world.openKitchen(...args);
+  const { nsShow } = ctx.lib["night-summary"];
+  const openWheelersDining = (...args) => world.openWheelersDining(...args);
 
   // ── Mike's room (reached through his window from the front lawn, or up the stairs from the basement) ──
   // The room, its furniture and the ways in and out, and now Will and Mike in the bed (see "in the bed" below): the same figures as at
@@ -11045,7 +11683,7 @@
     const W = 360, H = 540, hitsA = [], hitsB = [];
     const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     let cur = hitsA, view = "A", stage = "bed", prop = null;                                                          // stage: where they are ("bed" or "carpet"); prop: what is between them on the carpet
-    let leaving = false, nSign = 0, nCloset = 0, nHand = 0, nAsleep = 0, nAway = 0, tid = 0;
+    let leaving = false, headingDown = false, nSign = 0, nCloset = 0, nHand = 0, nAsleep = 0, nAway = 0, tid = 0;
     const sleepAt = hkSleep.at(), sleptAtWills = sleepAt === "wills";                                    // asleep in Will's room: this room is empty (no call pills, nobody to put to bed)
     const solo = !sleepAt && hkWhere.here("mom");                                                  // Will is here on his own (Mike is in the kitchen with his mother)
     const away = sleptAtWills || (!sleepAt && !hkWhere.here("room") && !solo);                                                        // awake, but somewhere else in the house: the bed is empty and the lamp is left on
@@ -11493,7 +12131,7 @@
         ...gn.beats,
         ["n", "They slide down under the comforter until only their faces show. The covers begin to rise and fall.", { a: MR_SLEEP.a, b: MR_SLEEP.b, zz: true }],
         ["n", "Asleep. The house ticks and the window glows faintly blue. They’ll stay like this until somebody taps the lamp.", { hearts: 1 }]
-      ], null, true);
+      ], () => later(() => { if (asleep && !scene) nsShow(sh); }, 1500), true);                                      // once they're asleep: the "today" card
     };
     const mrGoodnightBeats = wx => {                                                                                   // the goodnight as beats: eyes close on each one's last line, hearts on the very last, a caption line before (a long day) and after
       const g = mrGoodnight(wx), L = g.lines, n = L.length, beats = [];
@@ -11519,9 +12157,17 @@
         ["n", "Not asleep any more, not getting up either. The whole house wakes up around them.", { ms: 2600 }],
         ["n", "Five minutes later, the comforter starts to heave. Yesterday’s clothes get fished off the floor.", { heave: true, jig: true, ms: 2200, a: { dy: 22, mood: "o", L: "lap", R: "lap" }, b: { dy: 22, mood: "o", L: "lap", R: "lap" } }],
         ["n", "Two rumpled heads surface, dressed for the day.", { pj: false, unpile: true, ms: 1800, a: { dy: 0, mood: "smile", look: 1 }, b: { dy: 0, mood: "smile", look: -1 } }]
-      ], () => { tid = setTimeout(another, reduce ? 400 : 1600); });
+      ], () => { headingDown = true; tid = setTimeout(goBreakfast, reduce ? 400 : 1600); });
+    };
+    // after they wake and dress they go down to the dining room for breakfast, and you go with them (the dining room plays its breakfast scene once)
+    const goBreakfast = () => {
+      if (leaving) return; leaving = true;
+      hkWhere.set("dining", 25, 45); world.dnBreakfast = Date.now();
+      say("Dressed, hair still wild, they head downstairs towards the smell of bacon. You follow\u2026");
+      later(() => bfFade(sh, () => openWheelersDining()), reduce ? 200 : 2200);
     };
     const tapLamp = () => {
+      if (headingDown) return;
       if (scene) { advanceScene(); return; }
       if (asleep) { wakeUp(); return; }
       if (solo && nLamp === 1) { nLamp = 0; setLamp("base"); say("The lamp clicks back to amber. Will looks at the empty half of the bed. Not without Mike."); return; }
@@ -11649,7 +12295,7 @@
       if (who === "n") { hideBubble(); say(text); } else speak(who, text);
       tid = setTimeout(step, readTime(text));
     };
-    const play = i => { if (asleep || away || scene) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); const M = MOMS[mi]; start(M.stage); try { localStorage.setItem(MKEY, String(mi)); } catch {} say(M.intro || "Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const play = i => { if (asleep || away || scene || headingDown) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); const M = MOMS[mi]; start(M.stage); try { localStorage.setItem(MKEY, String(mi)); } catch {} say(M.intro || "Mike’s bed, a lamp left on, and two people lying very close."); tid = setTimeout(step, reduce ? 300 : 1100); };
     const another = () => { let n = Math.floor(Math.random() * (MOMS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
     const next = () => {
       if (leaving || view !== "A") return;
@@ -11761,6 +12407,7 @@
     tmBtn = pill("◷ timer", "Sleep timer: fades the sound out after 15, 30 or 60 minutes", tapTimer);
     sndBtn.style.display = tmBtn.style.display = zzOn ? "" : "none"; sndLabel(); timerLabel();
     const setView = v => {
+      if (headingDown) return;                                                                                          // they are on their way down to breakfast
       if (scene) { say("They’re settling in. Give them a moment."); return; }
       view = v;
       if (v === "B") { clearTimeout(tid); hideBubble(); playing = false; }
@@ -11856,7 +12503,59 @@
       ["m", "It’s my mom’s measurement. Everything she does is a dash.", { b: { mood: "grin" } }],
       ["w", "‘Whisk until smooth.’ Smooth, Mike. Not lumpy.", { a: { mood: "calm" } }],
       ["m", "It’s smooth. It’s just smooth with texture.", { b: { mood: "cheer", blush: true }, jig: true }],
-      ["n", "There is flour on Will’s cheek, flour in Mike’s curls and, somehow, flour on the ceiling light.", { hearts: 3, a: { eyes: "happy", mood: "cheer", blush: true } }]] }
+      ["n", "There is flour on Will’s cheek, flour in Mike’s curls and, somehow, flour on the ceiling light.", { hearts: 3, a: { eyes: "happy", mood: "cheer", blush: true } }]] },
+    { name: "the phone rings", props: [], beats: [
+      ["n", "The dial phone rings. Both of them look at it. Neither of them moves. It rings again."],
+      ["m", "You get it. It’s probably for Nancy.", { b: { mood: "smirk", look: 1 } }],
+      ["w", "It’s never for Nancy. It’s always my mom or yours.", { a: { mood: "calm", look: -1 } }],
+      ["m", "Then it’s definitely for you. Your mom has a sixth sense.", { b: { mood: "grin" } }],
+      ["n", "Will picks up. He uses his most polite voice, the one for grown-ups and dentists.", { a: { mood: "o", look: -1, R: [60, 190] } }],
+      ["w", "Hello, Wheeler residence. …Yes. …Yes, he’s right here.", { a: { mood: "smile" } }],
+      ["m", "Who is it? Who is it?", { b: { mood: "o", blush: true }, jig: true }],
+      ["w", "It’s the pizza place. They want to know if we’re the ones who ordered nothing.", { a: { mood: "smirk" } }],
+      ["m", "…Wrong number. Tell them wrong number.", { b: { mood: "calm" } }],
+      ["n", "Will hangs up very gently. He is laughing so hard he has to hold on to the counter, and Mike is not far behind.", { hearts: 2, a: { eyes: "happy", mood: "cheer", R: "lap", blush: true }, b: { mood: "grin" } }]] },
+    { name: "movie night", props: ["popcorn"], beats: [
+      ["n", "A big bowl of popcorn, a very small amount of butter and an argument about which movie. Mike has a plan. Will has a veto."],
+      ["m", "Okay. Hear me out. Something with a spaceship.", { b: { mood: "grin", L: [226, 262] } }],
+      ["w", "We watched a spaceship last time.", { a: { mood: "smirk", R: [204, 262] } }],
+      ["m", "It was a different spaceship.", { b: { mood: "smirk" } }],
+      ["w", "It had the same actor. In the same helmet.", { a: { mood: "grin" } }],
+      ["m", "Fine. You pick. But if it’s sad I’m eating all the popcorn.", { b: { mood: "smile", blush: true } }],
+      ["w", "That’s not a threat, that’s just Tuesday.", { a: { mood: "cheer" }, jig: true }],
+      ["m", "Hey. Hey. I share. Look. Sharing.", { b: { mood: "o", L: [230, 204, "cookie"] } }],
+      ["n", "Mike tosses a piece. Will catches it in his mouth on the first try. Mike stares at him as if he has just seen a magic trick.", { hearts: 3, a: { eyes: "happy", mood: "grin", R: "lap", blush: true }, b: { mood: "cheer", L: "lap" } }]] },
+    { name: "the storm", props: [], beats: [
+      ["n", "The window goes white for half a second. The kitchen light buzzes, flickers, and decides to stay on."],
+      ["w", "One… two… three… four…", { a: { mood: "calm", look: 0.5, lookY: -0.5 } }],
+      ["n", "Thunder, long and low, a long way off. The glass in the cupboard hums with it.", { b: { mood: "o", look: 1 } }],
+      ["m", "Four seconds. So that’s… a mile?", { b: { mood: "calm" } }],
+      ["w", "About a mile and a bit. It’s moving away.", { a: { mood: "smile" } }],
+      ["m", "I wasn’t scared. I was just checking.", { b: { mood: "smirk", blush: true } }],
+      ["w", "I know. Me too.", { a: { mood: "smile", blush: true, eyes: "happy" } }],
+      ["m", "…If it goes again, can we do the counting together?", { b: { mood: "smile", blush: true } }],
+      ["n", "The next flash comes. They count out loud, softly, at exactly the same speed. The house creaks, and the fridge hums, and nothing at all is wrong.", { hearts: 2, a: { mood: "cheer" }, b: { mood: "grin" } }]] },
+    { name: "sandwich diplomacy", props: ["sandwich"], beats: [
+      ["n", "One sandwich, two hungry people and a knife that Mike is holding with far too much ceremony."],
+      ["w", "Cut it evenly. I’m serious. I’m watching the knife.", { a: { mood: "smirk", look: 1, R: [198, 262] } }],
+      ["m", "It’s a diagonal. Diagonals are scientifically fairer.", { b: { mood: "grin", L: [226, 266] } }],
+      ["w", "That isn’t science.", { a: { mood: "o" } }],
+      ["m", "It’s geometry. Which is a kind of science that is also a kind of art.", { b: { mood: "cheer" }, jig: true }],
+      ["w", "Mike. This half has more tomato.", { a: { mood: "calm" } }],
+      ["m", "That’s the half for the person who is more gracious.", { b: { mood: "smirk" } }],
+      ["w", "…So you’re taking it.", { a: { mood: "smirk" } }],
+      ["m", "No, no, you can have it.", { b: { mood: "smile", blush: true } }],
+      ["n", "They swap halves at the same moment, then swap back, then give up and just eat. Will has a sesame seed on his lip. Mike notices and looks at the fridge for a very long time.", { hearts: 3, a: { eyes: "happy", mood: "cheer", blush: true, R: "lap" }, b: { mood: "o", L: "lap", blush: true } }]] },
+    { name: "the list", props: [], beats: [
+      ["n", "A pad on the island and a pencil with no eraser. Mrs. Wheeler has left a note: ‘Milk, eggs, something green. Be useful.’", { a: { R: [200, 222, "pad"], look: 0 }, b: { L: [232, 262] } }],
+      ["w", "Okay. Milk. Eggs. What is ‘something green’?", { a: { mood: "calm" } }],
+      ["m", "Lettuce. Or a lime. She says ‘something green’ and means ‘surprise me, but not too much’.", { b: { mood: "smirk" } }],
+      ["w", "That’s a lot of faith to put in a lime.", { a: { mood: "grin" } }],
+      ["m", "Add chocolate chips. For emergencies.", { b: { mood: "grin" }, jig: true }],
+      ["w", "That’s not green.", { a: { mood: "smirk" } }],
+      ["m", "There are green ones. I’ve seen them. At Christmas.", { b: { mood: "o" } }],
+      ["w", "…Writing it down. ‘Chocolate chips, the green kind, for emergencies.’", { a: { mood: "smile", blush: true } }],
+      ["n", "Mike reads it over Will’s shoulder, his chin very nearly on it. Neither of them says a word about how close that is.", { hearts: 2, a: { eyes: "happy", mood: "smile", blush: true }, b: { mood: "calm", blush: true } }]] }
   ];
 
   // ── the Wheelers' kitchen: the ROOM ONLY (nothing to tap, nobody in it, no sound; the way in is the "kitchen" pill in Mike's room) ──
@@ -12210,6 +12909,8 @@
         else if (k === "plate") { sv("ellipse", { cx: 212, cy: 272, rx: 17, ry: 4.4, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.7 }, propG); [[-6, -1.5], [5, -2], [0, -4]].forEach(([dx, dy]) => { sv("circle", { cx: 212 + dx, cy: 272 + dy, r: 4, fill: "#c98a4a", stroke: "#8a5a2a", "stroke-width": 0.5 }, propG); [[-1, -1], [1.2, 0.8]].forEach(([a, b]) => sv("circle", { cx: 212 + dx + a, cy: 272 + dy + b, r: 0.7, fill: "#4a2a18" }, propG)); }); }
         else if (k === "dishes") { for (let i = 0; i < 4; i++) sv("ellipse", { cx: 212, cy: 273 - i * 2.2, rx: 17, ry: 4.4, fill: i % 2 ? "#e8e0cc" : "#f4efe2", stroke: "#b8ad92", "stroke-width": 0.6 }, propG); sv("ellipse", { cx: 160, cy: 273, rx: 11, ry: 3, fill: "#fff", opacity: 0.55 }, propG); }
         else if (k === "milk") { sv("rect", { x: 205, y: 250, width: 12, height: 22, fill: "#f4f2ea", stroke: "#9a968a", "stroke-width": 0.6 }, propG); sv("polygon", { points: "205,250 211,244 217,250", fill: "#e8e4d8", stroke: "#9a968a", "stroke-width": 0.6 }, propG); sv("rect", { x: 205, y: 257, width: 12, height: 7, fill: "#3a82c8" }, propG); sv("rect", { x: 232, y: 262, width: 9, height: 10, rx: 1.5, fill: "#fff", opacity: 0.55, stroke: "#9a968a", "stroke-width": 0.6 }, propG); }
+        else if (k === "popcorn") { sv("path", { d: "M192 262 L196 278 Q212 283 228 278 L232 262 Z", fill: "#d8d2c4", stroke: "#8a8472", "stroke-width": 0.7 }, propG); [[198, 258], [206, 255], [214, 257], [222, 255], [228, 259], [210, 252], [220, 251]].forEach(([x, y], i) => sv("circle", { cx: x, cy: y, r: 4 - (i % 2) * 0.6, fill: i % 3 ? "#fff3cc" : "#fbe7a8", stroke: "#e0c070", "stroke-width": 0.5 }, propG)); sv("path", { d: "M195 268 h35 M196 273 h33", stroke: "#c9482e", "stroke-width": 1.4, opacity: 0.7 }, propG); }
+        else if (k === "sandwich") { sv("ellipse", { cx: 212, cy: 272, rx: 20, ry: 5, fill: "#efe8d6", stroke: "#b8ad92", "stroke-width": 0.7 }, propG); [[-1, 0], [1, 1]].forEach(([s, n]) => { const c = 212 + s * 9; sv("polygon", { points: `${c - 9},${271 - n * 2} ${c + 9},${271 - n * 2} ${c + (s > 0 ? 2 : -2)},${263 - n * 2}`, fill: "#e6c78a", stroke: "#a77d3c", "stroke-width": 0.6 }, propG); sv("path", { d: `M${c - 7} ${270 - n * 2} h14`, stroke: "#c9482e", "stroke-width": 1.4 }, propG); sv("path", { d: `M${c - 6} ${268.4 - n * 2} h12`, stroke: "#6aa84f", "stroke-width": 1.2 }, propG); }); }
         else if (k === "flour") { sv("ellipse", { cx: 212, cy: 270, rx: 19, ry: 5, fill: "#7a8a96", stroke: "#3a4650", "stroke-width": 0.7 }, propG); sv("path", { d: "M193 270 Q212 292 231 270 Z", fill: "#8a9aa6", stroke: "#3a4650", "stroke-width": 0.7 }, propG); sv("ellipse", { cx: 212, cy: 269, rx: 16, ry: 3.6, fill: "#f4efe2" }, propG); sv("path", { d: "M196 268 Q212 258 228 268", fill: "#fffaf0" }, propG); sv("circle", { cx: 244, cy: 268, r: 2, fill: "#fffaf0", opacity: 0.8 }, propG); }
       });
     };
@@ -12398,7 +13099,8 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["wheelers-dining"] = function (ctx) {
   'use strict';
-  const { hkShell } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSleep, hkWhere, bfFade, hkFindThem, hkVoice } = ctx.lib["hawkins-kit"];
+  const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openKitchen = (...args) => world.openKitchen(...args);
@@ -12415,10 +13117,100 @@
   // Nothing is tappable and nobody is in it yet: a still picture, chandelier on (no time of day, weather or sound).
   // Built in real measurements (metres) and projected with one camera (`P(x, h, z)` below; x runs left to right, h is the height above the floor, z the distance from
   // the camera), so to move or add something, give it metres, not pixels. Ceiling 2.4 m, a table 2.4 m x 1.1 m with its top at 0.76 m.
+
+  // The moments at the table. Same beat format as the kitchen: [who, text, patch?], who: "w" Will, "m" Mike, "n" the caption only.
+  // A patch changes the pose from that beat on: { a: Will's, b: Mike's } (mood, eyes, look, lookY, head [dx, dy, tilt], blush, and L / R hands), plus
+  // hearts: n (a puff of hearts) and jig: true (a happy wiggle). A hand is "lap" (hidden under the table) or a point [dx, dy, held?] measured from that
+  // person's own neck, in picture units (about [-9, 22] puts a hand flat on the table top); held: "glass", "mug", "plate", "toast".
+  const DN_KEY = "ao3-dn-moment";
+  const DN_BASE = { a: { sx: 0, head: [1, 1, 3], mood: "smile", look: 1, L: "lap", R: "lap" }, b: { sx: 0, head: [-1, 1, -3], mood: "smile", look: -1, L: "lap", R: "lap" } };
+  const DN_MOMENTS = [
+    { name: "the syrup", beats: [
+      ["n", "The far end of the table: two chairs pulled in close, a stack of pancakes and exactly one jug of syrup. Both of them are looking at the jug.", { a: { R: [9, 22] }, b: { L: [-9, 22] } }],
+      ["m", "I’ll pour. I have a very steady hand.", { b: { mood: "smirk", R: [14, 8, "mug"] } }],
+      ["w", "You have the shakiest hand I know.", { a: { mood: "smirk" } }],
+      ["m", "That’s not a flaw. That’s a… distribution method.", { b: { mood: "grin" }, jig: true }],
+      ["w", "Mike. It’s going on the tablecloth.", { a: { mood: "o" } }],
+      ["m", "…It’s going on the tablecloth.", { b: { mood: "o", blush: true } }],
+      ["n", "One amber drop lands on the lace. They both look at it, then at each other, then at the door.", { a: { mood: "o", look: 0 }, b: { look: 0 } }],
+      ["w", "Napkin. Napkin. Napkin.", { a: { mood: "calm", look: 1 } }],
+      ["n", "Will dabs it away. Mike steadies the jug with both hands. A truce has been reached.", { hearts: 2, a: { eyes: "happy", mood: "smile" }, b: { mood: "smile", R: [9, 22] } }]] },
+    { name: "the juice", beats: [
+      ["n", "A jug of orange juice between them and two tall glasses. Nobody has said who is pouring.", { a: { R: [9, 22] }, b: { L: [-9, 22] } }],
+      ["w", "Ladies first.", { a: { mood: "smirk" } }],
+      ["m", "I don’t see any ladies. I see you.", { b: { mood: "grin" } }],
+      ["w", "Ha.", { a: { mood: "grin" } }],
+      ["m", "I’ll pour yours and you pour mine. That’s the only fair system.", { b: { mood: "smirk" } }],
+      ["w", "That’s the same as pouring our own.", { a: { mood: "calm" } }],
+      ["m", "It’s not. It’s a ritual.", { b: { mood: "cheer", blush: true }, jig: true }],
+      ["n", "They pour with the seriousness of two scientists. The glasses clink, and a tiny wave goes over each rim.", { hearts: 2, a: { eyes: "happy", mood: "smile", R: [12, 6, "glass"] }, b: { mood: "grin", L: [-12, 6, "glass"] } }]] },
+    { name: "the chandelier", beats: [
+      ["n", "The chandelier is on, even though it is morning. Six white shades, and a small tinkle of brass whenever somebody walks past upstairs.", { a: { lookY: -0.8, look: 0 }, b: { lookY: -0.8, look: 0 } }],
+      ["m", "It looks like a spaceship.", { b: { mood: "smile" } }],
+      ["w", "Everything looks like a spaceship to you.", { a: { mood: "smirk" } }],
+      ["m", "That’s because everything is one, if you look at it right.", { b: { mood: "grin" } }],
+      ["w", "…Okay. That one does look a bit like a spaceship.", { a: { mood: "smile" } }],
+      ["m", "Six engines. One, two, three…", { b: { mood: "cheer" } }],
+      ["w", "There are six. You’re counting wrong on purpose.", { a: { mood: "grin", lookY: 0, look: -1 } }],
+      ["m", "I’m counting romantically.", { b: { mood: "smirk", blush: true, look: 1, lookY: 0 } }],
+      ["n", "Will looks at the chandelier. Then at Mike, looking at the chandelier. The brass tinkles once, as though the house agrees.", { hearts: 3, a: { eyes: "happy", mood: "smile", blush: true } }]] },
+    { name: "the good china", beats: [
+      ["n", "Behind them, the china hutch: glass doors, gold-rimmed plates and a rule that nobody has ever had to say out loud.", { a: { look: 0 }, b: { look: 0 } }],
+      ["w", "Don’t look at it. It knows.", { a: { mood: "o" } }],
+      ["m", "It’s a plate, Will.", { b: { mood: "smirk" } }],
+      ["w", "It’s Mrs. Wheeler’s plate. That’s different. That’s a plate with a record.", { a: { mood: "calm" } }],
+      ["m", "I ate off the good china once. I was six. Nobody has spoken of it since.", { b: { mood: "calm" } }],
+      ["w", "What happened?", { a: { mood: "o" } }],
+      ["m", "I dropped a spoon. It was the loudest spoon in history.", { b: { mood: "o", blush: true } }],
+      ["w", "Okay, now I’m scared of the spoons.", { a: { mood: "grin" }, jig: true }],
+      ["n", "They finish their pancakes in total silence, looking straight ahead, like two people being very careful around a sleeping dragon.", { hearts: 2, a: { eyes: "happy" }, b: { mood: "grin" } }]] },
+    { name: "the last bacon", beats: [
+      ["n", "One strip of bacon left on the platter. Two hands start towards it at exactly the same speed.", { a: { R: [14, 20] }, b: { L: [-14, 20] } }],
+      ["m", "I saw it first.", { b: { mood: "smirk" } }],
+      ["w", "You saw it second. I saw it from the doorway.", { a: { mood: "smirk" } }],
+      ["m", "The doorway doesn’t count. The doorway isn’t at the table.", { b: { mood: "grin" } }],
+      ["w", "The doorway is a legal vantage point.", { a: { mood: "cheer" } }],
+      ["m", "Fine. Rock, paper, bacon.", { b: { mood: "cheer" }, jig: true }],
+      ["n", "Best of three, in total silence, apart from fists thumping softly on the lace. Will wins. Then, without a word, he breaks the strip in half.", { a: { eyes: "happy", mood: "smile", R: [10, 22] }, b: { mood: "o", L: [-10, 22] } }],
+      ["m", "…You didn’t have to.", { b: { mood: "smile", blush: true } }],
+      ["w", "I know.", { hearts: 3, a: { mood: "smile", blush: true } }]] },
+    { name: "the napkins", beats: [
+      ["n", "The napkins are folded into little fans, one at every place. Mrs. Wheeler’s doing. Mike has unfolded his and is trying to remember how it went.", { b: { L: [-12, 14, "plate"], mood: "o" } }],
+      ["m", "It was a swan. I’m sure it was a swan.", { b: { mood: "calm" } }],
+      ["w", "It was a fan.", { a: { mood: "smirk" } }],
+      ["m", "Then why does mine look like a very sad boat?", { b: { mood: "cheer" } }],
+      ["w", "Give it here.", { a: { mood: "grin", R: [16, 14] } }],
+      ["n", "Will folds it back with his tongue between his teeth: three pleats, a tuck and a small, triumphant flick.", { a: { mood: "calm", look: 0 } }],
+      ["m", "How do you know how to do that?", { b: { mood: "o", look: 1 } }],
+      ["w", "Mom does them at Christmas. Jonathan and I used to race.", { a: { mood: "smile" } }],
+      ["n", "Mike holds the napkin in both hands, as carefully as a bird. He has decided not to use it.", { hearts: 2, a: { eyes: "happy", mood: "smile", R: [9, 22] }, b: { mood: "smile", blush: true } }]] },
+    // the scripted breakfast, played once when they come down from Mike's room after waking (keep it last: it is not in the random pool)
+    { name: "breakfast", breakfast: true, intro: "Breakfast at the Wheelers’: the chandelier on, everything laid out, and two people who have only just woken up.", beats: [
+      ["n", "Down the stairs, hair still flat on one side, they follow the smell of bacon into the dining room."],
+      ["n", "From the kitchen, muffled by the wall: Mrs. Wheeler. “Sit down and start! And use the napkins!”", { voice: "karen", a: { look: -1 }, b: { mood: "o", look: 1 } }],
+      ["m", "Good morning to you too.", { b: { mood: "smirk" } }],
+      ["w", "She made pancakes. Be nice.", { a: { mood: "smile", look: 1 } }],
+      ["m", "I’m always nice. I’m nice and I’m starving.", { b: { mood: "grin", look: -1, R: [12, 22, "plate"] } }],
+      ["w", "You said you weren’t hungry on the stairs.", { a: { mood: "smirk" } }],
+      ["m", "That was stairs me. Table me has needs.", { b: { mood: "cheer" }, jig: true }],
+      ["n", "Mike pours two glasses of juice and only spills a little. He slides the fuller one across to Will.", { a: { L: [-9, 22] }, b: { L: [-12, 6, "glass"] } }],
+      ["w", "Thanks.", { a: { mood: "smile", R: [12, 6, "glass"] }, b: { L: [-9, 22] } }],
+      ["m", "Don’t make it a thing. The other one had pulp.", { b: { mood: "smirk" } }],
+      ["w", "They’ve both got pulp.", { a: { mood: "grin" } }],
+      ["m", "Then yours has the good pulp.", { b: { mood: "grin" } }],
+      ["n", "Will laughs into his glass. There are plenty of pancakes left, and the whole day to get through them.", { hearts: 2, a: { eyes: "happy", mood: "grin" }, b: { mood: "smile" } }]] }
+  ];
+
   function openWheelersDining() {
     const sh = hkShell("ao3-wheelers-dining", "\u{1F37D}️ The dining room");
-    const { sv, rnd } = sh.kit;
-    const { sub, field, caption, pill, close } = sh;
+    const { sv, rnd, anim, el } = sh.kit;
+    const { sub, field, caption, pill, close, later } = sh;
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const asleep = hkSleep.get(), mine = !asleep && hkWhere.here("dining"), away = !asleep && !mine, empty = !mine;   // Will and Mike are at the table only when this is where they are
+    const say = t => { caption.textContent = t; };
+    let leaving = false, tid = 0, voice = null;
+    const NR = DN_MOMENTS.length - 1;                                                       // the random moments; the last one is the breakfast scene
+    const breakfast = !!ctx.world.dnBreakfast && Date.now() - ctx.world.dnBreakfast < 180000; ctx.world.dnBreakfast = 0;
     sub.textContent = "the wheelers’ · chandelier on";
     caption.textContent = "The Wheelers’ dining room. Breakfast is laid out, the chairs are pulled back, and nobody has sat down yet.";
     sh.box.style.background = "#1a0f08";
@@ -12502,6 +13294,11 @@
     const pais = sv("pattern", { id: "dn-paisley", width: 12, height: 12, patternUnits: "userSpaceOnUse" }, defs);
     A("rect", { width: 12, height: 12, fill: "#26304e" }, pais);
     [[3, 3, "#a8452e"], [9, 8, "#c89a3c"], [9, 2, "#4a6a8a"], [2, 9, "#7a2c3c"]].forEach(([x, y, c]) => A("ellipse", { cx: x, cy: y, rx: 2.4, ry: 1.7, fill: c, opacity: 0.85, transform: `rotate(35 ${x} ${y})` }, pais));
+    const plaid = sv("pattern", { id: "bs-plaid", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);   // Will's striped sweater (bsKit asks for this id)
+    sv("rect", { width: 16, height: 16, fill: "#d8c9b0" }, plaid); sv("rect", { y: 0, width: 16, height: 1.1, fill: "#8a2c44" }, plaid); sv("rect", { y: 2.1, width: 16, height: 3, fill: "#2b3862" }, plaid); sv("rect", { y: 5.9, width: 16, height: 1, fill: "#8a2c44" }, plaid);
+    const knit = sv("pattern", { id: "bs-knit", width: 30, height: 30, patternUnits: "userSpaceOnUse" }, defs);   // Mike's chunky patterned sweater
+    sv("rect", { width: 30, height: 30, fill: "#272d41" }, knit); sv("rect", { x: 2, y: 3, width: 13, height: 10, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 15, width: 11, height: 12, fill: "#6a2c3a" }, knit); sv("rect", { x: 17, y: 2, width: 9, height: 9, fill: "#1c2030" }, knit); sv("rect", { x: 3, y: 18, width: 10, height: 8, fill: "#1c2030" }, knit);
+    sv("path", { d: "M0 14.5 H30 M15.5 0 V30", stroke: "#74703f", "stroke-width": 0.7, "stroke-dasharray": "2 1.2", opacity: 0.5 }, knit); sv("path", { d: "M4 6 h3 M20 20 h3 M9 22 h2 M22 5 h2", stroke: "#8a4050", "stroke-width": 0.6, opacity: 0.6 }, knit);
     const cane = sv("pattern", { id: "dn-cane", width: 5, height: 5, patternUnits: "userSpaceOnUse" }, defs);
     A("rect", { width: 5, height: 5, fill: "#c9a063" }, cane); A("path", { d: "M0 0 L5 5 M5 0 L0 5", stroke: "#7a5428", "stroke-width": 0.7, opacity: 0.8 }, cane);
 
@@ -12684,6 +13481,24 @@
     };
     [[-1, 2.75], [1, 2.75], [-1, 2.0], [1, 2.0], [-1, 1.25], [1, 1.25]].forEach(([s, z]) => chair(s, z));
 
+    // ── Will and Mike at the far end of the table: front view, side by side on two chairs pulled up to the tip of the oval ──
+    // Their hips sit behind the table's far tip, which hides them (so only head, shoulders and a little sweater show), and their arms are drawn over the tabletop.
+    const FIG = (() => { const a = P(-0.31, 1.0, 3.3), b = P(0.31, 1.0, 3.3); return { a: { cx: a[0], sy: a[1] - 2, s: 0.6, u: 21, f: 20, sl: [-21, 5], sr: [21, 5] }, b: { cx: b[0], sy: b[1] - 2, s: 0.6, u: 23, f: 22, sl: [-24, 5], sr: [24, 5] } }; })();
+    const clear = n => { while (n.firstChild) n.removeChild(n.firstChild); };
+    const bodyL = G();
+    [-1, 1].forEach(s => {                                                           // the two chair backs behind them: cane panel, dark posts, a top rail
+      const x0 = s * 0.09, x1 = s * 0.53;
+      [x0, x1].forEach(x => path3([[x, 0.45, 3.62], [x, 1.14, 3.62]], "#4a2412", 0.045, {}, bodyL));
+      front(Math.min(x0, x1) + 0.03, Math.max(x0, x1) - 0.03, 0.62, 1.02, 3.62, "url(#dn-cane)", {}, bodyL);
+      front(Math.min(x0, x1) - 0.01, Math.max(x0, x1) + 0.01, 1.04, 1.14, 3.62, "#6a3620", {}, bodyL);
+    });
+    const { drawArm, torsoA, torsoB, headA, headB } = bsKit(sv, anim, FIG);
+    ["a", "b"].forEach(key => {
+      const Fg = FIG[key], br = key === "a" ? 4.2 : 4.8;
+      Fg.g1 = sv("g", {}, bodyL); Fg.r1 = sv("g", {}, Fg.g1);
+      Fg.b1 = anim(sv("g", {}, Fg.r1), `animation:hkBreathe ${br}s ease-in-out infinite;`);
+    });
+
     // the table's four turned legs on the carpet (the near ones show below the near end of the top), with a soft shadow at each foot
     [[-0.34, 1.35], [0.34, 1.35], [-0.34, 2.65], [0.34, 2.65]].forEach(([x, z]) => {
       ring3(x, 0, z, 0.14, 0.12, "#1a0804", { opacity: 0.4 });
@@ -12754,9 +13569,14 @@
       ring3(0, TH + 0.051, 1.62, 0.14, 0.1, "#dba84a"); ring3(0.01, TH + 0.053, 1.62, 0.1, 0.07, "#e8c067", { opacity: 0.9 });
       path3([[0.02, TH + 0.06, 1.58], [0.2, TH + 0.07, 1.7]], "#f4f2ec", 0.03);
     });
-    add(1.9, () => {                                                       // an oval platter of bacon
-      ring3(0, TH, 1.9, 0.19, 0.11, "#f4eee0"); ring3(0, TH + 0.012, 1.9, 0.17, 0.095, "#faf5ea", { stroke: "#a8744a", "stroke-width": 0.9 });
-      for (let k = 0; k < 7; k++) path3([[-0.12 + k * 0.04, TH + 0.02, 1.84], [-0.1 + k * 0.04, TH + 0.024, 1.88], [-0.12 + k * 0.04, TH + 0.024, 1.92], [-0.1 + k * 0.04, TH + 0.02, 1.96]], k % 2 ? "#8a2c1c" : "#b04a2c", 0.026);
+    add(1.9, () => {                                                      // the orange juice jug and the coffee carafe on a red trivet
+      cyl(-0.06, 1.9, 0.075, 0.075, TH, TH + 0.26, "#f08a1c", "#f6a23a"); cyl(-0.06, 1.9, 0.045, 0.045, TH + 0.26, TH + 0.31, "#f08a1c", "#f6a23a"); cyl(-0.06, 1.9, 0.052, 0.052, TH + 0.31, TH + 0.335, "#f4f0e4", "#fff");
+      const t = P(-0.06, TH + 0.13, 1.86); A("ellipse", { cx: t[0], cy: t[1], rx: 0.05 * t[2], ry: 0.07 * t[2], fill: "#fbe6a0" }); C(t[0], t[1], 0.022 * t[2], "#f08a1c");
+      ring3(0.14, TH + 0.001, 1.9, 0.1, 0.1, "#b4382a"); ring3(0.14, TH + 0.002, 1.9, 0.075, 0.075, "none", { stroke: "#7a1e14", "stroke-width": 0.9 });
+      cyl(0.14, 1.9, 0.062, 0.058, TH + 0.003, TH + 0.2, "#d8d2c0", "#1c0e08", { opacity: 0.92 });                                // the carafe, full of black coffee
+      cyl(0.14, 1.9, 0.058, 0.054, TH + 0.005, TH + 0.16, "#2a1608", "#2a1608");
+      cyl(0.14, 1.9, 0.05, 0.036, TH + 0.2, TH + 0.25, "#26221e", "#3a342c");
+      const hd = P(0.205, TH + 0.12, 1.9); A("path", { d: `M${hd[0]} ${hd[1] - 0.07 * hd[2]}q${0.07 * hd[2]} ${0.03 * hd[2]} 0 ${0.14 * hd[2]}`, fill: "none", stroke: "#26221e", "stroke-width": 0.012 * hd[2] });
     });
     add(2.16, () => {                                                      // a bowl of scrambled eggs, and the syrup
       cyl(-0.07, 2.16, 0.1, 0.12, TH, TH + 0.07, "#f4eee0", "#f1cf45");
@@ -12765,14 +13585,9 @@
       cyl(0.13, 2.14, 0.031, 0.031, TH + 0.2, TH + 0.235, "#c8362a", "#d84a3a");
       const lb = P(0.13, TH + 0.1, 2.1); A("ellipse", { cx: lb[0], cy: lb[1], rx: 0.03 * lb[2], ry: 0.04 * lb[2], fill: "#f0dcae" });
     });
-    add(2.42, () => {                                                      // the orange juice jug and the coffee carafe on a red trivet
-      cyl(-0.06, 2.42, 0.075, 0.075, TH, TH + 0.26, "#f08a1c", "#f6a23a"); cyl(-0.06, 2.42, 0.045, 0.045, TH + 0.26, TH + 0.31, "#f08a1c", "#f6a23a"); cyl(-0.06, 2.42, 0.052, 0.052, TH + 0.31, TH + 0.335, "#f4f0e4", "#fff");
-      const t = P(-0.06, TH + 0.13, 2.38); A("ellipse", { cx: t[0], cy: t[1], rx: 0.05 * t[2], ry: 0.07 * t[2], fill: "#fbe6a0" }); C(t[0], t[1], 0.022 * t[2], "#f08a1c");
-      ring3(0.14, TH + 0.001, 2.42, 0.1, 0.1, "#b4382a"); ring3(0.14, TH + 0.002, 2.42, 0.075, 0.075, "none", { stroke: "#7a1e14", "stroke-width": 0.9 });
-      cyl(0.14, 2.42, 0.062, 0.058, TH + 0.003, TH + 0.2, "#d8d2c0", "#1c0e08", { opacity: 0.92 });                                // the carafe, full of black coffee
-      cyl(0.14, 2.42, 0.058, 0.054, TH + 0.005, TH + 0.16, "#2a1608", "#2a1608");
-      cyl(0.14, 2.42, 0.05, 0.036, TH + 0.2, TH + 0.25, "#26221e", "#3a342c");
-      const hd = P(0.205, TH + 0.12, 2.42); A("path", { d: `M${hd[0]} ${hd[1] - 0.07 * hd[2]}q${0.07 * hd[2]} ${0.03 * hd[2]} 0 ${0.14 * hd[2]}`, fill: "none", stroke: "#26221e", "stroke-width": 0.012 * hd[2] });
+    add(2.42, () => {                                                       // an oval platter of bacon
+      ring3(0, TH, 2.42, 0.19, 0.11, "#f4eee0"); ring3(0, TH + 0.012, 2.42, 0.17, 0.095, "#faf5ea", { stroke: "#a8744a", "stroke-width": 0.9 });
+      for (let k = 0; k < 7; k++) path3([[-0.12 + k * 0.04, TH + 0.02, 2.36], [-0.1 + k * 0.04, TH + 0.024, 2.40], [-0.12 + k * 0.04, TH + 0.024, 2.44], [-0.1 + k * 0.04, TH + 0.02, 2.48]], k % 2 ? "#8a2c1c" : "#b04a2c", 0.026);
     });
     add(2.68, () => {                                                      // a red strawberry jam jar, the pepper and salt mills and the butter dish
       cyl(0.12, 2.68, 0.045, 0.05, TH, TH + 0.075, "#c8302c", "#e04a3c"); cyl(0.12, 2.68, 0.03, 0.03, TH + 0.075, TH + 0.095, "#3f7a2c", "#4f8f36");
@@ -12798,15 +13613,107 @@
         shade(x, CH + 0.06, z, 0.085, 0.045, 0.17, true);
       }); }
 
+    // ── Will and Mike's arms, over the table, and what they hold ──
+    const armL = G();
+    ["a", "b"].forEach(key => { const Fg = FIG[key], br = key === "a" ? 4.2 : 4.8; Fg.g2 = sv("g", {}, armL); Fg.r2 = sv("g", {}, Fg.g2); Fg.b2 = anim(sv("g", {}, Fg.r2), `animation:hkBreathe ${br}s ease-in-out infinite;`); });
+    const prop = (g, kind, x, y) => {
+      if (kind === "mug") { sv("rect", { x: x - 5, y: y - 8, width: 10, height: 9, rx: 2, fill: "#d9a05a", stroke: "#1a0c14", "stroke-width": 0.6 }, g); sv("path", { d: `M${x + 5} ${y - 6} q5 1 0 5`, stroke: "#d9a05a", "stroke-width": 1.6, fill: "none" }, g); sv("ellipse", { cx: x, cy: y - 8, rx: 5, ry: 1.3, fill: "#5a3420" }, g); }
+      else if (kind === "glass") { sv("rect", { x: x - 4.5, y: y - 10, width: 9, height: 12, rx: 1.5, fill: "#f6a53a", opacity: 0.85, stroke: "#fff", "stroke-width": 0.6 }, g); }
+      else if (kind === "plate") { sv("ellipse", { cx: x, cy: y + 1, rx: 12, ry: 3.2, fill: "#f4efe2", stroke: "#b8ad92", "stroke-width": 0.6 }, g); sv("path", { d: `M${x - 6} ${y} l6 -5 l6 5 z`, fill: "#fbf6ea", stroke: "#d8cfb8", "stroke-width": 0.5 }, g); }
+    };
+    const trans = (key, sx) => { const Fg = FIG[key], tr = `translate(${(Fg.cx + (sx || 0)).toFixed(1)} ${Fg.sy.toFixed(1)}) scale(${Fg.s})`; Fg.g1.setAttribute("transform", tr); Fg.g2.setAttribute("transform", tr); };
+    const drawFig = (key, p) => {
+      const Fg = FIG[key];
+      clear(Fg.b1); clear(Fg.b2); trans(key, p.sx);
+      const tg = sv("g", {}, Fg.b1);
+      ({ a: torsoA, b: torsoB })[key](tg);
+      const hand = (left, t) => {
+        const S = left ? Fg.sl : Fg.sr;
+        if (t === "lap") { drawArm(Fg.b1, key, left, [left ? -17 : 17, 50], 0, 0, 0, S); return; }
+        const tl = t === "mouth" ? [0, key === "a" ? -10.6 : -14.4] : [t[0] / Fg.s, t[1] / Fg.s];
+        // a hand resting on the table keeps the arm nearly straight: a folded elbow juts sideways into the other one and their arms cross
+        if (t !== "mouth" && t[1] >= 18) tl[1] = Math.max(tl[1], S[1] + Math.sqrt(Math.max(0, 39.5 * 39.5 - (tl[0] - S[0]) * (tl[0] - S[0]))));
+        const Hd = drawArm(Fg.b2, key, left, tl, 0, 0, 0, S);
+        if (t[2]) prop(Fg.b2, t[2], Hd[0], Hd[1]);
+      };
+      hand(false, p.R || "lap"); hand(true, p.L || "lap");
+      ({ a: headA, b: headB })[key](tg, p);
+    };
+    // hearts and the speech bubble
+    const heartsG = G({ "pointer-events": "none" });
+    const HEART = "M0 2.6 C-7 -2.4 -3.4 -7.6 0 -3.8 C3.4 -7.6 7 -2.4 0 2.6 Z", HCOL = ["#ff8fb1", "#ff6f91", "#ffc0d6", "#ff7a9a", "#ffd0e0"];
+    const puff = n => { if (reduce) return; for (let i = 0; i < n; i++) later(() => { const w = sv("g", { transform: `translate(${(180 + (Math.random() - 0.5) * 36).toFixed(1)} ${(236 + Math.random() * 10).toFixed(1)}) scale(${(0.8 + Math.random() * 0.5).toFixed(2)})` }, heartsG); anim(sv("path", { d: HEART, fill: HCOL[Math.floor(Math.random() * HCOL.length)] }, w), `--dx:${((Math.random() - 0.5) * 30).toFixed(0)}px;opacity:0;animation:bfHeart 2.6s ease-out 1 both;`); later(() => w.remove(), 2800); }, i * 160); };
+    if (!document.getElementById("ao3-bf-css")) { const st = document.createElement("style"); st.id = "ao3-bf-css"; st.textContent = "@keyframes bfHeart{0%{opacity:0;transform:translate(0,0) scale(.4)}15%{opacity:.95}70%{opacity:.8}100%{opacity:0;transform:translate(var(--dx,0px),-80px) scale(1.15)}}@keyframes bfPop{0%{opacity:0;transform:translate(-50%,-100%) scale(.85)}100%{opacity:1;transform:translate(-50%,-100%) scale(1)}}"; (document.head || document.documentElement).appendChild(st); }
+    const wrap = el("div", "position:relative;");
+    const ov = el("div", "position:absolute;inset:0;pointer-events:none;overflow:hidden;");
+    let bub = null;
+    const hideBubble = () => { if (bub) { bub.remove(); bub = null; } };
+    const speak = (who, text) => {
+      hideBubble();
+      const hx = (who === "m" ? FIG.b.cx : FIG.a.cx), pct = hx / W * 100, anchor = Math.max(30, Math.min(70, pct)), cw = wrap.clientWidth || 360;
+      bub = el("div", `position:absolute;left:${anchor}%;top:${((FIG.a.sy - 37) / H * 100).toFixed(2)}%;transform:translate(-50%,-100%);max-width:62%;box-sizing:border-box;background:#fff6e0;color:#3a2630;border-radius:14px;padding:7px 12px;font:italic 13px/1.35 Georgia,'Times New Roman',serif;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,0.35);pointer-events:none;z-index:5;`, text);
+      bub.appendChild(el("div", `position:absolute;bottom:-5px;left:calc(50% + ${((pct - anchor) * cw / 100).toFixed(0)}px);width:10px;height:10px;margin-left:-5px;background:#fff6e0;transform:rotate(45deg);`));
+      ov.appendChild(bub);
+    };
+    // the director: poses, moments, next / another
+    const PS = { a: null, b: null };
+    const setPose = patch => {
+      ["a", "b"].forEach(k => { if (patch[k] && PS[k]) { PS[k] = Object.assign({}, PS[k], patch[k]); drawFig(k, PS[k]); } });
+      if (patch.jig && !reduce) ["a", "b"].forEach(k => { try { FIG[k].g1.animate([{ transform: FIG[k].g1.getAttribute("transform") }, { transform: FIG[k].g1.getAttribute("transform") + " translate(0 -3)" }, { transform: FIG[k].g1.getAttribute("transform") }], { duration: 480, easing: "ease-out" }); } catch {} });
+      if (patch.voice) { if (voice) voice.stop(); voice = hkVoice(patch.voice); }
+      if (patch.hearts) puff(patch.hearts);
+    };
+    let mi = 0, bi = 0, playing = false;
+    const readTime = t => 2600 + t.length * 48;
+    const start = () => { PS.a = Object.assign({}, DN_BASE.a); PS.b = Object.assign({}, DN_BASE.b); drawFig("a", PS.a); drawFig("b", PS.b); };
+    const step = () => {
+      clearTimeout(tid);
+      const M = DN_MOMENTS[mi];
+      if (bi >= M.beats.length) { playing = false; hideBubble(); say(M.breakfast ? "Breakfast winds down. Neither of them is in any hurry to leave the table." : "The moment settles. Tap either of them for another."); if (M.breakfast) tid = setTimeout(another, reduce ? 2500 : 7000); return; }
+      const [who, text, patch] = M.beats[bi++];
+      setPose(patch || {});
+      if (who === "n") { hideBubble(); say(text); } else speak(who, text);
+      tid = setTimeout(step, readTime(text));
+    };
+    const NOBODY = asleep
+      ? ["The dining room, in the dark: the chandelier is off and the table is just a shape. Everyone is asleep " + hkSleep.up() + ".", "Nobody here. The hutch glints faintly, and the good china keeps its secrets. Everyone is asleep " + hkSleep.up() + "."]
+      : ["Nobody at the table. Two chairs are pulled in at the far end, and the syrup jug is suspiciously low.", "An empty dining room. The chandelier tinkles once, as if somebody just walked out.", "Breakfast is laid out for nobody. A napkin has been folded into a very sad boat."];
+    let nEmpty = 0;
+    const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(DN_KEY, String(mi)); } catch {} say(DN_MOMENTS[mi].intro || "In the dining room: Will and Mike at the far end of the table, with the whole breakfast to themselves."); tid = setTimeout(step, reduce ? 300 : 1100); };
+    const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } const pool = mi < NR ? NR - 1 : NR; let n = Math.floor(Math.random() * pool); if (mi < NR && n >= mi) n++; play(n); };
+    const next = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } if (playing) step(); else another(); };
+    sh.onClose = () => { clearTimeout(tid); hideBubble(); if (voice) voice.stop(); };
+    let first = Math.floor(Math.random() * NR);
+    try { const last = parseInt(localStorage.getItem(DN_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < NR) first = (last + 1 + Math.floor(Math.random() * (NR - 1))) % NR; } catch {}
+    // what you can tap
+    const SAY = {
+      chandelier: ["Six white pleated shades on a brass frame. It is always on at breakfast, whatever the sun is doing.", "The chandelier tinkles whenever somebody crosses the floor upstairs."],
+      table: ["A big oval cherry table, laid for eight and eaten by two. There is a faint tide-mark of syrup near the far end.", "The tablecloth has seen forty Thanksgivings, a science fair and one very famous spoon."]
+    };
+    const cnt = {}; const tapSay = k => () => { cnt[k] = (cnt[k] || 0) + 1; say(SAY[k][(cnt[k] - 1) % SAY[k].length]); };
+    const hitG = G();
+    const hit = (x, y, w, h, label, fn) => { const r = sv("rect", { x, y, width: w, height: h, fill: "transparent" }, hitG); r.style.cursor = "pointer"; r.setAttribute("role", "button"); r.setAttribute("aria-label", label); r.addEventListener("click", fn); };
+    hit(110, 66, 140, 84, "The chandelier", tapSay("chandelier"));
+    hit(96, 300, 168, 150, "The table", tapSay("table"));
+    if (mine) { hit(FIG.a.cx - 16, FIG.a.sy - 38, 32, 62, "Will", next); hit(FIG.b.cx - 16, FIG.b.sy - 38, 32, 62, "Mike", next); }
+
     // ── light and shade over everything ──
     { const cp = P(0, 0.9, CZ); A("ellipse", { cx: cp[0], cy: cp[1], rx: 200, ry: 170, fill: "url(#dn-glow2)", opacity: 0.32, "pointer-events": "none" }); }
     A("rect", { x: 0, y: 0, width: W, height: H, fill: "url(#dn-vig)", "pointer-events": "none" });
 
-    field.appendChild(svg);
-    pill("\u{1F373} kitchen", "Back through to the kitchen", () => { close(); openKitchen(); });
-    pill("\u{1F3E1} outside", "Out to the front lawn", () => { close(); openWheelers(); });
+    wrap.appendChild(svg); wrap.appendChild(ov); field.appendChild(wrap);
+    pill("\u{1F373} kitchen", "Back through to the kitchen", () => { if (leaving) return; leaving = true; close(); openKitchen(); });
+    pill("\u{1F3E1} outside", "Out to the front lawn", () => { if (leaving) return; leaving = true; close(); openWheelers(); });
+    if (empty) pill("\u{1F50D} find them", "Go to wherever Will and Mike are right now", () => { if (leaving) return; leaving = true; hkFindThem(sh, say); });
+    if (away) pill("✦ call them here", "Call Will and Mike to the table", () => { if (leaving) return; leaving = true; hkWhere.call("dining"); say("You call through the doorway. Two chairs scrape, and somebody says “Pancakes?”…"); bfFade(sh, () => ctx.world.openWheelersDining()); });
+    pill("\u{1F4AC} next", "Hear the next line sooner", next);
+    pill("\u{1F501} another", "A different moment", another);
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(false); });
     document.body.appendChild(sh.back);
+    if (empty) {
+      bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none");
+      say(asleep ? "The Wheelers’ dining room, in the quiet: the chandelier is off, the table is cleared of everything but crumbs, and nobody is up. Everyone is asleep " + hkSleep.up() + "." : "The Wheelers’ dining room. Breakfast is laid out, the chairs are pulled in, and nobody has sat down just now." + hkWhere.hint());
+    } else { say("The Wheelers’ dining room: breakfast laid out, and Will and Mike at the far end of the table."); play(breakfast ? NR : first); }
   }
 
   return { openWheelersDining };
@@ -13962,7 +14869,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["byers-kitchen"] = function (ctx) {
   'use strict';
-  const { hkShell, hkSleep, hkWhere, bfFade, hkFindThem } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSleep, hkWhere, bfFade, hkFindThem, hkVoice } = ctx.lib["hawkins-kit"];
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
@@ -14059,7 +14966,22 @@
       ["m", "…What do you want to do?", { b: { mood: "calm", blush: true } }],
       ["w", "Honestly? This. Just this.", { a: { mood: "smile", blush: true, eyes: "happy" } }],
       ["m", "Okay. Same.", { b: { mood: "smile", eyes: "happy" } }],
-      ["n", "They don’t say anything else for a while. The lamp hums, the house creaks, and nobody minds.", { hearts: 3 }]] }
+      ["n", "They don’t say anything else for a while. The lamp hums, the house creaks, and nobody minds.", { hearts: 3 }]] },
+    { name: "breakfast", breakfast: true, intro: "Breakfast at the Byers’: the lamp already on, eggs and toast waiting, and two people who have just woken up in the same house.", props: [["jug", 172, 288, 0.8], ["cup", 194, 287, 0.85], ["jam", 211, 287, 0.85], ["scramble", 186, 299, 0.9], ["toast", 234, 299, 0.9]], beats: [
+      ["n", "Down the hall, hair still wild, still half in their dreams, they follow the smell of toast into the Byers’ kitchen. The lamp is already on."],
+      ["n", "From somewhere near the front door, muffled: Joyce. “Eggs are on the table! I’m late. Eat, both of you!”", { voice: "joyce", a: { look: -1 }, b: { mood: "o", look: 1 } }],
+      ["m", "She said both of you. About me. Out loud.", { b: { mood: "smile", blush: true, look: -1 } }],
+      ["w", "She’s been saying it for weeks. Sit down before the eggs get cold.", { a: { mood: "smirk", look: 1 } }],
+      ["n", "Scrambled eggs, a stack of toast, the jam, a jug of orange juice. The flowery cup has been filled anyway. Nobody is going to mention it.", { hearts: 1, a: { R: [164, 292], eyes: "happy" } }],
+      ["m", "At my house, breakfast is a bowl and a lecture about posture.", { b: { mood: "smirk", L: [236, 288, "toast"] } }],
+      ["w", "Here it’s burnt toast and a speech about the budget.", { a: { mood: "grin", R: [174, 284, "toast"] } }],
+      ["m", "Burnt toast is the best toast. It’s got character.", { b: { mood: "grin" }, jig: true }],
+      ["w", "You’re only saying that because it’s Mom’s.", { a: { mood: "smirk" } }],
+      ["n", "Mike steals the last piece off Will’s plate and gets jam on his thumb. Will watches him lick it off, and both of them look very hard at the eggs.", { hearts: 2, a: { blush: true, R: [200, 288] }, b: { blush: true, L: [222, 288] } }],
+      ["w", "Stay for dinner. Mom said so.", { a: { mood: "smile", look: 1 } }],
+      ["m", "Your mom says a lot of things.", { b: { mood: "smirk" } }],
+      ["w", "She means every one of them.", { a: { eyes: "happy", mood: "smile" }, hearts: 2 }],
+      ["n", "The front door clicks shut. The lamp hums, the juice goes gold, and there is one more slice of toast and nowhere either of them has to be.", { hearts: 1, b: { mood: "smile", look: -1 } }]] }
   ];
 
   // ── THE BYERS' KITCHEN ──
@@ -14363,18 +15285,24 @@
     const drawProps = list => {
       clear(propG); clear(stoveG);
       [[142, 297], [274, 297]].forEach(([x, y]) => { E(x, y, 24, 5.6, "#d8d0b8", {}, propG); E(x, y - 1.5, 19, 3.8, "#ece4cc", {}, propG); L(`M${x - 34} ${y - 3} l8 -6 M${x + 30} ${y - 3} l8 -6`, "#c8c8c0", 1.3, {}, propG); });
-      list.forEach(k => {
+      // a prop can be given as [name, x, y, scale] to set it down at its own spot on the table (anchor = its base centre as drawn below), so a crowded spread can be laid out in two rows instead of piling up
+      const ANCH = { jam: [179.5, 290], jug: [245, 296], toast: [207, 293], scramble: [190, 291], cup: [190, 292] };
+      list.forEach(k0 => {
+        const k = Array.isArray(k0) ? k0[0] : k0, n0 = propG.childNodes.length;
         if (k === "jam") { R(172, 268, 15, 22, "#7a1c14", { rx: 3 }, propG); R(172, 268, 15, 5, "#c8c0a8", {}, propG); R(175, 276, 4, 11, "#e0705a", { opacity: 0.6 }, propG); }
         else if (k === "jug") { const g = G({ transform: "translate(-52 4)" }, propG); P("M284 250 L310 250 L313 292 Q298 298 281 292 Z", "#f0961c", { stroke: "#fadf9a", "stroke-width": 1.2 }, g); R(287, 256, 4, 32, "#fff3c0", { opacity: 0.5, rx: 2 }, g); R(283, 247, 28, 4, "#f4e8c8", { rx: 2 }, g); L("M311 258 Q326 262 312 280", "#f0961c", 3.4, {}, g); }
         else if (k === "toast") { E(207, 293, 22, 5.4, "#d8d0b8", {}, propG); [[-9, -4, -8], [3, -6, 6], [-2, -9, 0]].forEach(([dx, dy, r]) => { const t = G({ transform: `translate(${207 + dx} ${293 + dy}) rotate(${r})` }, propG); R(-8, -9, 16, 12, "#d8a550", { rx: 4, stroke: "#8a5a22", "stroke-width": 0.7 }, t); R(-5.5, -7, 11, 8, "#ecc16c", { rx: 3 }, t); }); }
         else if (k === "pie") { E(207, 293, 26, 6, "#d8d0b8", {}, propG); E(207, 289, 21, 8, "#d8a040", {}, propG); E(207, 287, 16, 5.6, "#e8b858", {}, propG); L("M197 287 H217 M207 282 V292", "#a8702a", 1, { opacity: 0.7 }, propG); P("M207 289 L222 297 L214 299 Z", "#c0482e", { opacity: 0.9 }, propG); }
         else if (k === "bowl") { E(207, 288, 21, 5.6, "#7a8a96", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); P("M186 288 Q207 308 228 288 Z", "#8a9aa6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); E(207, 287, 17.5, 3.8, "#f4efe2", {}, propG); [[-14, 296], [12, 298], [20, 294]].forEach(([dx, y]) => C(207 + dx, y, 0.9, "#fffaf0", { opacity: 0.8 }, propG)); }
         else if (k === "eggs") { R(214, 284, 30, 10, "#cfc6a8", { rx: 2, stroke: "#8a7a58", "stroke-width": 0.6 }, propG); [220, 229, 238].forEach(x => E(x, 283, 3.6, 4.6, "#f4efe2", { stroke: "#b8ad92", "stroke-width": 0.5 }, propG)); E(190, 291, 17, 4.6, "#8a9aa6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); P("M173 291 Q190 306 207 291 Z", "#9aaab6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); E(190, 290, 14, 3.2, "#f0d050", {}, propG); }
+        else if (k === "scramble") { E(190, 291, 17, 4.6, "#8a9aa6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); P("M173 291 Q190 306 207 291 Z", "#9aaab6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); E(190, 290, 14, 3.2, "#f0d050", {}, propG); [[-5, 289], [2, 290.5], [7, 289]].forEach(([dx, y]) => E(190 + dx, y, 3.6, 1.6, "#f8e27a", {}, propG)); steam(propG, 188, 284, 2); }
+        else if (k === "cup") { cupShape(propG, 190, 292, 1); steam(propG, 188, 280, 2); }
         else if (k === "cups") { cupShape(propG, 190, 292, 1); cupShape(propG, 226, 292, 1); steam(propG, 188, 280, 2); steam(propG, 224, 280, 2); }
         else if (k === "napkin") { PG("186,284 214,282 218,300 182,302", "#f4efe2", { stroke: "#cfc6ad", "stroke-width": 0.7 }, propG); L("M193 292 l3 -5 l3 5 M205 291 q3 -4 6 0", "#6a5a4a", 0.9, { opacity: 0.8 }, propG); }
         else if (k === "cbowl") { E(256, 238, 17, 4.4, "#7a8a96", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); P("M239 238 Q256 254 273 238 Z", "#8a9aa6", { stroke: "#3a4650", "stroke-width": 0.7 }, propG); E(256, 237.5, 14, 3, "#f4efe2", {}, propG); L("M258 236 L270 224", "#c8c8c0", 1.8, {}, propG); }
         else if (k === "cplate") { E(256, 238, 16, 3.8, "#d8d0b8", {}, propG); [[-6, -4, -8], [4, -5, 6]].forEach(([dx, dy, r]) => { const t = G({ transform: `translate(${256 + dx} ${238 + dy}) rotate(${r})` }, propG); R(-7, -8, 14, 10, "#d8a550", { rx: 3.5, stroke: "#8a5a22", "stroke-width": 0.7 }, t); }); }
         else if (k === "pan") { E(380, 240, 15, 3, "#1a1a1a", {}, stoveG); P("M366 238 H394 L391 232 H369 Z", "#2a2a2a", {}, stoveG); R(394, 234, 14, 3, "#2a2a2a", { rx: 1.5 }, stoveG); E(380, 233, 12, 1.8, "#8a6a34", {}, stoveG); steam(stoveG, 374, 228, 3); }
+        if (Array.isArray(k0)) { const [, tx, ty, sc] = k0, [ax, ay] = ANCH[k], nodes = Array.from(propG.childNodes).slice(n0), w = G({ transform: `translate(${tx} ${ty}) scale(${sc}) translate(${-ax} ${-ay})` }, propG); nodes.forEach(n => w.appendChild(n)); }
       });
     };
     const mugShape = (g, x, y, col, k) => { R(x - 5.5 * k, y - 10 * k, 11 * k, 10 * k, col, { rx: 2 * k, stroke: "#1a0c14", "stroke-width": 0.6 }, g); L(`M${x + 5.5 * k} ${y - 7.5 * k} q${5 * k} ${1 * k} 0 ${5 * k}`, col, 1.6 * k, {}, g); E(x, y - 10 * k, 5 * k, 1.4 * k, "#5a3420", {}, g); steam(g, x, y - 12 * k, 2); };
@@ -14432,8 +15360,12 @@
       ov.appendChild(bub);
     };
     const PS = { a: null, b: null }, KEYS = ["a", "b"];
+    let voice = null;                                                                       // Joyce calling from the front door in the breakfast scene
+    const NR = BK_MOMENTS.length - 1;                                                       // the random moments; the last one is the breakfast scene, played when they come in from Will’s room
+    const breakfast = !!ctx.world.byBreakfast && Date.now() - ctx.world.byBreakfast < 180000; ctx.world.byBreakfast = 0;
     const setPose = patch => {
       KEYS.forEach(k => { if (patch[k] && PS[k]) { PS[k] = Object.assign({}, PS[k], patch[k]); drawFig(k, PS[k]); } });
+      if (patch.voice) { if (voice) voice.stop(); voice = hkVoice(patch.voice); }
       if (patch.jig && !reduce) KEYS.forEach(k => [FIG[k].r1, FIG[k].r2].forEach(n => { try { n.animate([{ transform: "translateY(0)" }, { transform: "translateY(-4px)" }, { transform: "translateY(0)" }, { transform: "translateY(-2px)" }, { transform: "translateY(0)" }], { duration: 520, easing: "ease-out" }); } catch {} }));
       if (patch.hearts) puff(patch.hearts);
     };
@@ -14449,7 +15381,7 @@
     const step = () => {
       clearTimeout(tid);
       const M = BK_MOMENTS[mi];
-      if (bi >= M.beats.length) { playing = false; hideBubble(); say("The moment settles. Tap either of them for another."); return; }
+      if (bi >= M.beats.length) { playing = false; hideBubble(); say(M.breakfast ? "Breakfast winds down. The two of them linger over the last of the toast." : "The moment settles. Tap either of them for another."); if (M.breakfast) tid = setTimeout(another, reduce ? 2500 : 7000); return; }
       const [who, text, patch0] = M.beats[bi++];
       let patch = patch0 || {};
       if (counter && (who === "w" || who === "m")) patch = Object.assign({}, patch, { a: Object.assign({ turn: who === "w" ? 1 : 0 }, patch.a || {}), b: Object.assign({ turn: who === "m" ? -1 : 0 }, patch.b || {}) });   // seen from behind, the speaker turns their head a little towards the other
@@ -14462,11 +15394,11 @@
     const NOBODY = asleep ? ASLEEP_SAY : AWAY_SAY;
     let nEmpty = 0;
     const play = i => { if (empty) return; clearTimeout(tid); mi = i; bi = 0; playing = true; hideBubble(); start(); try { localStorage.setItem(BK_KEY, String(mi)); } catch {} say(BK_MOMENTS[mi].intro || "The Byers’ kitchen: Will and Mike at the round table, with the whole house to themselves."); tid = setTimeout(step, reduce ? 300 : 1100); };
-    const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } let n = Math.floor(Math.random() * (BK_MOMENTS.length - 1)); n = n >= mi ? n + 1 : n; play(n); };
+    const another = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } const pool = mi < NR ? NR - 1 : NR; let n = Math.floor(Math.random() * pool); if (mi < NR && n >= mi) n++; play(n); };
     const next = () => { if (empty) { say(NOBODY[nEmpty++ % NOBODY.length]); return; } if (playing) step(); else another(); };
-    sh.onClose = () => { clearTimeout(tid); hideBubble(); };
-    let first = Math.floor(Math.random() * BK_MOMENTS.length);
-    try { const last = parseInt(localStorage.getItem(BK_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < BK_MOMENTS.length) first = (last + 1 + Math.floor(Math.random() * (BK_MOMENTS.length - 1))) % BK_MOMENTS.length; } catch {}
+    sh.onClose = () => { clearTimeout(tid); hideBubble(); if (voice) voice.stop(); };
+    let first = Math.floor(Math.random() * NR);
+    try { const last = parseInt(localStorage.getItem(BK_KEY), 10); if (Number.isFinite(last) && last >= 0 && last < NR) first = (last + 1 + Math.floor(Math.random() * (NR - 1))) % NR; } catch {}
 
     // ── what you can tap ──
     const SAY = {
@@ -14501,7 +15433,7 @@
     if (empty) {
       bodyL.setAttribute("display", "none"); armL.setAttribute("display", "none");
       say(asleep ? "The Byers’ kitchen. The lamp over the table is on, and Will and Mike are fast asleep " + (hkSleep.at() === "wills" ? "down the hall" : "across town") + "." : "The Byers’ kitchen. The lamp over the table is on, and nobody is home just now." + hkWhere.hint());
-    } else { tableStatic.setAttribute("display", "none"); play(first); }
+    } else { tableStatic.setAttribute("display", "none"); play(breakfast ? NR : first); }
   }
 
   return { openByersKitchen };
@@ -14516,6 +15448,7 @@
   const { bsKit } = ctx.lib["figures"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
+  const { nsShow } = ctx.lib["night-summary"];
   const openHawkins = (...args) => world.openHawkins(...args);
   const openWillsHouse = (...args) => world.openWillsHouse(...args);
   const openByersLivingRoom = (...args) => world.openByersLivingRoom(...args);
@@ -15152,7 +16085,14 @@
         ...goodnightBeats(HK_WX[hkWxGet()][0]),
         ["n", "They slide down under the comforter until only their faces show. The covers begin to rise and fall.", { a: WR_SLEEP.a, b: WR_SLEEP.b, zz: true }],
         ["n", "Asleep. The pine walls tick as they cool. They’ll stay like this until somebody taps a lamp.", { hearts: 1 }]
-      ], null, true);
+      ], () => later(() => { if (asleep && !scene) nsShow(sh); }, 1500), true);   // once they're asleep: the "today" card
+    };
+    // after they wake and dress they go down the hall to the Byers' kitchen for breakfast, and you go with them (the kitchen plays its breakfast scene once)
+    const goBreakfast = () => {
+      if (leaving) return; leaving = true;
+      hkWhere.set("byerskitchen", 25, 45); world.byBreakfast = Date.now();
+      say("Dressed, hair still wild, they head down the hall towards the smell of toast. You follow\u2026");
+      later(() => bfFade(sh, () => openByersKitchen()), reduce ? 200 : 2200);
     };
     const wakeUp = () => {
       asleep = false; hkSleep.set(false); nLamp = 0; hkWhere.set("wills");
@@ -15166,7 +16106,7 @@
         ["n", "Not asleep any more, not getting up either. The whole house wakes up around them: a pan, a radio, the smell of toast.", { ms: 2600 }],
         ["n", "Five minutes later, the comforter starts to heave. Yesterday’s clothes get fished off the floor.", { heave: true, jig: true, ms: 2200, a: { dy: 22, mood: "o", L: "lap", R: "lap" }, b: { dy: 22, mood: "o", L: "lap", R: "lap" } }],
         ["n", "Two rumpled heads surface, dressed for the day.", { pj: false, unpile: true, ms: 1800, a: { dy: 0, mood: "smile", look: 1 }, b: { dy: 0, mood: "smile", look: -1 } }]
-      ], () => { tid = setTimeout(another, reduce ? 400 : 1600); });
+      ], () => { tid = setTimeout(goBreakfast, reduce ? 400 : 1600); });
     };
     const tapLamp = () => {
       if (scene) { advanceScene(); return; }
@@ -15300,7 +16240,7 @@
 // Part of the keepsake world: see world.js for how the files fit together.
 (window.__ao3WorldModules = window.__ao3WorldModules || {})["castle-byers"] = function (ctx) {
   'use strict';
-  const { hkShell } = ctx.lib["hawkins-kit"];
+  const { hkShell, hkSeason, hkTimeGet, hkWxGet, HK_WX, HK_TIMES, HK_SEASON_TAG, hkTimeSet, hkTimeNext, hkWxSet, hkWxNext, hkThunder, hkAmbience, hkSoundPill, hkWxOverlay, hkEnvWatch } = ctx.lib["hawkins-kit"];
   // Other scenes are reached through the router, at call time.
   const world = ctx.world;
   const openHawkins = (...args) => world.openHawkins(...args);
@@ -15319,12 +16259,17 @@
   // and bushes sit in front of the floor at the sides. All its greens come from the one `FOREST` palette at the top of that block (so
   // the seasons can swap it later); nothing there reads the season yet.
   // Drawn in its own units (360 x 640, fort base at y 560; the phone shows roughly y 30 to 610), so to move something, give it those numbers.
+  // **Time, weather and season** are the live Hawkins environment, same logic as Will's house (willshouse.js): the sky in the gaps, stars, the
+  // warm light through the trees (sun by day, moon by night), a colour tint per hour, the lantern, string lights, the glow round the cloth
+  // and the rug pool brighten as it gets dark, rain, storm (lightning and thunder), fog, snow (ground, roof logs, heap, teepee, log) and falling
+  // leaves from the real weather, and the sound of the weather (outdoors, not muffled). The leafy trees follow the season (autumn colours,
+  // bare and frosted in winter or snow, fresh green in spring); the old snow patches only show with snow. Time, weather and sound pills.
   function openCastleByers() {
     const sh = hkShell("ao3-castle-byers", "\u{1F3F0} Castle Byers");
     const { sv, rnd, anim } = sh.kit;
-    const { box, sub, field, caption, pill, close } = sh;
-    sub.textContent = "the forest · behind the byers’ · dusk";
-    caption.textContent = "Castle Byers. Sticks, a blanket hung across the doorway, and a sign that says friends are welcome.";
+    const { box, sub, field, caption, pill, close, later } = sh;
+    sub.textContent = "castle byers";
+    caption.textContent = "All friends welcome.";
     box.style.background = "#1c1712";
 
     const VW = 360, VH = 640;
@@ -15342,8 +16287,8 @@
     const A = (tag, attrs, parent) => sv(tag, attrs, parent || svg);
     const L = (x1, y1, x2, y2, stroke, w, o, p) => A("line", Object.assign({ x1, y1, x2, y2, stroke, "stroke-width": w, "stroke-linecap": "round" }, o || {}), p);
     const r = k => rnd("cb-" + k);
-    const glow = (cx, cy, rr, id, css) => {                                  // a soft warm light that breathes a little
-      const e = A("circle", { cx, cy, r: rr, fill: `url(#${id})`, style: "mix-blend-mode:screen" });
+    const glow = (cx, cy, rr, id, css, par) => {                                  // a soft warm light that breathes a little
+      const e = A("circle", { cx, cy, r: rr, fill: `url(#${id})`, style: "mix-blend-mode:screen" }, par);
       return css ? anim(e, css) : e;
     };
 
@@ -15370,11 +16315,16 @@
       bark: ["#3a3230", "#2e2a2c", "#403630"]
     };
     A("rect", { x: 0, y: 0, width: VW, height: VH, fill: FOREST.sky });
+    const starG = A("g", { "pointer-events": "none", opacity: 0 });                                // stars in the gaps of the canopy
+    for (let i = 0; i < 70; i++) A("circle", { cx: (r("sx" + i) * VW).toFixed(0), cy: (r("sy" + i) * 230).toFixed(0), r: (0.5 + r("sr" + i) * 0.9).toFixed(1), fill: "#f4f1ff", opacity: (0.5 + r("so" + i) * 0.5).toFixed(2) }, starG);
+    // every leafy shape is registered here with its base green, so the season can recolour or drop it (paintFoliage below)
+    const FOL = [];
+    const foliage = (kind, el) => { const prop = el.getAttribute("fill") === "none" ? "stroke" : "fill"; FOL.push({ el, kind, prop, base: el.getAttribute(prop), h: r("fo" + FOL.length) }); return el; };
     // a leafy mass: overlapping blobs inside an ellipse (a bush, a crown, a bit of canopy)
     const clump = (cx, cy, rx, ry, cols, n, k, op) => {
       for (let i = 0; i < n; i++) {
         const a = r(k + "a" + i) * Math.PI * 2, d = Math.sqrt(r(k + "d" + i)), s0 = 0.26 + r(k + "s" + i) * 0.3;
-        A("ellipse", { cx: (cx + Math.cos(a) * rx * d).toFixed(1), cy: (cy + Math.sin(a) * ry * d).toFixed(1), rx: (rx * s0).toFixed(1), ry: (ry * s0 * 0.85).toFixed(1), fill: cols[Math.floor(r(k + "c" + i) * cols.length)], opacity: op == null ? 1 : op });
+        foliage("leaf", A("ellipse", { cx: (cx + Math.cos(a) * rx * d).toFixed(1), cy: (cy + Math.sin(a) * ry * d).toFixed(1), rx: (rx * s0).toFixed(1), ry: (ry * s0 * 0.85).toFixed(1), fill: cols[Math.floor(r(k + "c" + i) * cols.length)], opacity: op == null ? 1 : op }));
       }
     };
     // a tiered evergreen: a slim trunk, then drooping tiers that narrow towards the top, the right half a shade darker
@@ -15384,7 +16334,7 @@
       for (let i = 0; i < n; i++) {
         const f = i / n, tw = w * (1 - f * 0.82) * 0.5, yb = base - h * 0.16 - f * h * 0.8, th = h * 0.8 / n * 2.1;
         const d = `M${x} ${(yb - th).toFixed(1)} L${(x + tw).toFixed(1)} ${(yb + 1).toFixed(1)} L${(x + tw * 0.55).toFixed(1)} ${(yb - 2).toFixed(1)} L${(x + tw * 0.2).toFixed(1)} ${(yb + 3).toFixed(1)} L${(x - tw * 0.3).toFixed(1)} ${(yb - 1).toFixed(1)} L${(x - tw * 0.6).toFixed(1)} ${(yb + 2).toFixed(1)} L${(x - tw).toFixed(1)} ${(yb + 1).toFixed(1)} Z`;
-        A("path", { d, fill: cols[i % 2], opacity: op });
+        foliage("pine", A("path", { d, fill: cols[i % 2], opacity: op }));
         A("path", { d: `M${x} ${(yb - th).toFixed(1)} L${(x + tw).toFixed(1)} ${(yb + 1).toFixed(1)} L${x} ${(yb + 3).toFixed(1)} Z`, fill: "#000", opacity: 0.16 * op });
       }
       return top;
@@ -15427,7 +16377,7 @@
     // 4 · undergrowth: a hedge of bushes where the trees meet the ground (the fort stands in front of its middle)
     for (let i = 0; i < 16; i++) clump(i * 24 + (r("ub" + i) - 0.5) * 14, 424 + r("uy" + i) * 14, 30 + r("ur" + i) * 14, 16 + r("uq" + i) * 8, FOREST.brush, 11, "ub" + i, 1);
     // warm dusk light coming through the trees behind the fort, so the sticks read against the green
-    A("circle", { cx: 180, cy: 330, r: 190, fill: "url(#cb-haze)", style: "mix-blend-mode:screen", "pointer-events": "none" });
+    const hazeEl = A("circle", { cx: 180, cy: 330, r: 190, fill: "url(#cb-haze)", style: "mix-blend-mode:screen", "pointer-events": "none" });
     // 5 · near trunks at the edges, with foliage hanging in over the corners
     [[-18, 26], [350, 30]].forEach(([x, w], i) => {
       A("path", { d: `M${x} 0 L${x + w} 0 L${x + w + 6} 470 L${x - 6} 470 Z`, fill: FOREST.near[i] });
@@ -15437,6 +16387,16 @@
     clump(354, 14, 86, 56, FOREST.near, 16, "nr", 1);
     clump(40, 96, 40, 28, FOREST.crown, 7, "nl2", 0.9);
     clump(322, 100, 42, 30, FOREST.crown, 7, "nr2", 0.9);
+    // bare limbs and twigs, shown only when the leaves are gone (winter, or snow)
+    const bareG = A("g", { "pointer-events": "none", style: "display:none" });
+    MID.forEach(([x, w], i) => {
+      for (let j = 0; j < 5; j++) {
+        const y = 30 + j * 72 + r("bl" + i + j) * 30, sd = (i + j) % 2 ? 1 : -1, sx = x + w / 2, ex = sx + sd * (34 + r("bm" + i + j) * 46), ey = y - 22 - r("bn" + i + j) * 30;
+        L(sx, y, ex, ey, "#2a2424", 2.6 - j * 0.25, {}, bareG);
+        L(ex, ey, ex + sd * 20, ey - 16 - r("bo" + i + j) * 10, "#2a2424", 1.3, {}, bareG);
+        L((sx + ex) / 2, (y + ey) / 2, (sx + ex) / 2 + sd * 6, (y + ey) / 2 - 24, "#2a2424", 1.1, {}, bareG);
+      }
+    });
 
     // ── forest floor: leaf litter with a few patches of old snow ──
     A("path", { d: `M0 430 Q90 410 180 420 T360 412 V640 H0 Z`, fill: "url(#cb-floor)" });
@@ -15444,16 +16404,18 @@
       const x = r("lx" + i) * VW, y = 420 + Math.pow(r("ly" + i), 0.8) * 220, s = 1 + (y - 420) / 70;
       A("ellipse", { cx: x, cy: y, rx: 1.6 * s, ry: 0.8 * s, fill: ["#8a6a48", "#6e5236", "#a07e58", "#4e3a28"][i % 4], opacity: 0.7, transform: `rotate(${r("lr" + i) * 180} ${x} ${y})` });
     }
+    const oldSnowG = A("g");
     [[24, 452, 26, 5], [330, 470, 30, 6], [20, 530, 18, 4], [344, 540, 16, 4], [60, 598, 26, 5], [292, 520, 14, 3]].forEach(([cx, cy, rx, ry]) => {
-      A("ellipse", { cx, cy, rx, ry, fill: "#d6d0de", opacity: 0.6 });
-      A("ellipse", { cx: cx - rx * 0.2, cy: cy - ry * 0.3, rx: rx * 0.6, ry: ry * 0.5, fill: "#f0ecf6", opacity: 0.5 });
+      A("ellipse", { cx, cy, rx, ry, fill: "#d6d0de", opacity: 0.6 }, oldSnowG);
+      A("ellipse", { cx: cx - rx * 0.2, cy: cy - ry * 0.3, rx: rx * 0.6, ry: ry * 0.5, fill: "#f0ecf6", opacity: 0.5 }, oldSnowG);
     });
 
+    const groundG = A("g", { "pointer-events": "none" });                                       // snow, fallen leaves or flowers on the floor (paintDyn)
     // ── ferns and low bushes at the sides, in front of the floor (the middle stays clear for the fort) ──
     const fern = (x, y, sc, k) => {
       for (let i = 0; i < 9; i++) {
         const a = -Math.PI / 2 + (i - 4) * 0.34 + (r(k + "a" + i) - 0.5) * 0.12, l = (16 + r(k + "l" + i) * 12) * sc, ex = x + Math.cos(a) * l, ey = y + Math.sin(a) * l * 0.9;
-        A("path", { d: `M${x} ${y} Q${(x + Math.cos(a) * l * 0.55).toFixed(1)} ${(y + Math.sin(a) * l * 0.9 - 5 * sc).toFixed(1)} ${ex.toFixed(1)} ${(ey + 4 * sc).toFixed(1)}`, fill: "none", stroke: FOREST.brush[i % 4], "stroke-width": (2.2 * sc).toFixed(1), "stroke-linecap": "round", opacity: 0.95 });
+        foliage("fern", A("path", { d: `M${x} ${y} Q${(x + Math.cos(a) * l * 0.55).toFixed(1)} ${(y + Math.sin(a) * l * 0.9 - 5 * sc).toFixed(1)} ${ex.toFixed(1)} ${(ey + 4 * sc).toFixed(1)}`, fill: "none", stroke: FOREST.brush[i % 4], "stroke-width": (2.2 * sc).toFixed(1), "stroke-linecap": "round", opacity: 0.95 }));
         A("path", { d: `M${x} ${y} Q${(x + Math.cos(a) * l * 0.55).toFixed(1)} ${(y + Math.sin(a) * l * 0.9 - 5 * sc).toFixed(1)} ${ex.toFixed(1)} ${(ey + 4 * sc).toFixed(1)}`, fill: "none", stroke: "#8ab070", "stroke-width": (0.6 * sc).toFixed(1), opacity: 0.4 });
       }
     };
@@ -15489,8 +16451,9 @@
     // at the top with cord loops, hem a little ragged and lifted off the ground; warm light leaks round its edges and under it
     const FX0 = 116, FX1 = 208, FT = 352;
     const clothD = `M${FX0} ${FT} L${FX1} ${FT - 1} L${FX1 - 1} 540 L${FX1 - 2} 552 Q${FX1 - 12} 558 ${FX1 - 22} 553 Q${FX1 - 34} 549 ${FX1 - 44} 556 Q${FX1 - 58} 561 ${FX1 - 70} 554 Q${FX1 - 82} 550 ${FX0 + 4} 556 L${FX0 + 2} 540 Z`;
-    A("path", { d: `M${FX0 - 3} ${FT} L${FX1 + 3} ${FT - 2} L${FX1 + 4} 562 L${FX0 - 4} 564 Z`, fill: "url(#cb-slit)" });   // the lit inside, showing round the edges and under the hem
-    anim(A("path", { d: `M${FX0 - 3} ${FT} L${FX1 + 3} ${FT - 2} L${FX1 + 4} 562 L${FX0 - 4} 564 Z`, fill: "#ffb860", opacity: 0.3 }), "animation:hkFlicker 4.2s ease-in-out infinite;");
+    const slitG = A("g");
+    A("path", { d: `M${FX0 - 3} ${FT} L${FX1 + 3} ${FT - 2} L${FX1 + 4} 562 L${FX0 - 4} 564 Z`, fill: "url(#cb-slit)" }, slitG);   // the lit inside, showing round the edges and under the hem
+    anim(A("path", { d: `M${FX0 - 3} ${FT} L${FX1 + 3} ${FT - 2} L${FX1 + 4} 562 L${FX0 - 4} 564 Z`, fill: "#ffb860", opacity: 0.3 }, slitG), "animation:hkFlicker 4.2s ease-in-out infinite;");
     A("path", { d: clothD, fill: "url(#cb-cloth)" });
     for (let y = 362; y < 556; y += 5.5) A("path", { d: `M${FX0 + 1} ${y} L${FX1 - 1} ${y - 1}`, stroke: "#5a3e18", "stroke-width": 0.6, opacity: 0.16 });   // the weave
     for (let i = 0; i < 7; i++) {                                                                  // long soft folds, a dark side and a light side to each
@@ -15556,19 +16519,25 @@
     const fw = A("text", { x: 0, y: 3.4, "text-anchor": "middle", textLength: 86, lengthAdjust: "spacingAndGlyphs", rotate: "-3 2 -2 3 0 -3 2 -2 3 0 -2 3 -3 2 0 -2 3 -2 2", "font-family": "'Marker Felt','Comic Sans MS','Chalkboard SE',cursive", "font-size": 9, "font-weight": 700, fill: "#e8c050" }, board);
     fw.textContent = "ALL FRIENDS WELCOME";
 
-    A("rect", { x: 0, y: 0, width: VW, height: VH, fill: "#2a1f3a", opacity: 0.16, "pointer-events": "none" });   // the last of the daylight, so the lights can show
+    const late = A("rect", { x: 0, y: 0, width: VW, height: VH, fill: "#2a1f3a", opacity: 0.16, "pointer-events": "none" });   // the last of the daylight, so the lights can show
+    // the colour of the hour, the weather's grey and a mist over the forest and the fort; the lights are drawn above these so they still glow
+    const OV = (fill) => A("rect", { x: -20, y: -20, width: VW + 40, height: VH + 40, fill, opacity: 0, "pointer-events": "none" });
+    const tint = OV("#000"), ovc = OV("#7d8a99"), dim = OV("#0a1230"), mistTop = OV("#cdd3dc");
+    const doorG = A("g", { "pointer-events": "none", opacity: 0 });                             // the room behind the cloth glows through it at night
+    A("path", { d: clothD, fill: "#ffc060", opacity: 0.4, style: "mix-blend-mode:screen" }, doorG);
 
     // ── a string of coloured lights draped over the lintel (Joyce would approve) ──
     const swags = [[[62, 352], [100, 374], [138, 354]], [[138, 354], [176, 374], [214, 356]], [[214, 356], [244, 372], [274, 348]]];
     const cols = ["#ff6a58", "#ffd25a", "#6ad0ff", "#8ae07a"];
+    const bulbG = A("g");
     let bi = 0;
     swags.forEach(([p0, p1, p2]) => {
       A("path", { d: `M${p0} Q${p1} ${p2}`, fill: "none", stroke: "#1a1410", "stroke-width": 1.1 });
       [0, 0.25, 0.5, 0.75].forEach(t => {
         const x = (1 - t) * (1 - t) * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0], y = (1 - t) * (1 - t) * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1] + 2;
         const c = cols[bi++ % 4];
-        A("circle", { cx: x.toFixed(1), cy: (y + 1).toFixed(1), r: 8, fill: c, opacity: 0.35, style: "mix-blend-mode:screen" });
-        anim(A("circle", { cx: x.toFixed(1), cy: (y + 1).toFixed(1), r: 2.3, fill: c }), `animation:hkTwinkle ${(1.8 + r("tw" + bi) * 1.8).toFixed(1)}s ease-in-out -${(r("tx" + bi) * 3).toFixed(1)}s infinite;`);
+        A("circle", { cx: x.toFixed(1), cy: (y + 1).toFixed(1), r: 8, fill: c, opacity: 0.35, style: "mix-blend-mode:screen" }, bulbG);
+        anim(A("circle", { cx: x.toFixed(1), cy: (y + 1).toFixed(1), r: 2.3, fill: c }, bulbG), `animation:hkTwinkle ${(1.8 + r("tw" + bi) * 1.8).toFixed(1)}s ease-in-out -${(r("tx" + bi) * 3).toFixed(1)}s infinite;`);
       });
     });
 
@@ -15578,13 +16547,15 @@
     A("path", { d: "M103.5 369 L112.5 369 L111 389 L105 389 Z", fill: "#ffd890" });
     A("path", { d: "M104 366 Q108 360 112 366", fill: "none", stroke: "#1a1410", "stroke-width": 1.4 });
     L(108, 369, 108, 389, "#8a5a2a", 0.8);
-    glow(108, 380, 78, "cb-lamp", "animation:hkFlicker 3.4s ease-in-out infinite;");
+    const lampG = A("g");
+    glow(108, 380, 78, "cb-lamp", "animation:hkFlicker 3.4s ease-in-out infinite;", lampG);
 
     // ── light spilling onto the ground, and a rag rug in front of the door ──
     A("ellipse", { cx: 180, cy: 584, rx: 44, ry: 8, fill: "#8a4a3a" });
     A("ellipse", { cx: 180, cy: 584, rx: 32, ry: 5.5, fill: "none", stroke: "#e8c88a", "stroke-width": 1.2, opacity: 0.7 });
     A("ellipse", { cx: 180, cy: 584, rx: 20, ry: 3.2, fill: "none", stroke: "#4a6a8a", "stroke-width": 1.2, opacity: 0.8 });
-    glow(190, 572, 110, "cb-pool", "animation:hkFlicker 5s ease-in-out infinite;");
+    const poolG = A("g");
+    glow(190, 572, 110, "cb-pool", "animation:hkFlicker 5s ease-in-out infinite;", poolG);
 
     // ── in front: a fallen log with a plaid blanket and a mug of cocoa, and an old tyre with a cushion ──
     A("path", { d: "M204 580 L338 564 L341 583 L207 599 Z", fill: "#7a6650" });
@@ -15604,11 +16575,142 @@
     A("ellipse", { cx: 96, cy: 591, rx: 11, ry: 2.6, fill: "#c86a58", opacity: 0.8 });
     for (let i = 0; i < 8; i++) stick(140 + i * 24 + r("fs" + i) * 10, 604 + r("fy" + i) * 6, 140 + i * 24 + 16 + r("fe" + i) * 10, 600 + r("fz" + i) * 6, 1.6, "fs" + i);
 
+    const dynG = A("g", { "pointer-events": "none" });                                           // snow on the fort, fireflies (paintDyn)
+    const flash = OV("#eaf0ff");                                                                 // lightning
     A("rect", { x: 0, y: 0, width: VW, height: VH, fill: "url(#cb-vig)", "pointer-events": "none" });
+
+
+    // ── time of day, weather and season: the live Hawkins clock and weather, same logic as Will's house ──
+    const season = hkSeason();
+    const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const say = t => { caption.textContent = t; };
+    let tI = hkTimeGet(), wxI = hkWxGet(), gone = false, flashEl = null;
+    const amb = hkAmbience({ owner: sh.back });                                                  // the sound of the weather, birds by day, crickets at night
+    sh.onClose = () => { gone = true; amb.stop(); };
+    sh.back.addEventListener("pointerdown", () => amb.poke(), { passive: true });
+    const skyStops = Array.from(defs.querySelectorAll("#cb-sky stop")), hazeStops = Array.from(defs.querySelectorAll("#cb-haze stop"));
+    const SKY = { night: ["#141a3a", "#1e2650", "#2c3052", "#1c1c2e"], dusk: ["#3a3450", "#7e6670", "#b0906c", "#8a6e52"], dawn: ["#3d4a86", "#a58aa6", "#e0b08a", "#8a7060"], day: ["#74add9", "#a9cde8", "#cfe0e8", "#8aa090"] };
+    const TINT = { night: ["#060a28", 0.5], dusk: ["#000000", 0], dawn: ["#6a6aa8", 0.12], day: ["#e6f0ff", 0.2] };
+    const LATE = { night: 0.1, dusk: 0.16, dawn: 0.1, day: 0 };
+    const HAZE = { night: ["#9db4ee", 0.3], dusk: ["#e8a874", 1], dawn: ["#f0b48a", 0.85], day: ["#fff0c0", 0.9] };   // light through the trees: moon, dusk, dawn, sun
+    const OVC = { rain: ["#6c7886", 0.4], storm: ["#46505f", 0.6], fog: ["#c3cad3", 0.5], snow: ["#c9d2de", 0.3] };
+    const BY_SAY = { night: "All friends welcome. The lantern and the string lights are the only light in the woods.", dusk: "All friends welcome. The lantern is lit and the lights are coming on.", dawn: "All friends welcome. Grey light in the trees, and the lantern still burning.", day: "All friends welcome. Daylight comes down through the branches." };
+    const COZY = { day: "Snow in the woods. All friends welcome, and the sticks are white.", night: "Snow at night. The lantern makes a small gold room in it.", dusk: "A snowy dusk. The whole fort glows.", dawn: "Snow at dawn. The lights are still on from last night." };
+    const WX_SAY = { clear: "The sky clears between the branches.", rain: "Rain drips through the leaves onto the roof logs.", fog: "Fog fills the woods. The lantern is a small moon.", snow: "Snow settles on the sticks. The fort looks like a snow globe.", leaves: "A gust of leaves skitters through the clearing.", storm: "Thunder over the woods. The cloth glows a little braver.", sunny: "Sun through the trees. The sticks are warm." };
+    const wxLine = () => { const k = HK_WX[wxI][0]; return k === "clear" && HK_TIMES[tI].name === "day" ? WX_SAY.sunny : WX_SAY[k]; };
+    const wxLabel = () => HK_WX[wxI][0] === "clear" ? (HK_TIMES[tI].name === "day" ? "☀️ sunny" : "✨ clear") : HK_WX[wxI][1];
+    const r1 = (k, a, b) => a + r(k) * (b - a);
+    const eli = (cx, cy, rx, ry, fill, o, p) => A("ellipse", Object.assign({ cx, cy, rx, ry, fill }, o || {}), p);
+    const poly = (pts, fill, o, p) => A("polygon", Object.assign({ points: pts, fill }, o || {}), p);
+
+    // ── the leafy trees follow the season: autumn colours, bare and frosted in winter or snow, fresh green in spring, the original dusk green in summer ──
+    const hx = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+    const mix = (a, b, t) => { const p = hx(a), q = hx(b); return "#" + p.map((v, i) => Math.max(0, Math.min(255, Math.round(v + (q[i] - v) * t))).toString(16).padStart(2, "0")).join(""); };
+    const lumOf = h => { const [rr, gg, bb] = hx(h); return (0.3 * rr + 0.59 * gg + 0.11 * bb) / 255; };
+    const ramp = (st, t) => t < 0.5 ? mix(st[0], st[1], t * 2) : mix(st[1], st[2], (t - 0.5) * 2);   // [dark, mid, light] -> colour for t in 0..1
+    const FALL = [["#5a2410", "#a63f18", "#d9822a"], ["#5e4010", "#b57e1a", "#e0b838"], ["#4a1216", "#8e2620", "#c4483a"], ["#4a2610", "#85481c", "#bf7c38"]];   // orange, gold, red, copper
+    const BARE = ["#2a2422", "#463c38", "#80848e"], SPRING = ["#1f4624", "#3f7c30", "#7cae48"], BLOSSOM = ["#8e4a62", "#c47090", "#e6aec0"];
+    const paintFoliage = () => {
+      const kind = HK_WX[wxI][0], bare = season === "winter" || kind === "snow";
+      const mode = bare ? "bare" : season === "autumn" ? "fall" : season === "halloween" ? "hallow" : season === "spring" ? "spring" : "summer";
+      bareG.style.display = bare ? "" : "none";
+      FOL.forEach(f => {
+        const t = Math.max(0, Math.min(1, (lumOf(f.base) - 0.12) / 0.26));
+        let col = f.base, hide = false;
+        if (mode === "bare") {
+          if (f.kind === "pine") col = mix(f.base, "#d4dde8", 0.3);                                // the evergreens stay, dusted
+          else if (f.kind === "fern") col = mix(ramp(BARE, t), "#6b5a52", 0.2);
+          else { col = ramp(BARE, t); hide = season === "winter" || f.h > 0.45; }                  // from December every leaf is gone; in an early snow about half have dropped
+        } else if (mode === "fall" || mode === "hallow") {
+          if (f.kind !== "pine") {
+            const px = f.el.getAttribute("cx") || 180, py = f.el.getAttribute("cy") || 200;
+            let i = Math.floor(((Math.sin(px * 0.017 + 1.3) + Math.sin(py * 0.013 + 0.4) + 2) / 4) * 4);   // patches of colour across the woods
+            if (f.h < 0.3) i += 1;
+            col = mix(ramp(FALL[((i % 4) + 4) % 4], t), "#140e0c", 0.15);
+            if (mode === "hallow") col = mix(col, "#2a1018", 0.22);
+          }
+        } else if (mode === "spring") {
+          if (f.kind !== "pine") col = f.kind === "leaf" && f.h < 0.08 ? ramp(BLOSSOM, t) : ramp(SPRING, t);
+        }
+        f.el.setAttribute(f.prop, col);
+        f.el.style.display = hide ? "none" : "";
+      });
+    };
+
+    // what the weather and the season leave in the clearing: snow on the floor, fort and log, leaves in autumn, flowers in spring, fireflies on summer evenings
+    const paintDyn = () => {
+      dynG.textContent = ""; groundG.textContent = "";
+      paintFoliage();
+      const kind = HK_WX[wxI][0], n = HK_TIMES[tI].name, cover = season === "winter" || kind === "snow";
+      oldSnowG.style.display = cover ? "" : "none";
+      if (cover) {
+        const sop = { night: 0.55, dusk: 0.8, dawn: 0.9, day: 1 }[n];
+        A("path", { d: "M0 430 Q90 410 180 420 T360 412 V640 H0 Z", fill: "#eef2fb", opacity: 0.72 * sop }, groundG);
+        for (let i = 0; i < 26; i++) { const y = r1("dy" + i, 440, 630), k = (y - 430) / 210; eli(r1("dx" + i, 0, VW).toFixed(0), y.toFixed(0), (14 + k * 34).toFixed(0), (2.5 + k * 6).toFixed(1), "#fbfcff", { opacity: 0.7 * sop }, groundG); }
+        const sg = A("g", { opacity: sop }, dynG);
+        eli(180, 254, 88, 10, "#f4f7ff", { opacity: 0.92 }, sg);                                  // the heap of leaves on the red plank
+        eli(180, 266, 70, 4, "#eef2fb", { opacity: 0.7 }, sg);
+        poly("52,322 270,306 272,311 54,328", "#f2f5ff", { opacity: 0.85 }, sg);                  // the top roof log
+        eli(247, 305, 22, 4, "#f4f7ff", { opacity: 0.9 }, sg);                                    // the point of the teepee
+        poly("204,580 338,564 338,568 204,584", "#f4f7ff", { opacity: 0.92 }, sg);                // along the fallen log
+        eli(96, 599, 31, 6, "#eef2fb", { opacity: 0.55 }, sg);                                    // the tyre
+      }
+      if ((season === "autumn" || season === "halloween") && !cover) for (let i = 0; i < 70; i++) {
+        const lx = r1("gl" + i, 0, VW).toFixed(0), ly = r1("gm" + i, 440, 632).toFixed(0);
+        eli(lx, ly, 4.6, 2.2, ["#d9731f", "#b5541a", "#e0a032", "#a02a22"][i % 4], { opacity: 0.8, transform: `rotate(${Math.round(r("gr" + i) * 180)} ${lx} ${ly})` }, groundG);
+      }
+      if (season === "spring" && !cover) for (let i = 0; i < 24; i++) A("circle", { cx: r1("fl" + i, 0, VW).toFixed(0), cy: r1("fm" + i, 450, 625).toFixed(0), r: 1.6, fill: ["#f4f1ff", "#f7c5d4", "#ffe58a"][i % 3], opacity: 0.85 }, groundG);
+      if (season === "summer" && (n === "dusk" || n === "night")) for (let i = 0; i < 14; i++) {
+        const f = A("circle", { cx: r1("ff" + i, 20, 340).toFixed(0), cy: r1("fg" + i, 380, 600).toFixed(0), r: 2.4, fill: "#e8ff8a" }, dynG);
+        if (!reduce) anim(f, `animation:hkFirefly ${(4 + r("fd" + i) * 4).toFixed(1)}s ease-in-out -${(r("fz" + i) * 5).toFixed(1)}s infinite;`);
+      }
+    };
+    const paintWeather = () => {
+      const kind = HK_WX[wxI][0];
+      dim.setAttribute("opacity", kind === "storm" ? 0.26 : kind === "rain" ? 0.14 : 0);
+      mistTop.setAttribute("opacity", kind === "fog" ? 0.3 : kind === "rain" || kind === "storm" ? 0.08 : 0);
+      flashEl = kind === "storm" ? flash : null;
+      hkWxOverlay(box, kind, reduce);
+      paintDyn();
+    };
+    const applyTime = announce => {
+      const t = HK_TIMES[tI], kind = HK_WX[wxI][0], n = t.name, cozy = kind === "snow", dull = kind !== "clear" && kind !== "leaves";
+      const over = kind === "clear" || kind === "leaves" ? 1 : kind === "fog" ? 0.4 : 0.2;        // cloud hides the stars and dims the moon
+      skyStops.forEach((st, i) => st.setAttribute("stop-color", SKY[n][i]));
+      starG.setAttribute("opacity", t.stars * over);
+      late.setAttribute("opacity", LATE[n]);
+      hazeStops.forEach(st => st.setAttribute("stop-color", HAZE[n][0]));
+      hazeEl.setAttribute("opacity", HAZE[n][1] * (dull ? 0.6 : 1));
+      tint.setAttribute("fill", TINT[n][0]); tint.setAttribute("opacity", TINT[n][1]);
+      const ov = OVC[kind];
+      ovc.setAttribute("fill", ov ? ov[0] : "#7d8a99"); ovc.setAttribute("opacity", ov ? ov[1] : 0);
+      const lv = n === "day" ? (dull ? 0.5 : 0.22) : Math.min(1, t.lit + (cozy ? 0.12 : 0));       // the lantern, lights and rug pool
+      [slitG, bulbG, lampG, poolG].forEach(g => g.setAttribute("opacity", lv));
+      doorG.setAttribute("opacity", n === "day" ? (dull ? 0.12 : 0) : n === "dawn" ? 0.3 : n === "dusk" ? 0.4 : 0.75);
+      timeBtn.textContent = t.label; wxBtn.textContent = wxLabel();
+      amb.set(kind, n);
+      sub.textContent = "castle byers · " + n + " · " + HK_SEASON_TAG[season].replace(/^\S+\s/, "");
+      paintDyn();
+      if (announce) say(cozy ? COZY[n] : kind === "clear" || kind === "leaves" ? BY_SAY[n] : wxLine());
+    };
+    const timeBtn = pill("", "Change the time of day (it goes back to the real time until you close the app)", () => { tI = hkTimeNext(tI); hkTimeSet(tI); applyTime(true); });
+    const wxBtn = pill(HK_WX[wxI][1], "Change the weather (it goes back to the live weather until you close the app)", () => { wxI = hkWxNext(wxI); hkWxSet(wxI); paintWeather(); applyTime(false); say(wxLine()); });
+    hkSoundPill(pill, amb);
+    // lightning, and thunder a moment later, when it storms
+    const sched = (fn, lo, hi) => later(() => { if (gone) return; fn(); sched(fn, lo, hi); }, lo + Math.random() * (hi - lo));
+    sched(() => {
+      if (!flashEl) return;
+      if (!reduce) { try { flashEl.animate([{ opacity: 0 }, { opacity: 0.55 }, { opacity: 0 }, { opacity: 0.35 }, { opacity: 0 }], { duration: 650 }); } catch {} }
+      later(() => { if (!gone && flashEl) hkThunder(); }, 700 + Math.random() * 900);
+    }, 5000, 14000);
+    // the live values roll over by themselves if you stay (a new hour, or an override running out)
+    hkEnvWatch(box, (t, w) => { if (t !== tI || w !== wxI) { const wc = w !== wxI; tI = t; wxI = w; if (wc) paintWeather(); applyTime(false); } });
 
     field.appendChild(svg);
     pill("\u{1F3DA}️ Will’s house", "Back through the woods to the Byers’ house", () => { close(); openWillsHouse(); });
     pill("\u{1F5FA}️ map", "Back to the map of Hawkins", () => { close(); openHawkins(); });
+    applyTime(false);                                                                            // the caption stays "All friends welcome." until you change something
+    paintWeather();
     document.body.appendChild(sh.back);
   }
 
